@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: theme('colors.surface.DEFAULT');
+  color: theme('colors.text.primary');
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D3D8E0; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* -----------------------------------------------------------------------
+   Signature elements: biometric "scan frame" corner brackets for avatars,
+   and a live status pulse dot for device/attendance online states.
+   ----------------------------------------------------------------------- */
+
+.scan-frame {
+  position: relative;
+}
+
+.scan-frame::before,
+.scan-frame::after,
+.scan-frame > .scan-corner-tl,
+.scan-frame > .scan-corner-br {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: theme('colors.accent.DEFAULT');
+  opacity: 0.9;
+}
+
+.scan-frame::before {
+  top: -4px;
+  left: -4px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-color: theme('colors.accent.DEFAULT');
+}
+
+.scan-frame::after {
+  bottom: -4px;
+  right: -4px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+  border-color: theme('colors.accent.DEFAULT');
+}
+
+.status-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.status-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: inherit;
+}
+
+.status-dot.pulsing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: inherit;
+  animation: pulseRing 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.table-row-hover {
+  transition: background-color 120ms ease;
+}

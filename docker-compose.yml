@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smart-hrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hrm_user
+      POSTGRES_PASSWORD: hrm_password
+      POSTGRES_DB: smart_hrm
+    ports:
+      - '5432:5432'
+    volumes:
+      - smart_hrm_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hrm_user -d smart_hrm']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: smart-hrm-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: 'postgresql://hrm_user:hrm_password@postgres:5432/smart_hrm?schema=public'
+      JWT_SECRET: 'change-this-to-a-long-random-string-in-production'
+      JWT_EXPIRES_IN: '8h'
+      PORT: 4000
+      CORS_ORIGIN: 'http://localhost:3000'
+      ZKTECO_DRIVER: 'mock'
+    ports:
+      - '4000:4000'
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: 'http://localhost:4000/api'
+    container_name: smart-hrm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: 'http://localhost:4000/api'
+    ports:
+      - '3000:3000'
+
+volumes:
+  smart_hrm_postgres_data:

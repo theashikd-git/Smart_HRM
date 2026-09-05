@@ -1,0 +1,603 @@
+// Smart HRM - Database Schema
+// PostgreSQL via Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  HR
+  MANAGER
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum SyncStatus {
+  NOT_SYNCED
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum DeviceConnectionStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+enum AttendanceSource {
+  FINGERPRINT
+  FACE
+  RFID
+  PIN
+  MANUAL
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  HOLIDAY
+}
+
+enum SyncOperation {
+  PUSH_NEW
+  UPDATE
+  DELETE
+  DISABLE
+  BULK
+}
+
+enum SyncResultStatus {
+  SUCCESS
+  FAILED
+  RETRYING
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveSession {
+  FULL_DAY
+  FIRST_HALF
+  SECOND_HALF
+}
+
+enum OrgUnitStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LocationType {
+  FACTORY
+  OFFICE
+  SITE
+  PROJECT
+  OTHER
+}
+
+// ---------------------------------------------------------------------------
+// Auth / Users
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(HR)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs AuditLog[]
+  leaveRequestsApplied LeaveRequest[] @relation("LeaveAppliedBy")
+  leaveRequestsDecided LeaveRequest[] @relation("LeaveDecidedBy")
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Company
+// ---------------------------------------------------------------------------
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  code        String?  @unique
+  logo        String?
+  address     String?
+  phone       String?
+  email       String?
+  website     String?
+  timeZone    String   @default("UTC")
+  officeHours String?
+  workingDays String? // comma separated e.g. "Mon,Tue,Wed,Thu,Fri"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branches Branch[]
+
+  @@map("company")
+}
+
+// ---------------------------------------------------------------------------
+// Organization structure
+// ---------------------------------------------------------------------------
+//
+// Hierarchy: Company -> Branch -> Location -> Department -> SubDepartment
+// -> Section/Team -> Employee. Every level below Company is optional on the
+// levels that reference it (an Employee can be placed directly under a
+// Department with no SubDepartment, a Department can exist with no Branch
+// yet assigned, etc.) so existing data from before this hierarchy existed
+// keeps working without a forced backfill.
+
+model Branch {
+  id        String        @id @default(uuid())
+  companyId String?
+  name      String
+  code      String        @unique
+  address   String?
+  phone     String?
+  email     String?
+  managerId String?
+  status    OrgUnitStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  company    Company?  @relation(fields: [companyId], references: [id])
+  manager    Employee? @relation("BranchManager", fields: [managerId], references: [id])
+  locations  Location[]
+  departments Department[]
+  employees  Employee[]
+
+  @@map("branches")
+}
+
+model Location {
+  id        String        @id @default(uuid())
+  branchId  String?
+  name      String
+  type      LocationType  @default(OFFICE)
+  address   String?
+  status    OrgUnitStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  departments Department[]
+  employees   Employee[]
+
+  @@map("locations")
+}
+
+model Department {
+  id             String        @id @default(uuid())
+  name           String
+  code           String        @unique
+  branchId       String?
+  locationId     String?
+  headEmployeeId String?
+  status         OrgUnitStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  branch         Branch?          @relation(fields: [branchId], references: [id])
+  location       Location?        @relation(fields: [locationId], references: [id])
+  employees      Employee[]
+  subDepartments SubDepartment[]
+  sections       Section[]
+  designations   Designation[]
+  superiors      DepartmentSuperior[]
+
+  @@map("departments")
+}
+
+model SubDepartment {
+  id           String        @id @default(uuid())
+  departmentId String
+  name         String
+  code         String        @unique
+  status       OrgUnitStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  department Department           @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  sections   Section[]
+  employees  Employee[]
+  superiors  DepartmentSuperior[]
+
+  @@map("sub_departments")
+}
+
+// "Section" also covers "Team" from the blueprint -- both are optional,
+// lower-level groupings under a Department (directly, or nested one level
+// further under a SubDepartment).
+model Section {
+  id              String        @id @default(uuid())
+  departmentId    String
+  subDepartmentId String?
+  name            String
+  code            String        @unique
+  status          OrgUnitStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  department    Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  subDepartment SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  employees     Employee[]
+
+  @@map("sections")
+}
+
+model Grade {
+  id        String        @id @default(uuid())
+  name      String        @unique
+  level     Int           @default(0)
+  minSalary Decimal?      @db.Decimal(12, 2)
+  maxSalary Decimal?      @db.Decimal(12, 2)
+  benefits  String?
+  status    OrgUnitStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  designations Designation[]
+
+  @@map("grades")
+}
+
+model Designation {
+  id           String        @id @default(uuid())
+  title        String        @unique
+  gradeId      String?
+  departmentId String? // department this designation primarily applies to; null = applies anywhere
+  status       OrgUnitStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  grade      Grade?      @relation(fields: [gradeId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  employees  Employee[]
+
+  @@map("designations")
+}
+
+// One row per (department-or-subdepartment, employee, title) assignment,
+// so a department can have several superiors with different titles
+// ("Department Head", "Shift Supervisor", ...) and one employee can be a
+// superior of more than one department/sub-department.
+model DepartmentSuperior {
+  id              String   @id @default(uuid())
+  departmentId    String?
+  subDepartmentId String?
+  employeeId      String
+  title           String // e.g. "Department Head", "Assistant Department Head", "Shift Supervisor"
+  createdAt       DateTime @default(now())
+
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  subDepartment SubDepartment? @relation(fields: [subDepartmentId], references: [id], onDelete: Cascade)
+  employee      Employee       @relation("DepartmentSuperiorEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, subDepartmentId, employeeId, title])
+  @@map("department_superiors")
+}
+
+model Shift {
+  id             String   @id @default(uuid())
+  name           String
+  startTime      String   // "09:00"
+  endTime        String   // "18:00"
+  graceMinutes   Int      @default(10)
+  breakMinutes   Int      @default(60)
+  weekendRule    String?  // comma separated days off, e.g. "Fri,Sat"
+  overtimeRule   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employees Employee[]
+
+  @@map("shifts")
+}
+
+// ---------------------------------------------------------------------------
+// Employees
+// ---------------------------------------------------------------------------
+
+model Employee {
+  id               String         @id @default(uuid())
+  employeeCode     String         @unique
+  fullName         String
+  photo            String?
+  dateOfBirth      DateTime?
+  gender           String?
+  nationalId       String?
+  passport         String?
+  bloodGroup       String?
+  maritalStatus    String?
+
+  phone            String?
+  email            String?
+  address          String?
+  emergencyContact String?
+
+  joiningDate      DateTime?
+  branchId         String?
+  locationId       String?
+  departmentId     String?
+  subDepartmentId  String?
+  sectionId        String?
+  designationId    String?
+  shiftId          String?
+  reportingSuperiorId String?
+  employmentType   EmploymentType @default(FULL_TIME)
+  salary           Decimal?       @db.Decimal(12, 2)
+  status           EmployeeStatus @default(ACTIVE)
+
+  // Biometric / device sync
+  deviceUserId     String?        @unique
+  syncStatus       SyncStatus     @default(NOT_SYNCED)
+  lastSyncDate     DateTime?
+  fingerprintEnrolled Boolean     @default(false)
+  faceEnrolled        Boolean     @default(false)
+  rfidEnrolled         Boolean    @default(false)
+  rfidCardNumber       String?
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  branch           Branch?        @relation(fields: [branchId], references: [id])
+  location         Location?      @relation(fields: [locationId], references: [id])
+  department       Department?    @relation(fields: [departmentId], references: [id])
+  subDepartment    SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  section          Section?       @relation(fields: [sectionId], references: [id])
+  designation      Designation?   @relation(fields: [designationId], references: [id])
+  shift            Shift?         @relation(fields: [shiftId], references: [id])
+  reportingSuperior Employee?     @relation("EmployeeSuperior", fields: [reportingSuperiorId], references: [id])
+
+  subordinates      Employee[]           @relation("EmployeeSuperior")
+  managedBranches   Branch[]             @relation("BranchManager")
+  superiorRoles     DepartmentSuperior[] @relation("DepartmentSuperiorEmployee")
+  attendanceLogs    AttendanceLog[]
+  attendanceRecords AttendanceRecord[]
+  syncHistory       SyncHistory[]
+  documents         Document[]
+  leaveBalances     LeaveBalance[]
+  leaveRequests     LeaveRequest[]
+
+  @@map("employees")
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  employeeId String
+  type       String   // Resume, Contract, Certificate, Identification
+  fileName   String
+  fileUrl    String
+  uploadedAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// Device
+// ---------------------------------------------------------------------------
+
+model Device {
+  id                 String                  @id @default(uuid())
+  name               String
+  deviceModel        String                  @default("ZKTeco uFace 800 Plus")
+  ipAddress          String
+  port               Int                     @default(4370)
+  serialNumber       String?                 @unique
+  firmwareVersion    String?
+  connectionStatus   DeviceConnectionStatus  @default(UNKNOWN)
+  lastCommunication  DateTime?
+  deviceTime         DateTime?
+  storageUsed        Int?                    // percentage
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  attendanceLogs AttendanceLog[]
+  deviceLogs     DeviceLog[]
+  syncHistory    SyncHistory[]
+
+  @@map("devices")
+}
+
+model DeviceLog {
+  id        String   @id @default(uuid())
+  deviceId  String
+  level     String   // INFO, WARNING, ERROR
+  message   String
+  createdAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Synchronization
+// ---------------------------------------------------------------------------
+
+model SyncHistory {
+  id         String            @id @default(uuid())
+  employeeId String?
+  deviceId   String?
+  operation  SyncOperation
+  status     SyncResultStatus
+  message    String?
+  createdAt  DateTime          @default(now())
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
+  device   Device?   @relation(fields: [deviceId], references: [id])
+
+  @@map("sync_history")
+}
+
+// ---------------------------------------------------------------------------
+// Attendance
+// ---------------------------------------------------------------------------
+
+// Raw punches as they arrive from the device (or manual entry)
+model AttendanceLog {
+  id         String           @id @default(uuid())
+  employeeId String
+  deviceId   String?
+  timestamp  DateTime
+  source     AttendanceSource @default(FINGERPRINT)
+  inOutMode  String?          // "IN" | "OUT" | "BREAK_OUT" | "BREAK_IN"
+  createdAt  DateTime         @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  device   Device?  @relation(fields: [deviceId], references: [id])
+
+  // Belt-and-suspenders against duplicate punches: the application layer
+  // already de-dupes by (employeeId, timestamp) before inserting, but this
+  // constraint makes it impossible even if two syncs somehow overlap.
+  @@unique([employeeId, timestamp])
+  @@index([employeeId, timestamp])
+  @@map("attendance_logs")
+}
+
+// Processed, one row per employee per day
+model AttendanceRecord {
+  id               String            @id @default(uuid())
+  employeeId       String
+  date             DateTime          @db.Date
+  checkIn          DateTime?
+  checkOut         DateTime?
+  workHours        Decimal?          @db.Decimal(5, 2)
+  lateMinutes      Int               @default(0)
+  earlyLeaveMinutes Int              @default(0)
+  overtimeMinutes  Int               @default(0)
+  status           AttendanceStatus  @default(PRESENT)
+  approved         Boolean           @default(false)
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@map("attendance_records")
+}
+
+// ---------------------------------------------------------------------------
+// Leave
+// ---------------------------------------------------------------------------
+
+model LeaveType {
+  id                  String   @id @default(uuid())
+  name                String   @unique
+  code                String   @unique
+  daysPerYear         Decimal  @db.Decimal(5, 1) @default(0)
+  paid                Boolean  @default(true)
+  carryForward        Boolean  @default(false)
+  maxCarryForwardDays Decimal? @db.Decimal(5, 1)
+  requiresApproval    Boolean  @default(true)
+  color               String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+model LeaveBalance {
+  id             String   @id @default(uuid())
+  employeeId     String
+  leaveTypeId    String
+  year           Int
+  allocated      Decimal  @db.Decimal(5, 1) @default(0)
+  carriedForward Decimal  @db.Decimal(5, 1) @default(0)
+  used           Decimal  @db.Decimal(5, 1) @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id              String             @id @default(uuid())
+  employeeId      String
+  leaveTypeId     String
+  startDate       DateTime           @db.Date
+  endDate         DateTime           @db.Date
+  session         LeaveSession       @default(FULL_DAY)
+  totalDays       Decimal            @db.Decimal(5, 1)
+  reason          String?
+  status          LeaveRequestStatus @default(PENDING)
+  rejectionReason String?
+  appliedById     String?
+  decidedById     String?
+  decidedAt       DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  appliedBy User?     @relation("LeaveAppliedBy", fields: [appliedById], references: [id])
+  decidedBy User?     @relation("LeaveDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+  @@map("leave_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String   // e.g. "EMPLOYEE_CREATED"
+  entity    String   // e.g. "Employee"
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
