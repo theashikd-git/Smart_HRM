@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LoginDto } from './dto/login.dto';
 import { EmployeeLoginDto } from './dto/employee-login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -51,7 +52,10 @@ export class AuthService {
     return this.issueSession(user, ipAddress);
   }
 
-  private async issueSession(user: { id: string; email: string; fullName: string; role: string }, ipAddress?: string) {
+  private async issueSession(
+    user: { id: string; email: string; fullName: string; role: string; mustChangePassword?: boolean },
+    ipAddress?: string,
+  ) {
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -75,6 +79,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        mustChangePassword: user.mustChangePassword ?? false,
       },
     };
   }
@@ -82,9 +87,48 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, fullName: true, role: true, lastLoginAt: true, createdAt: true, employeeId: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        lastLoginAt: true,
+        createdAt: true,
+        employeeId: true,
+        mustChangePassword: true,
+      },
     });
     return user;
+  }
+
+  /** Self-service password change -- available to every role, but the one
+   *  place it's actually mandatory is the employee portal, which blocks on
+   *  this until mustChangePassword clears (see AppShellRoot/EmployeePortalView). */
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Account not found');
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) throw new BadRequestException('Current password is incorrect');
+
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException('New password must be different from the current password');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'PASSWORD_CHANGED',
+      entity: 'User',
+      entityId: userId,
+    });
+
+    return { success: true };
   }
 
   async logout(userId: string, ipAddress?: string) {

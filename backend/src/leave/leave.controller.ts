@@ -47,13 +47,13 @@ export class LeaveController {
   }
 
   @Patch('requests/:id/approve')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   approve(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.approve(id, user.id, user.role);
   }
 
   @Patch('requests/:id/reject')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   reject(@Param('id') id: string, @Body() dto: RejectLeaveRequestDto, @CurrentUser() user: any) {
     return this.service.reject(id, dto, user.id, user.role);
   }

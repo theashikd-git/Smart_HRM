@@ -1,15 +1,19 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
+import { UsersService } from '../users/users.service';
 import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 @Injectable()
 export class EmployeesService {
+  private readonly logger = new Logger(EmployeesService.name);
+
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
     private deviceSyncService: DeviceSyncService,
+    private usersService: UsersService,
   ) {}
 
   async create(dto: CreateEmployeeDto, actorId?: string) {
@@ -49,6 +53,16 @@ export class EmployeesService {
     // its own device errors and records them as a FAILED sync instead),
     // so this can't turn a device hiccup into a failed employee creation.
     await this.deviceSyncService.pushNewEmployee(employee.id).catch(() => undefined);
+
+    // Auto-provision this employee's self-service login -- username and
+    // default password are both their Employee ID (see UsersService.create's
+    // EMPLOYEE branch), with mustChangePassword set so they're forced to
+    // change it on first login. Never let a login-provisioning hiccup turn
+    // into a failed employee creation; HR can still add the account by hand
+    // from System Settings if this one call happens to fail.
+    await this.usersService.create({ role: 'EMPLOYEE' as any, employeeId: employee.id }, actorId).catch((err) => {
+      this.logger.error(`Failed to auto-provision login for employee ${employee.id}: ${err?.message ?? err}`);
+    });
 
     return this.findOne(employee.id);
   }
@@ -212,6 +226,10 @@ export class EmployeesService {
       department: { select: { id: true, name: true, code: true } },
       designation: { select: { id: true, title: true } },
       shift: { select: { id: true, name: true, startTime: true, endTime: true } },
+      // The employee's own login account (if any) -- lets the Employee
+      // profile screen show/change their access level (Employee, Supervisor,
+      // Manager) without a separate trip to System Settings.
+      account: { select: { id: true, role: true, isActive: true } },
     };
   }
 }

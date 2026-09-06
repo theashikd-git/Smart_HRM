@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE';
+export type Role = 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
 
 export interface User {
   id: string;
@@ -8,6 +8,10 @@ export interface User {
   isActive?: boolean;
   lastLoginAt?: string | null;
   createdAt?: string;
+  // True right after an auto-provisioned employee login's first sign-in --
+  // the employee portal blocks on a "set a new password" screen until
+  // it's cleared via /auth/change-password.
+  mustChangePassword?: boolean;
 }
 
 export type OrgUnitStatus = 'ACTIVE' | 'INACTIVE';
@@ -155,6 +159,10 @@ export interface Employee {
   designation?: { id: string; title: string } | null;
   shift?: { id: string; name: string; startTime: string; endTime: string } | null;
   createdAt?: string;
+  // This employee's own login account, if any -- lets the Employee profile
+  // screen show/change their access level (Employee/Supervisor/Manager)
+  // directly, instead of a separate trip to System Settings.
+  account?: { id: string; role: Role; isActive: boolean } | null;
 }
 
 export type DeviceConnectionStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN';

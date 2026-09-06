@@ -10,6 +10,7 @@ const SAFE_SELECT = {
   fullName: true,
   role: true,
   isActive: true,
+  mustChangePassword: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
@@ -50,6 +51,10 @@ export class UsersService {
           role: 'EMPLOYEE',
           passwordHash,
           employeeId: employee.id,
+          // Forces the "set a new password" gate on the employee portal
+          // until they change it themselves -- the default password (their
+          // own Employee ID) can't be relied on indefinitely.
+          mustChangePassword: true,
         },
         select: SAFE_SELECT,
       });

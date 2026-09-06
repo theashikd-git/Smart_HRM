@@ -4,6 +4,7 @@ export enum RoleDto {
   ADMIN = 'ADMIN',
   HR = 'HR',
   MANAGER = 'MANAGER',
+  SUPERVISOR = 'SUPERVISOR',
   EMPLOYEE = 'EMPLOYEE',
 }
 

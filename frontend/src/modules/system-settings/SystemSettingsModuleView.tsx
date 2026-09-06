@@ -108,6 +108,7 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
   HR: 'HR Officer',
   MANAGER: 'Manager',
+  SUPERVISOR: 'Supervisor',
   EMPLOYEE: 'Employee (self-service)',
 };
 
@@ -244,6 +245,7 @@ function UserManagement() {
               <option value="ADMIN">Administrator</option>
               <option value="HR">HR Officer</option>
               <option value="MANAGER">Manager</option>
+              <option value="SUPERVISOR">Supervisor</option>
               <option value="EMPLOYEE">Employee (self-service)</option>
             </Select>
           </FieldWrap>

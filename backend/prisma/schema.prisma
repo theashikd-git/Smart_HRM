@@ -18,6 +18,13 @@ enum Role {
   ADMIN
   HR
   MANAGER
+  // Narrower than MANAGER: can approve/reject a leave request only when
+  // they're the currently-resolved approver for a tier in that department's
+  // approval chain (see LeaveApprovalTier) -- no override power, no access
+  // to reports, org structure, users, devices, or logging leave on behalf
+  // of someone else. Typically the first tier (e.g. "Supervisor") in a
+  // department's chain.
+  SUPERVISOR
   EMPLOYEE
 }
 
@@ -128,6 +135,14 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // Set true on an auto-provisioned employee login (see EmployeesService)
+  // so the default password (the Employee ID) can't be used indefinitely --
+  // the employee portal blocks on a "set a new password" screen until this
+  // clears. Manually-created staff accounts (ADMIN/HR/MANAGER/SUPERVISOR
+  // via System Settings) get a real password up front, so this stays false
+  // for those unless an admin resets a password and wants to force a change.
+  mustChangePassword Boolean @default(false)
 
   auditLogs AuditLog[]
   leaveRequestsApplied LeaveRequest[] @relation("LeaveAppliedBy")

@@ -13,6 +13,9 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   employeeLogin: (employeeCode: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Patches the signed-in user's own record (e.g. after changing their
+   *  password clears mustChangePassword) without a full re-login. */
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -74,5 +77,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('smart_hrm_user');
     set({ token: null, user: null });
     if (typeof window !== 'undefined') window.location.href = '/login';
+  },
+
+  setUser: (user: User) => {
+    if (typeof window !== 'undefined') localStorage.setItem('smart_hrm_user', JSON.stringify(user));
+    set({ user });
   },
 }));

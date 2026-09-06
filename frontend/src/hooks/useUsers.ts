@@ -12,7 +12,7 @@ export function useUsers() {
 }
 
 export interface CreateUserPayload {
-  role: 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE';
+  role: 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
   // Required for ADMIN/HR/MANAGER; omitted for EMPLOYEE (derived server-side
   // from the linked Employee record).
   email?: string;

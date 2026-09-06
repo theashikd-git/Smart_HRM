@@ -12,6 +12,8 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { MyLeaveRequestModal } from './MyLeaveRequestModal';
+import { ChangePasswordGate } from './ChangePasswordGate';
+import { useAuthStore } from '@/lib/auth-store';
 
 /**
  * Self-service home for an EMPLOYEE-role login (see /login's "Employee
@@ -22,6 +24,7 @@ import { MyLeaveRequestModal } from './MyLeaveRequestModal';
  */
 export function EmployeePortalView() {
   const { ready } = useRequireAuth('employee');
+  const user = useAuthStore((s) => s.user);
   const [requestOpen, setRequestOpen] = useState(false);
 
   const { data: requests, isLoading: requestsLoading } = useMyLeaveRequests();
@@ -34,6 +37,12 @@ export function EmployeePortalView() {
         <Loader2 className="h-5 w-5 animate-spin text-accent" />
       </div>
     );
+  }
+
+  // A freshly auto-provisioned account (default password = Employee ID)
+  // must change it before seeing anything else -- see ChangePasswordGate.
+  if (user?.mustChangePassword) {
+    return <ChangePasswordGate />;
   }
 
   async function handleCancel(id: string) {
