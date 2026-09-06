@@ -1,7 +1,7 @@
 import { SetMetadata } from '@nestjs/common';
 
 export const ROLES_KEY = 'roles';
-export type AppRole = 'ADMIN' | 'HR' | 'MANAGER';
+export type AppRole = 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE';
 
 /**
  * Restrict an endpoint to one or more roles.

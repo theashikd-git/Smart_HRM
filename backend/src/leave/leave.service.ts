@@ -367,6 +367,7 @@ export class LeaveService {
           reportingSuperiorId: true,
           department: {
             select: {
+              id: true,
               name: true,
               approvalWorkflow: {
                 select: { isActive: true, tiers: { select: { order: true, label: true }, orderBy: { order: 'asc' as const } } },
@@ -515,7 +516,7 @@ export class LeaveService {
       return { allowed: actorRole === 'ADMIN' || actorRole === 'HR' || actorRole === 'MANAGER', resolvedApproverId: null, tier: null };
     }
 
-    const workflow = await this.getActiveWorkflow(request.employee.departmentId ?? null);
+    const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
     const tier = workflow?.tiers.find((t) => t.order === request.currentTierOrder);
     const isOverride = actorRole === 'ADMIN' || actorRole === 'HR';
 
@@ -546,7 +547,7 @@ export class LeaveService {
     }
 
     if (request.currentTierOrder != null && tier) {
-      const workflow = await this.getActiveWorkflow(request.employee.departmentId ?? null);
+      const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
       const nextTier = workflow?.tiers.find((t) => t.order > tier.order);
 
       await this.prisma.leaveApprovalDecision.create({
