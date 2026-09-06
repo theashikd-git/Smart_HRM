@@ -32,7 +32,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   openTabs: [],
   activeTabKey: 'workbench',
   sidebarExpanded: true,
-  expandedGroups: { organization: true, reports: true },
+  expandedGroups: {},
 
   setActiveModule: (moduleId) => set({ activeModule: moduleId }),
 
