@@ -37,7 +37,7 @@ export class LeaveTypesController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'HR')
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.remove(id, user.id);
   }

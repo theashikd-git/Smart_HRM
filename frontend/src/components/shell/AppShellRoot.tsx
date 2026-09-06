@@ -9,6 +9,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { PersonnelDashboard } from '@/modules/personnel/dashboard/PersonnelDashboard';
 import { ProgramRouter } from '@/modules/personnel/ProgramRouter';
 import { LeaveModuleView } from '@/modules/leave/LeaveModuleView';
+import { SystemSettingsModuleView } from '@/modules/system-settings/SystemSettingsModuleView';
 
 export function AppShellRoot() {
   const { ready } = useRequireAuth();
@@ -34,6 +35,20 @@ export function AppShellRoot() {
         <TopNavigation />
         <main className="flex-1 overflow-hidden">
           <LeaveModuleView />
+        </main>
+      </div>
+    );
+  }
+
+  // Same shape as Leave -- a single screen, no sidebar/tabs. Restricted to
+  // ADMIN via TopNavigation's roles filter, but the backend also enforces
+  // this on every endpoint the screen calls.
+  if (activeModule === 'system-settings') {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden bg-surface text-text-primary">
+        <TopNavigation />
+        <main className="flex-1 overflow-hidden">
+          <SystemSettingsModuleView />
         </main>
       </div>
     );

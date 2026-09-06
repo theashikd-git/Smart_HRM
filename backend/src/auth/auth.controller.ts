@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { EmployeeLoginDto } from './dto/employee-login.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -13,6 +14,11 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req: any) {
     return this.authService.login(dto, req.ip);
+  }
+
+  @Post('employee-login')
+  employeeLogin(@Body() dto: EmployeeLoginDto, @Req() req: any) {
+    return this.authService.employeeLogin(dto, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)

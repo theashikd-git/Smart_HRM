@@ -2,32 +2,54 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Fingerprint, ShieldCheck, Loader2 } from 'lucide-react';
+import { Fingerprint, ShieldCheck, IdCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/auth-store';
 import { apiErrorMessage } from '@/lib/api';
 import { Input } from '@/components/ui/Form';
 import { Button } from '@/components/ui/Button';
 
+type Mode = 'staff' | 'employee';
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, hydrate, hydrated, token } = useAuthStore();
+  const { login, employeeLogin, isLoading, hydrate, hydrated, token, user } = useAuthStore();
+  const [mode, setMode] = useState<Mode>('staff');
+
   const [email, setEmail] = useState('admin@smarthrm.local');
   const [password, setPassword] = useState('Admin@123');
+
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [employeePassword, setEmployeePassword] = useState('');
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
   useEffect(() => {
-    if (hydrated && token) router.replace('/workbench');
-  }, [hydrated, token, router]);
+    if (!hydrated || !token) return;
+    router.replace(user?.role === 'EMPLOYEE' ? '/employee-portal' : '/workbench');
+  }, [hydrated, token, user, router]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function switchMode(next: Mode) {
+    setMode(next);
+  }
+
+  async function handleStaffSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
       await login(email, password);
       router.replace('/workbench');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  async function handleEmployeeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await employeeLogin(employeeCode.trim(), employeePassword);
+      router.replace('/employee-portal');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -81,41 +103,99 @@ export default function LoginPage() {
 
           <h1 className="text-xl font-semibold text-text-primary">Sign in to your workspace</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Use your administrator or HR account credentials.
+            {mode === 'staff'
+              ? 'Use your administrator or HR account credentials.'
+              : 'Sign in with your Employee ID to view your leave and apply for time off.'}
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-secondary">Email</label>
-              <Input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-secondary">Password</label>
-              <Input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-
-            <Button type="submit" className="w-full mt-2" size="lg" loading={isLoading}>
-              {isLoading ? 'Signing in' : 'Sign in'}
-            </Button>
-          </form>
-
-          <div className="mt-6 rounded-lg border border-line bg-surface-sunken/60 p-3.5 text-xs text-text-secondary">
-            <p className="font-medium text-text-primary mb-1">Demo credentials</p>
-            <p>Admin — admin@smarthrm.local / Admin@123</p>
-            <p>HR — hr@smarthrm.local / Hr@12345</p>
+          <div className="mt-5 flex items-center rounded-lg border border-line bg-white p-0.5 w-full">
+            <button
+              type="button"
+              onClick={() => switchMode('staff')}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === 'staff' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Staff Login
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('employee')}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === 'employee' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <IdCard className="h-3.5 w-3.5" />
+              Employee Login
+            </button>
           </div>
+
+          {mode === 'staff' ? (
+            <form onSubmit={handleStaffSubmit} className="mt-6 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Email</label>
+                <Input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Password</label>
+                <Input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <Button type="submit" className="w-full mt-2" size="lg" loading={isLoading}>
+                {isLoading ? 'Signing in' : 'Sign in'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleEmployeeSubmit} className="mt-6 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Employee ID</label>
+                <Input
+                  required
+                  value={employeeCode}
+                  onChange={(e) => setEmployeeCode(e.target.value)}
+                  placeholder="e.g. EMP-0042"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Password</label>
+                <Input
+                  type="password"
+                  required
+                  value={employeePassword}
+                  onChange={(e) => setEmployeePassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <Button type="submit" className="w-full mt-2" size="lg" loading={isLoading}>
+                {isLoading ? 'Signing in' : 'Sign in'}
+              </Button>
+
+              <p className="text-xs text-text-muted">
+                By default your password is the same as your Employee ID. Ask HR if you need it reset.
+              </p>
+            </form>
+          )}
+
+          {mode === 'staff' && (
+            <div className="mt-6 rounded-lg border border-line bg-surface-sunken/60 p-3.5 text-xs text-text-secondary">
+              <p className="font-medium text-text-primary mb-1">Demo credentials</p>
+              <p>Admin — admin@smarthrm.local / Admin@123</p>
+              <p>HR — hr@smarthrm.local / Hr@12345</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

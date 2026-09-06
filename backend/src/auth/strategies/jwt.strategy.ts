@@ -28,6 +28,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User no longer active');
     }
-    return { id: user.id, email: user.email, role: user.role, fullName: user.fullName };
+    return { id: user.id, email: user.email, role: user.role, fullName: user.fullName, employeeId: user.employeeId };
   }
 }

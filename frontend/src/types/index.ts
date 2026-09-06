@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'HR' | 'MANAGER';
+export type Role = 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE';
 
 export interface User {
   id: string;
@@ -47,6 +47,7 @@ export interface Department {
   branch?: { id: string; name: string } | null;
   location?: { id: string; name: string } | null;
   _count?: { employees: number };
+  approvalWorkflow?: LeaveApprovalWorkflow | null;
 }
 
 export interface SubDepartment {
@@ -212,6 +213,18 @@ export interface Paginated<T> {
   totalPages: number;
 }
 
+export interface SystemUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  isActive: boolean;
+  lastLoginAt?: string | null;
+  createdAt?: string;
+  employeeId?: string | null;
+  employee?: { id: string; employeeCode: string; fullName: string } | null;
+}
+
 export interface LeaveType {
   id: string;
   name: string;
@@ -228,6 +241,34 @@ export interface LeaveType {
 export type LeaveSession = 'FULL_DAY' | 'FIRST_HALF' | 'SECOND_HALF';
 export type LeaveRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
+export type LeaveTierType = 'REPORTING_SUPERIOR' | 'SPECIFIC_USER';
+
+export interface LeaveApprovalTier {
+  id: string;
+  order: number;
+  label: string;
+  type: LeaveTierType;
+  approverUserId?: string | null;
+  approver?: { id: string; fullName: string; role: Role } | null;
+}
+
+export interface LeaveApprovalWorkflow {
+  id: string;
+  departmentId: string;
+  isActive: boolean;
+  tiers: LeaveApprovalTier[];
+}
+
+export interface LeaveApprovalDecision {
+  id: string;
+  tierOrder: number;
+  tierLabel: string;
+  decision: 'APPROVED' | 'REJECTED';
+  reason?: string | null;
+  decidedAt: string;
+  approver?: { id: string; fullName: string } | null;
+}
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;
@@ -242,6 +283,13 @@ export interface LeaveRequest {
   decidedAt?: string | null;
   cancelledAt?: string | null;
   createdAt: string;
+  // Tier-chain state -- set only while a tiered workflow is driving this
+  // request (see LeaveApprovalWorkflow). currentTierLabel is the tier whose
+  // decision is next needed; both are null once the request leaves PENDING
+  // or when its department has no configured workflow.
+  currentTierOrder?: number | null;
+  currentTierLabel?: string | null;
+  decisions?: LeaveApprovalDecision[];
   employee?: {
     id: string;
     fullName: string;

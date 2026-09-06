@@ -175,3 +175,51 @@ export function useLeaveCalendar(from?: string, to?: string, departmentId?: stri
     enabled: !!from && !!to,
   });
 }
+
+
+// -- Employee self-service (Employee portal) ---------------------------------
+// Every request below is implicitly scoped to the signed-in employee's own
+// record on the backend (via their linked User.employeeId) -- there is no
+// employeeId to pass here, unlike the HR-facing hooks above.
+
+export function useMyLeaveRequests() {
+  return useQuery({
+    queryKey: ['my-leave-requests'],
+    queryFn: async () => (await api.get<LeaveRequest[]>('/leave/my/requests')).data,
+  });
+}
+
+export function useMyLeaveBalances(year?: number) {
+  return useQuery({
+    queryKey: ['my-leave-balances', year],
+    queryFn: async () => (await api.get<LeaveBalance[]>('/leave/my/balances', { params: { year } })).data,
+  });
+}
+
+export function useCreateMyLeaveRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      leaveTypeId: string;
+      startDate: string;
+      endDate: string;
+      session?: string;
+      reason?: string;
+    }) => (await api.post('/leave/my/requests', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-leave-requests'] });
+      qc.invalidateQueries({ queryKey: ['my-leave-balances'] });
+    },
+  });
+}
+
+export function useCancelMyLeaveRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.patch(`/leave/my/requests/${id}/cancel`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-leave-requests'] });
+      qc.invalidateQueries({ queryKey: ['my-leave-balances'] });
+    },
+  });
+}

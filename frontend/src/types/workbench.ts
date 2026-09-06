@@ -6,6 +6,8 @@ export interface ModuleDefinition {
   id: ModuleId;
   label: string;
   enabled: boolean; // only Personnel is enabled in this phase
+  /** Restricts the tab to these roles; omit to show it to everyone logged in. */
+  roles?: string[];
 }
 
 export interface ProgramInternalTab {

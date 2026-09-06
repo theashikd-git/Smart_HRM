@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -13,6 +13,8 @@ const SAFE_SELECT = {
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
+  employeeId: true,
+  employee: { select: { id: true, employeeCode: true, fullName: true } },
 };
 
 @Injectable()
@@ -23,8 +25,57 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto, actorId?: string) {
+    // Employee self-service accounts: no email/password to collect --
+    // derive both from the linked Employee record instead. Login for these
+    // accounts is by Employee ID (see AuthService.employeeLogin), with the
+    // Employee ID itself as the default password.
+    if (dto.role === 'EMPLOYEE') {
+      if (!dto.employeeId) {
+        throw new BadRequestException('employeeId is required to create an employee login');
+      }
+      const employee = await this.prisma.employee.findUnique({ where: { id: dto.employeeId } });
+      if (!employee) throw new NotFoundException('Employee not found');
+
+      const alreadyLinked = await this.prisma.user.findUnique({ where: { employeeId: dto.employeeId } });
+      if (alreadyLinked) throw new ConflictException('This employee already has a login account');
+
+      const passwordHash = await bcrypt.hash(employee.employeeCode, 10);
+      const user = await this.prisma.user.create({
+        data: {
+          // Synthetic, unique placeholder -- the User table requires a
+          // unique email, but employee accounts log in by Employee ID and
+          // never see or use this value.
+          email: `${employee.employeeCode}@employee.smarthrm.local`,
+          fullName: employee.fullName,
+          role: 'EMPLOYEE',
+          passwordHash,
+          employeeId: employee.id,
+        },
+        select: SAFE_SELECT,
+      });
+
+      await this.auditService.log({
+        userId: actorId,
+        action: 'USER_CREATED',
+        entity: 'User',
+        entityId: user.id,
+        details: `Created employee login for ${employee.fullName} (${employee.employeeCode})`,
+      });
+
+      return user;
+    }
+
+    if (!dto.email || !dto.fullName || !dto.password) {
+      throw new BadRequestException('email, fullName, and password are required for this role');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('A user with this email already exists');
+
+    if (dto.employeeId) {
+      const alreadyLinked = await this.prisma.user.findUnique({ where: { employeeId: dto.employeeId } });
+      if (alreadyLinked) throw new ConflictException('This employee already has a login account');
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
@@ -33,6 +84,7 @@ export class UsersService {
         fullName: dto.fullName,
         role: dto.role,
         passwordHash,
+        employeeId: dto.employeeId,
       },
       select: SAFE_SELECT,
     });

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -218,6 +218,56 @@ export class LeaveService {
   }
 
   // -------------------------------------------------------------------
+  // Approval workflow resolution
+  // -------------------------------------------------------------------
+
+  /** The employee's department's active, non-empty tier chain, or null if
+   *  none is configured (the department then uses the original simple flow:
+   *  any ADMIN/HR/MANAGER may decide the request). */
+  private async getActiveWorkflow(departmentId: string | null) {
+    if (!departmentId) return null;
+    const workflow = await this.prisma.leaveApprovalWorkflow.findUnique({
+      where: { departmentId },
+      include: { tiers: { orderBy: { order: 'asc' } } },
+    });
+    if (!workflow || !workflow.isActive || workflow.tiers.length === 0) return null;
+    return workflow;
+  }
+
+  /** Resolves which User is currently the approver for a given tier on a
+   *  given request's employee. Returns null if unresolvable (e.g. a
+   *  REPORTING_SUPERIOR tier where the employee has no reportingSuperior
+   *  assigned, or their superior has no login of their own) -- callers
+   *  treat null as "only ADMIN/HR can act on this tier right now". */
+  private async resolveTierApprover(
+    tier: { type: string; approverUserId: string | null },
+    employeeId: string,
+  ): Promise<string | null> {
+    if (tier.type === 'SPECIFIC_USER') return tier.approverUserId;
+
+    // REPORTING_SUPERIOR: dynamic, resolved from the employee's own org-chart
+    // supervisor at decision time (not fixed when the workflow was built).
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      include: { reportingSuperior: { include: { account: true } } },
+    });
+    return employee?.reportingSuperior?.account?.id ?? null;
+  }
+
+  /** Attaches a human-readable label for the request's current tier (for
+   *  display -- e.g. "Pending: Housekeeping Manager") without a second
+   *  round-trip; the tier list is already nested under
+   *  employee.department.approvalWorkflow from includeRelations(). */
+  private withTierLabel<T extends { currentTierOrder: number | null; employee?: any }>(request: T) {
+    const tiers = request.employee?.department?.approvalWorkflow?.tiers as
+      | { order: number; label: string }[]
+      | undefined;
+    const currentTierLabel =
+      request.currentTierOrder != null ? tiers?.find((t) => t.order === request.currentTierOrder)?.label ?? null : null;
+    return { ...request, currentTierLabel };
+  }
+
+  // -------------------------------------------------------------------
   // Requests
   // -------------------------------------------------------------------
 
@@ -264,6 +314,9 @@ export class LeaveService {
       }
     }
 
+    const needsApproval = leaveType.requiresApproval;
+    const workflow = needsApproval ? await this.getActiveWorkflow(employee.departmentId) : null;
+
     const request = await this.prisma.leaveRequest.create({
       data: {
         employeeId: dto.employeeId,
@@ -274,8 +327,9 @@ export class LeaveService {
         totalDays,
         reason: dto.reason,
         appliedById: actorId,
-        status: leaveType.requiresApproval ? 'PENDING' : 'APPROVED',
-        ...(leaveType.requiresApproval ? {} : { decidedById: actorId, decidedAt: new Date() }),
+        status: needsApproval ? 'PENDING' : 'APPROVED',
+        currentTierOrder: workflow ? workflow.tiers[0].order : null,
+        ...(needsApproval ? {} : { decidedById: actorId, decidedAt: new Date() }),
       },
       include: this.includeRelations(),
     });
@@ -294,7 +348,13 @@ export class LeaveService {
       await this.applyApprovalSideEffects(request);
     }
 
-    return request;
+    return this.withTierLabel(request);
+  }
+
+  /** Self-service creation for the Employee portal -- always the caller's
+   *  own record, balance overrides never allowed. */
+  async createForSelf(employeeId: string, actorUserId: string, dto: Omit<CreateLeaveRequestDto, 'employeeId' | 'overrideBalance'>) {
+    return this.create({ ...dto, employeeId, overrideBalance: false }, actorUserId);
   }
 
   private includeRelations() {
@@ -304,13 +364,22 @@ export class LeaveService {
           id: true,
           fullName: true,
           employeeCode: true,
-          department: { select: { name: true } },
+          reportingSuperiorId: true,
+          department: {
+            select: {
+              name: true,
+              approvalWorkflow: {
+                select: { isActive: true, tiers: { select: { order: true, label: true }, orderBy: { order: 'asc' as const } } },
+              },
+            },
+          },
           shift: { select: { weekendRule: true } },
         },
       },
       leaveType: { select: { id: true, name: true, code: true, color: true, paid: true } },
       appliedBy: { select: { id: true, fullName: true } },
       decidedBy: { select: { id: true, fullName: true } },
+      decisions: { orderBy: { decidedAt: 'asc' as const }, include: { approver: { select: { id: true, fullName: true } } } },
     };
   }
 
@@ -341,7 +410,18 @@ export class LeaveService {
       this.prisma.leaveRequest.count({ where }),
     ]);
 
-    return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+    return { items: items.map((r) => this.withTierLabel(r)), total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  /** All of one employee's own requests, most recent first -- for the
+   *  Employee portal. Unpaginated (a single employee's history is small). */
+  async findAllForEmployee(employeeId: string) {
+    const items = await this.prisma.leaveRequest.findMany({
+      where: { employeeId },
+      include: this.includeRelations(),
+      orderBy: { createdAt: 'desc' },
+    });
+    return items.map((r) => this.withTierLabel(r));
   }
 
   async findOne(id: string) {
@@ -350,7 +430,7 @@ export class LeaveService {
       include: this.includeRelations(),
     });
     if (!request) throw new NotFoundException('Leave request not found');
-    return request;
+    return this.withTierLabel(request);
   }
 
   /** Deducts the balance and marks each covered day ON_LEAVE in attendance.
@@ -423,20 +503,96 @@ export class LeaveService {
     });
   }
 
-  async approve(id: string, actorId?: string) {
+  /** Checks whether `actorId`/`actorRole` may decide (approve or reject) the
+   *  request's CURRENT tier right now. ADMIN/HR can always override, at any
+   *  tier, including one that's unresolvable. Everyone else must be exactly
+   *  the resolved approver for that tier. Returns the resolved approver id
+   *  (or null if unresolvable) alongside the boolean, so callers can build a
+   *  clear error message. */
+  private async checkTierAuthorization(request: any, actorId: string, actorRole: string) {
+    if (request.currentTierOrder == null) {
+      // No workflow configured for this department -- original simple flow.
+      return { allowed: actorRole === 'ADMIN' || actorRole === 'HR' || actorRole === 'MANAGER', resolvedApproverId: null, tier: null };
+    }
+
+    const workflow = await this.getActiveWorkflow(request.employee.departmentId ?? null);
+    const tier = workflow?.tiers.find((t) => t.order === request.currentTierOrder);
+    const isOverride = actorRole === 'ADMIN' || actorRole === 'HR';
+
+    if (!tier) {
+      // Workflow was deleted/changed after this request entered it -- only
+      // ADMIN/HR can rescue it from here.
+      return { allowed: isOverride, resolvedApproverId: null, tier: null };
+    }
+
+    const resolvedApproverId = await this.resolveTierApprover(tier, request.employeeId);
+    return { allowed: isOverride || resolvedApproverId === actorId, resolvedApproverId, tier };
+  }
+
+  async approve(id: string, actorId: string, actorRole: string) {
     const request = await this.findOne(id);
     if (request.status !== 'PENDING') {
       throw new BadRequestException(`Only PENDING requests can be approved (current status: ${request.status})`);
     }
 
+    const { allowed, resolvedApproverId, tier } = await this.checkTierAuthorization(request, actorId, actorRole);
+    if (!allowed) {
+      const waitingOn = tier
+        ? resolvedApproverId
+          ? `${tier.label}`
+          : `${tier.label} (no approver currently resolved -- ask an Admin or HR to step in)`
+        : 'the assigned approver';
+      throw new ForbiddenException(`This request is awaiting a decision from ${waitingOn}, not you.`);
+    }
+
+    if (request.currentTierOrder != null && tier) {
+      const workflow = await this.getActiveWorkflow(request.employee.departmentId ?? null);
+      const nextTier = workflow?.tiers.find((t) => t.order > tier.order);
+
+      await this.prisma.leaveApprovalDecision.create({
+        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'APPROVED' },
+      });
+
+      if (nextTier) {
+        const updated = await this.prisma.leaveRequest.update({
+          where: { id },
+          data: { currentTierOrder: nextTier.order },
+          include: this.includeRelations(),
+        });
+        await this.auditService.log({
+          userId: actorId,
+          action: 'LEAVE_TIER_APPROVED',
+          entity: 'LeaveRequest',
+          entityId: id,
+          details: `${tier.label} approved -- now awaiting ${nextTier.label}`,
+        });
+        return this.withTierLabel(updated);
+      }
+
+      // Final tier -- fully approved.
+      const updated = await this.prisma.leaveRequest.update({
+        where: { id },
+        data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date(), currentTierOrder: null },
+        include: this.includeRelations(),
+      });
+      await this.applyApprovalSideEffects(updated);
+      await this.auditService.log({
+        userId: actorId,
+        action: 'LEAVE_APPROVED',
+        entity: 'LeaveRequest',
+        entityId: id,
+        details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s) (final approval at ${tier.label})`,
+      });
+      return this.withTierLabel(updated);
+    }
+
+    // No workflow for this department -- original simple flow.
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
       data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
       include: this.includeRelations(),
     });
-
     await this.applyApprovalSideEffects(updated);
-
     await this.auditService.log({
       userId: actorId,
       action: 'LEAVE_APPROVED',
@@ -444,16 +600,33 @@ export class LeaveService {
       entityId: id,
       details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s)`,
     });
-
-    return updated;
+    return this.withTierLabel(updated);
   }
 
-  async reject(id: string, dto: RejectLeaveRequestDto, actorId?: string) {
+  async reject(id: string, dto: RejectLeaveRequestDto, actorId: string, actorRole: string) {
     const request = await this.findOne(id);
     if (request.status !== 'PENDING') {
       throw new BadRequestException(`Only PENDING requests can be rejected (current status: ${request.status})`);
     }
 
+    const { allowed, resolvedApproverId, tier } = await this.checkTierAuthorization(request, actorId, actorRole);
+    if (!allowed) {
+      const waitingOn = tier
+        ? resolvedApproverId
+          ? `${tier.label}`
+          : `${tier.label} (no approver currently resolved -- ask an Admin or HR to step in)`
+        : 'the assigned approver';
+      throw new ForbiddenException(`This request is awaiting a decision from ${waitingOn}, not you.`);
+    }
+
+    if (tier) {
+      await this.prisma.leaveApprovalDecision.create({
+        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'REJECTED', reason: dto.reason },
+      });
+    }
+
+    // A reject at ANY tier stops the whole chain immediately -- it never
+    // passes forward to the next tier.
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
       data: {
@@ -461,6 +634,7 @@ export class LeaveService {
         decidedById: actorId,
         decidedAt: new Date(),
         rejectionReason: dto.reason,
+        currentTierOrder: null,
       },
       include: this.includeRelations(),
     });
@@ -470,10 +644,10 @@ export class LeaveService {
       action: 'LEAVE_REJECTED',
       entity: 'LeaveRequest',
       entityId: id,
-      details: dto.reason,
+      details: tier ? `Rejected at ${tier.label}: ${dto.reason}` : dto.reason,
     });
 
-    return updated;
+    return this.withTierLabel(updated);
   }
 
   async cancel(id: string, actorId?: string) {
@@ -488,7 +662,7 @@ export class LeaveService {
 
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
+      data: { status: 'CANCELLED', cancelledAt: new Date(), currentTierOrder: null },
       include: this.includeRelations(),
     });
 
@@ -499,7 +673,18 @@ export class LeaveService {
       entityId: id,
     });
 
-    return updated;
+    return this.withTierLabel(updated);
+  }
+
+  /** Self-service cancel for the Employee portal -- verifies the request
+   *  actually belongs to the caller before delegating to cancel(). */
+  async cancelOwn(employeeId: string, requestId: string, actorUserId: string) {
+    const request = await this.prisma.leaveRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('Leave request not found');
+    if (request.employeeId !== employeeId) {
+      throw new ForbiddenException('You can only cancel your own leave requests');
+    }
+    return this.cancel(requestId, actorUserId);
   }
 
   /** Small dashboard widget helper: count of requests awaiting a decision. */

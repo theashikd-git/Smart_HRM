@@ -3,6 +3,7 @@
 import { ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
+import { useAuthStore } from '@/lib/auth-store';
 import type { ModuleDefinition } from '@/types/workbench';
 import { NotificationMenu } from './NotificationMenu';
 import { UserMenu } from './UserMenu';
@@ -12,12 +13,14 @@ const MODULES: ModuleDefinition[] = [
   { id: 'leave', label: 'Leave', enabled: true },
   { id: 'device', label: 'Device', enabled: false },
   { id: 'payroll', label: 'Payroll', enabled: false },
-  { id: 'system-settings', label: 'System Settings', enabled: false },
+  { id: 'system-settings', label: 'System Settings', enabled: true, roles: ['ADMIN'] },
 ];
 
 export function TopNavigation() {
   const activeModule = useWorkbenchStore((s) => s.activeModule);
   const setActiveModule = useWorkbenchStore((s) => s.setActiveModule);
+  const user = useAuthStore((s) => s.user);
+  const visibleModules = MODULES.filter((mod) => !mod.roles || (user && mod.roles.includes(user.role)));
 
   return (
     <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-ink-line/40 bg-ink px-3 text-white">
@@ -30,7 +33,7 @@ export function TopNavigation() {
         </div>
 
         <nav className="flex items-center gap-0.5" aria-label="Top level modules">
-          {MODULES.map((mod) => {
+          {visibleModules.map((mod) => {
             const active = mod.id === activeModule;
             return (
               <button

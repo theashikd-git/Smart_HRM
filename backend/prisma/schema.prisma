@@ -18,6 +18,7 @@ enum Role {
   ADMIN
   HR
   MANAGER
+  EMPLOYEE
 }
 
 enum EmployeeStatus {
@@ -77,6 +78,16 @@ enum SyncResultStatus {
   RETRYING
 }
 
+enum LeaveTierType {
+  REPORTING_SUPERIOR // resolved dynamically per-request from Employee.reportingSuperior
+  SPECIFIC_USER      // a fixed User assigned to this tier when the workflow is configured
+}
+
+enum LeaveDecisionType {
+  APPROVED
+  REJECTED
+}
+
 enum LeaveRequestStatus {
   PENDING
   APPROVED
@@ -121,6 +132,14 @@ model User {
   auditLogs AuditLog[]
   leaveRequestsApplied LeaveRequest[] @relation("LeaveAppliedBy")
   leaveRequestsDecided LeaveRequest[] @relation("LeaveDecidedBy")
+
+  // One login account per Employee at most -- set when this User IS that
+  // Employee (an EMPLOYEE self-service account, or a staff member who is
+  // also an Employee in the org chart).
+  employeeId String?  @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  tierAssignments LeaveApprovalTier[]     @relation("LeaveTierApprover")
+  tierDecisions   LeaveApprovalDecision[] @relation("LeaveTierDecisionApprover")
 
   @@map("users")
 }
@@ -217,6 +236,7 @@ model Department {
   sections       Section[]
   designations   Designation[]
   superiors      DepartmentSuperior[]
+  approvalWorkflow LeaveApprovalWorkflow?
 
   @@map("departments")
 }
@@ -391,6 +411,7 @@ model Employee {
   documents         Document[]
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
+  account           User?
 
   @@map("employees")
 }
@@ -577,10 +598,65 @@ model LeaveRequest {
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
   appliedBy User?     @relation("LeaveAppliedBy", fields: [appliedById], references: [id])
   decidedBy User?     @relation("LeaveDecidedBy", fields: [decidedById], references: [id])
+  decisions LeaveApprovalDecision[]
+
+  // Null = no approval chain configured for this employee's department (the
+  // original simple flow: any ADMIN/HR/MANAGER may decide it). Otherwise the
+  // order of the LeaveApprovalTier currently holding this request.
+  currentTierOrder Int?
 
   @@index([employeeId, status])
   @@index([startDate, endDate])
   @@map("leave_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Leave approval workflow (per-department tier chain)
+// ---------------------------------------------------------------------------
+
+model LeaveApprovalWorkflow {
+  id           String   @id @default(uuid())
+  departmentId String   @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  tiers      LeaveApprovalTier[]
+
+  @@map("leave_approval_workflows")
+}
+
+model LeaveApprovalTier {
+  id             String        @id @default(uuid())
+  workflowId     String
+  order          Int
+  label          String
+  type           LeaveTierType
+  // Required when type = SPECIFIC_USER; unused for REPORTING_SUPERIOR.
+  approverUserId String?
+
+  workflow LeaveApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  approver User?                 @relation("LeaveTierApprover", fields: [approverUserId], references: [id])
+
+  @@unique([workflowId, order])
+  @@map("leave_approval_tiers")
+}
+
+model LeaveApprovalDecision {
+  id         String             @id @default(uuid())
+  requestId  String
+  tierOrder  Int
+  tierLabel  String
+  approverId String?
+  decision   LeaveDecisionType
+  reason     String?
+  decidedAt  DateTime           @default(now())
+
+  request  LeaveRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver User?        @relation("LeaveTierDecisionApprover", fields: [approverId], references: [id])
+
+  @@map("leave_approval_decisions")
 }
 
 // ---------------------------------------------------------------------------

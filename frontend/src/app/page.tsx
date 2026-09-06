@@ -6,7 +6,7 @@ import { useAuthStore } from '@/lib/auth-store';
 
 export default function Home() {
   const router = useRouter();
-  const { hydrate, token, hydrated } = useAuthStore();
+  const { hydrate, token, user, hydrated } = useAuthStore();
 
   useEffect(() => {
     hydrate();
@@ -14,8 +14,12 @@ export default function Home() {
 
   useEffect(() => {
     if (!hydrated) return;
-    router.replace(token ? '/workbench' : '/login');
-  }, [hydrated, token, router]);
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    router.replace(user?.role === 'EMPLOYEE' ? '/employee-portal' : '/workbench');
+  }, [hydrated, token, user, router]);
 
   return null;
 }

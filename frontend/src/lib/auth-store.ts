@@ -11,6 +11,7 @@ interface AuthState {
   hydrated: boolean;
   hydrate: () => void;
   login: (email: string, password: string) => Promise<void>;
+  employeeLogin: (employeeCode: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -35,6 +36,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await api.post('/auth/login', { email, password });
+      const { accessToken, user } = res.data;
+      localStorage.setItem('smart_hrm_token', accessToken);
+      localStorage.setItem('smart_hrm_user', JSON.stringify(user));
+      set({ token: accessToken, user, isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
+  },
+
+  // Employee self-service login -- by Employee ID (Employee Code), not
+  // email. Separate backend endpoint, same session/token shape afterwards,
+  // so the rest of the app (api interceptor, logout, hydrate) never needs
+  // to know which door the user came in through.
+  employeeLogin: async (employeeCode: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const res = await api.post('/auth/employee-login', { employeeCode, password });
       const { accessToken, user } = res.data;
       localStorage.setItem('smart_hrm_token', accessToken);
       localStorage.setItem('smart_hrm_user', JSON.stringify(user));

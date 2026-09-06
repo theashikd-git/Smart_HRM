@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -12,6 +12,7 @@ import {
   LeaveQueryDto,
   RejectLeaveRequestDto,
 } from './dto/leave.dto';
+import { SelfCreateLeaveRequestDto } from './dto/self-leave-request.dto';
 
 @ApiTags('Leave')
 @ApiBearerAuth()
@@ -48,13 +49,13 @@ export class LeaveController {
   @Patch('requests/:id/approve')
   @Roles('ADMIN', 'HR', 'MANAGER')
   approve(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.approve(id, user.id);
+    return this.service.approve(id, user.id, user.role);
   }
 
   @Patch('requests/:id/reject')
   @Roles('ADMIN', 'HR', 'MANAGER')
   reject(@Param('id') id: string, @Body() dto: RejectLeaveRequestDto, @CurrentUser() user: any) {
-    return this.service.reject(id, dto, user.id);
+    return this.service.reject(id, dto, user.id, user.role);
   }
 
   @Patch('requests/:id/cancel')
@@ -96,5 +97,45 @@ export class LeaveController {
   @Get('pending-count')
   pendingCount() {
     return this.service.pendingCount();
+  }
+
+  // -- Employee self-service (Employee portal) ------------------------------
+  // Every route below is scoped strictly to the caller's OWN Employee record
+  // (via their linked User.employeeId) -- never trusts an employeeId from
+  // the request body/query, so one employee's login can never see or act on
+  // another's leave.
+
+  @Get('my/requests')
+  @Roles('EMPLOYEE')
+  findMyRequests(@CurrentUser() user: any) {
+    this.assertLinkedEmployee(user);
+    return this.service.findAllForEmployee(user.employeeId);
+  }
+
+  @Get('my/balances')
+  @Roles('EMPLOYEE')
+  findMyBalances(@CurrentUser() user: any, @Query('year') year?: string) {
+    this.assertLinkedEmployee(user);
+    return this.service.getBalances(user.employeeId, year ? parseInt(year, 10) : undefined);
+  }
+
+  @Post('my/requests')
+  @Roles('EMPLOYEE')
+  createMyRequest(@Body() dto: SelfCreateLeaveRequestDto, @CurrentUser() user: any) {
+    this.assertLinkedEmployee(user);
+    return this.service.createForSelf(user.employeeId, user.id, dto);
+  }
+
+  @Patch('my/requests/:id/cancel')
+  @Roles('EMPLOYEE')
+  cancelMyRequest(@Param('id') id: string, @CurrentUser() user: any) {
+    this.assertLinkedEmployee(user);
+    return this.service.cancelOwn(user.employeeId, id, user.id);
+  }
+
+  private assertLinkedEmployee(user: any) {
+    if (!user.employeeId) {
+      throw new BadRequestException('This login is not linked to an Employee record');
+    }
   }
 }
