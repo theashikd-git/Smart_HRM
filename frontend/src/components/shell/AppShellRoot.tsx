@@ -9,6 +9,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { PersonnelDashboard } from '@/modules/personnel/dashboard/PersonnelDashboard';
 import { ProgramRouter } from '@/modules/personnel/ProgramRouter';
 import { LeaveModuleView } from '@/modules/leave/LeaveModuleView';
+import { DeviceModuleView } from '@/modules/device/DeviceModuleView';
 import { SystemSettingsModuleView } from '@/modules/system-settings/SystemSettingsModuleView';
 
 export function AppShellRoot() {
@@ -35,6 +36,19 @@ export function AppShellRoot() {
         <TopNavigation />
         <main className="flex-1 overflow-hidden">
           <LeaveModuleView />
+        </main>
+      </div>
+    );
+  }
+
+  // Same shape as Leave -- a single screen, no sidebar/tabs. Ported from the
+  // old, unreachable app/device/page.tsx (see DeviceModuleView for details).
+  if (activeModule === 'device') {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden bg-surface text-text-primary">
+        <TopNavigation />
+        <main className="flex-1 overflow-hidden">
+          <DeviceModuleView />
         </main>
       </div>
     );

@@ -11,7 +11,7 @@ import { UserMenu } from './UserMenu';
 const MODULES: ModuleDefinition[] = [
   { id: 'personnel', label: 'Personnel', enabled: true },
   { id: 'leave', label: 'Leave', enabled: true },
-  { id: 'device', label: 'Device', enabled: false },
+  { id: 'device', label: 'Device', enabled: true },
   { id: 'payroll', label: 'Payroll', enabled: false },
   { id: 'system-settings', label: 'System Settings', enabled: true, roles: ['ADMIN'] },
 ];
