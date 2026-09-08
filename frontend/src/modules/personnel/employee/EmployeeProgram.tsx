@@ -124,10 +124,10 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
       <Card>
         <div className="flex flex-col gap-3 p-4 border-b border-line sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative sm:w-64">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <div className="relative shrink-0 sm:w-64">
+              <span className="pointer-events-none absolute left-3 top-0 bottom-0 flex items-center">
                 <Search className="h-3.5 w-3.5 text-text-muted" />
-              </div>
+              </span>
               <Input
                 value={search}
                 onChange={(e) => {
@@ -138,34 +138,36 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
                 className="pl-9"
               />
             </div>
-            <Select
-              value={departmentId}
-              onChange={(e) => {
-                setDepartmentId(e.target.value);
-                setPage(1);
-              }}
-              className="sm:w-44"
-            >
-              <option value="">All Departments</option>
-              {departments?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-              className="sm:w-36"
-            >
-              <option value="">All Status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="TERMINATED">Terminated</option>
-            </Select>
+            <div className="shrink-0 sm:w-44">
+              <Select
+                value={departmentId}
+                onChange={(e) => {
+                  setDepartmentId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Departments</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="shrink-0 sm:w-36">
+              <Select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Status</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="TERMINATED">Terminated</option>
+              </Select>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={handleImportFromDevice} loading={importDeviceUsers.isPending}>
