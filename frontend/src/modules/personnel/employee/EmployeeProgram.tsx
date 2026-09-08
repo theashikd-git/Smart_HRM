@@ -112,8 +112,22 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
   async function handleDelete(emp: Employee) {
     if (!confirm(`Permanently delete ${emp.fullName}? This also removes them from the device.`)) return;
     try {
-      await deleteEmployee.mutateAsync(emp.id);
-      toast.success('Employee deleted');
+      const res = await deleteEmployee.mutateAsync(emp.id);
+      if (res.deviceRemoval && !res.deviceRemoval.success) {
+        // The employee row is gone either way (Smart HRM stays the source
+        // of truth), but unlike a failed create/update push there's no
+        // employee left here to retry against later -- so this is the one
+        // chance to tell the person it didn't actually clear the device,
+        // instead of a green "deleted" toast that isn't quite true.
+        toast.error(
+          `${emp.fullName} was deleted from Smart HRM, but removing them from the biometric device failed` +
+            (res.deviceRemoval.message ? `: ${res.deviceRemoval.message}` : '.') +
+            ' Remove them from the device manually, or check Device > Sync History for details.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.success('Employee deleted');
+      }
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

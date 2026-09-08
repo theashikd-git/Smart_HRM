@@ -187,8 +187,17 @@ export class EmployeesService {
   async remove(id: string, actorId?: string) {
     const employee = await this.findOne(id);
 
+    // Best-effort: Smart HRM stays the source of truth, so the employee is
+    // removed here even if the device can't be reached -- but unlike a
+    // failed create/update push, a failed delete has no employee row left
+    // to retry against afterwards, so the outcome is captured and handed
+    // back to the caller instead of being silently swallowed.
+    let deviceRemoval: { success: boolean; message?: string } | undefined;
     if (employee.deviceUserId) {
-      await this.deviceSyncService.pushDelete(id, employee.deviceUserId).catch(() => undefined);
+      deviceRemoval = await this.deviceSyncService.pushDelete(id, employee.deviceUserId).catch((err: any) => ({
+        success: false,
+        message: err?.message ?? 'Unknown error',
+      }));
     }
 
     await this.prisma.employee.delete({ where: { id } });
@@ -201,7 +210,7 @@ export class EmployeesService {
       details: `Deleted employee ${employee.fullName} (${employee.employeeCode})`,
     });
 
-    return { success: true };
+    return { success: true, deviceRemoval };
   }
 
   /**

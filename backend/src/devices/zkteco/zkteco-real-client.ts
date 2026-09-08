@@ -19,6 +19,15 @@ const CMD_DELETE_USERTEMP = 19;
 const CMD_GET_TIME = 201;
 const CMD_SET_TIME = 202;
 const CMD_OPTIONS_RRQ = 11;
+// CMD_DELETE_USER / CMD_DELETE_USERTEMP only queue the change on some
+// firmwares -- the terminal's *active* user table (what verification and
+// the device's own user-list menu actually read from) isn't reloaded from
+// that until CMD_REFRESHDATA is sent, or the device is rebooted. Without
+// it, a delete looks like it worked (command acknowledged, no error, our
+// own SyncHistory row says SUCCESS) but the person is still enrolled on
+// the physical device. This matches pyzk's delete_user(), which calls the
+// equivalent refresh after every delete for the same reason.
+const CMD_REFRESHDATA = 1013;
 
 interface ConnectionEntry {
   zk: InstanceType<typeof ZKLib>;
@@ -441,10 +450,17 @@ export class ZktecoRealClient implements ZktecoClient, OnModuleDestroy {
       try {
         await zk.disableDevice().catch(() => undefined);
         await zk.executeCmd(CMD_DELETE_USER, buf);
+        // CMD_DELETE_USER removes the base identity record but, on some
+        // firmwares, leaves any enrolled fingerprint/face templates
+        // behind -- enough for the person to still punch in even though
+        // Smart HRM (and the device's own user list) no longer shows
+        // them. Strip those too so "deleted" actually means deleted.
+        await this.deleteUserTemplates(zk, uid);
+        await zk.executeCmd(CMD_REFRESHDATA, '').catch(() => undefined);
       } finally {
         await zk.enableDevice().catch(() => undefined);
       }
-      this.logger.log(`Deleted user ${deviceUserId} from ${ip}:${port}`);
+      this.logger.log(`Deleted user ${deviceUserId} (uid ${uid}) from ${ip}:${port}`);
       return true;
     });
   }
@@ -454,27 +470,42 @@ export class ZktecoRealClient implements ZktecoClient, OnModuleDestroy {
       const uid = this.deriveUid(deviceUserId);
       try {
         await zk.disableDevice().catch(() => undefined);
-        // CMD_DELETE_USERTEMP payload (uid: uint16 LE, fingerIndex: uint8)
-        // matches the widely-referenced pyzk protocol implementation of
-        // this same command. Not validated against a real uFace 800 in
-        // this environment (no device was reachable) -- test against a
-        // spare device before relying on this in production, per the
-        // class-level warning. Loops finger slots 0-9 (every slot the
-        // terminal can enroll); slots that were never enrolled simply
-        // no-op on the device side, so failures per-slot are swallowed
-        // rather than aborting the whole clear.
-        for (let fingerIndex = 0; fingerIndex <= 9; fingerIndex++) {
-          const buf = Buffer.alloc(3);
-          buf.writeUInt16LE(uid, 0);
-          buf.writeUInt8(fingerIndex, 2);
-          await zk.executeCmd(CMD_DELETE_USERTEMP, buf).catch(() => undefined);
-        }
+        await this.deleteUserTemplates(zk, uid);
+        await zk.executeCmd(CMD_REFRESHDATA, '').catch(() => undefined);
       } finally {
         await zk.enableDevice().catch(() => undefined);
       }
       this.logger.log(`Cleared biometric templates for user ${deviceUserId} on ${ip}:${port}`);
       return true;
     });
+  }
+
+  /**
+   * Deletes every enrolled finger template (slots 0-9) for a device uid.
+   * Shared by deleteUser() and clearTemplates() -- must be called with an
+   * already-open `zk` handle from inside an existing withConnection()
+   * callback, never via a fresh withConnection() of its own: this class
+   * serializes commands per-connection through a single queue, and a
+   * nested withConnection() call on the same connection would await that
+   * same queue from inside the callback that's supposed to resolve it,
+   * deadlocking forever.
+   *
+   * CMD_DELETE_USERTEMP payload (uid: uint16 LE, fingerIndex: uint8)
+   * matches the widely-referenced pyzk protocol implementation of this
+   * same command. Not validated against a real uFace 800 in this
+   * environment (no device was reachable) -- test against a spare device
+   * before relying on this in production, per the class-level warning.
+   * Loops finger slots 0-9 (every slot the terminal can enroll); slots
+   * that were never enrolled simply no-op on the device side, so
+   * failures per-slot are swallowed rather than aborting the whole clear.
+   */
+  private async deleteUserTemplates(zk: InstanceType<typeof ZKLib>, uid: number): Promise<void> {
+    for (let fingerIndex = 0; fingerIndex <= 9; fingerIndex++) {
+      const buf = Buffer.alloc(3);
+      buf.writeUInt16LE(uid, 0);
+      buf.writeUInt8(fingerIndex, 2);
+      await zk.executeCmd(CMD_DELETE_USERTEMP, buf).catch(() => undefined);
+    }
   }
 
   async getAttendanceLogs(ip: string, port: number): Promise<RawPunch[]> {

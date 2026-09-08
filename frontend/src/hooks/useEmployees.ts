@@ -64,10 +64,19 @@ export function useActivateEmployee() {
   });
 }
 
+export interface DeleteEmployeeResult {
+  success: boolean;
+  // Present only when the employee had been pushed to a biometric device --
+  // tells the caller whether the device-side removal actually succeeded, so
+  // a failure there (nothing left in Smart HRM to retry against afterwards)
+  // isn't silently swallowed behind a generic "deleted" success toast.
+  deviceRemoval?: { success: boolean; message?: string };
+}
+
 export function useDeleteEmployee() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/employees/${id}`)).data,
+    mutationFn: async (id: string): Promise<DeleteEmployeeResult> => (await api.delete(`/employees/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 }

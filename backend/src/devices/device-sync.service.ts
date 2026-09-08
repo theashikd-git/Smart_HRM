@@ -179,10 +179,26 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Remove the employee entirely from the device (hard delete). */
-  async pushDelete(employeeId: string, deviceUserId: string | null) {
+  /**
+   * Remove the employee entirely from the device (hard delete). Returns
+   * whether the device side actually succeeded so callers (EmployeesService)
+   * can tell the person deleting the employee when it didn't -- unlike a
+   * failed push, a failed delete has nothing left in Smart HRM to retry
+   * against later (the employee row is gone), so this is the only chance
+   * to surface it.
+   */
+  async pushDelete(
+    employeeId: string,
+    deviceUserId: string | null,
+  ): Promise<{ success: boolean; message?: string }> {
     const device = await this.getPrimaryDevice();
-    if (!device || !deviceUserId) return;
+    if (!device) {
+      return { success: false, message: 'No biometric device configured' };
+    }
+    if (!deviceUserId) {
+      // Never pushed to a device in the first place -- nothing to remove.
+      return { success: true };
+    }
 
     try {
       await this.zkteco.deleteUser(device.ipAddress, device.port, deviceUserId);
@@ -192,14 +208,17 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
         operation: 'DELETE',
         status: 'SUCCESS',
       });
+      return { success: true };
     } catch (err: any) {
+      const message = err?.message ?? 'Unknown error';
       await this.recordHistory({
         employeeId,
         deviceId: device.id,
         operation: 'DELETE',
         status: 'FAILED',
-        message: err?.message ?? 'Unknown error',
+        message,
       });
+      return { success: false, message };
     }
   }
 
