@@ -3,7 +3,7 @@
 import { ReactNode, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Fingerprint, Scan, CreditCard, ShieldCheck } from 'lucide-react';
+import { Fingerprint, Scan, CreditCard, ShieldCheck, Ban, CheckCircle2 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/Form';
 import { employeeStatusColors, syncStatusColors, formatDate, formatDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
 import { useUpdateUser } from '@/hooks/useUsers';
+import { useDisableEmployee, useActivateEmployee } from '@/hooks/useEmployees';
 import { apiErrorMessage } from '@/lib/api';
 import { Employee, Role } from '@/types';
 
@@ -90,6 +91,47 @@ function AccountAccessSection({ employee }: { employee: Employee }) {
   );
 }
 
+/** Admin/HR-only Activate/Disable control -- lives on the profile now that
+ *  the Employee List table only shows the clock/edit/delete icons, so the
+ *  capability the old row-level "..." menu offered isn't lost. */
+function EmployeeStatusToggle({ employee }: { employee: Employee }) {
+  const viewer = useAuthStore((s) => s.user);
+  const canManage = viewer?.role === 'ADMIN' || viewer?.role === 'HR';
+  const disableEmployee = useDisableEmployee();
+  const activateEmployee = useActivateEmployee();
+  const qc = useQueryClient();
+
+  if (!canManage) return null;
+
+  async function handleToggle() {
+    try {
+      if (employee.status === 'ACTIVE') {
+        await disableEmployee.mutateAsync(employee.id);
+        toast.success(`${employee.fullName} disabled`);
+      } else {
+        await activateEmployee.mutateAsync(employee.id);
+        toast.success(`${employee.fullName} activated`);
+      }
+      qc.invalidateQueries({ queryKey: ['employee', employee.id] });
+      qc.invalidateQueries({ queryKey: ['employees'] });
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  const pending = disableEmployee.isPending || activateEmployee.isPending;
+
+  return employee.status === 'ACTIVE' ? (
+    <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
+      <Ban className="h-3.5 w-3.5" /> Disable
+    </Button>
+  ) : (
+    <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
+      <CheckCircle2 className="h-3.5 w-3.5" /> Activate
+    </Button>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
@@ -121,20 +163,23 @@ export function EmployeeProfileContent({ employee }: { employee: Employee }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Avatar name={employee.fullName} size="lg" scanFrame />
-        <div>
-          <p className="text-base font-semibold text-text-primary">{employee.fullName}</p>
-          <p className="text-xs text-text-muted font-mono">{employee.employeeCode}</p>
-          <div className="mt-2 flex items-center gap-2">
-            <StatusPill label={employee.status} colors={employeeStatusColors[employee.status]} />
-            <StatusPill
-              label={employee.syncStatus.replace('_', ' ')}
-              colors={syncStatusColors[employee.syncStatus]}
-              pulsing={employee.syncStatus === 'PENDING'}
-            />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Avatar name={employee.fullName} size="lg" scanFrame />
+          <div>
+            <p className="text-base font-semibold text-text-primary">{employee.fullName}</p>
+            <p className="text-xs text-text-muted font-mono">{employee.employeeCode}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <StatusPill label={employee.status} colors={employeeStatusColors[employee.status]} />
+              <StatusPill
+                label={employee.syncStatus.replace('_', ' ')}
+                colors={syncStatusColors[employee.syncStatus]}
+                pulsing={employee.syncStatus === 'PENDING'}
+              />
+            </div>
           </div>
         </div>
+        <EmployeeStatusToggle employee={employee} />
       </div>
 
       <AccountAccessSection employee={employee} />

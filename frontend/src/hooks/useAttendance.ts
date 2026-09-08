@@ -12,11 +12,12 @@ export interface AttendanceQuery {
   pageSize?: number;
 }
 
-export function useAttendance(query: AttendanceQuery) {
+export function useAttendance(query: AttendanceQuery, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['attendance', query],
     queryFn: async () =>
       (await api.get<Paginated<AttendanceRecord>>('/attendance', { params: query })).data,
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -6,14 +6,9 @@ import {
   Plus,
   Search,
   Users,
-  MoreVertical,
   Pencil,
-  Ban,
-  CheckCircle2,
   Trash2,
-  Fingerprint,
-  Scan,
-  Eye,
+  Clock,
   DownloadCloud,
   Loader2,
 } from 'lucide-react';
@@ -22,20 +17,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
-import { StatusPill } from '@/components/ui/Card';
-import { Avatar } from '@/components/ui/Avatar';
 import { EmployeeFormModal } from '@/components/employees/EmployeeFormModal';
 import { EmployeeProfileContent } from '@/components/employees/EmployeeProfileContent';
-import {
-  useEmployees,
-  useEmployee,
-  useDisableEmployee,
-  useActivateEmployee,
-  useDeleteEmployee,
-} from '@/hooks/useEmployees';
+import { AttendanceHistoryModal } from '@/components/employees/AttendanceHistoryModal';
+import { useEmployees, useEmployee, useDeleteEmployee } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDevices, useImportDeviceUsers } from '@/hooks/useDevices';
-import { employeeStatusColors, syncStatusColors } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/api';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { PROGRAM_REGISTRY } from '@/lib/personnel-nav';
@@ -81,7 +69,7 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [attendanceFor, setAttendanceFor] = useState<Employee | null>(null);
 
   const { data, isLoading } = useEmployees({
     search: search || undefined,
@@ -92,8 +80,6 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
   });
   const { data: departments } = useDepartments();
   const { data: devices } = useDevices();
-  const disableEmployee = useDisableEmployee();
-  const activateEmployee = useActivateEmployee();
   const deleteEmployee = useDeleteEmployee();
   const importDeviceUsers = useImportDeviceUsers();
   const primaryDevice = devices?.[0];
@@ -121,32 +107,6 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
   function openEdit(emp: Employee) {
     setEditing(emp);
     setModalOpen(true);
-    setMenuFor(null);
-  }
-
-  function openView(emp: Employee) {
-    onViewEmployee(emp.id);
-    setMenuFor(null);
-  }
-
-  async function handleDisable(emp: Employee) {
-    try {
-      await disableEmployee.mutateAsync(emp.id);
-      toast.success(`${emp.fullName} disabled`);
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-    setMenuFor(null);
-  }
-
-  async function handleActivate(emp: Employee) {
-    try {
-      await activateEmployee.mutateAsync(emp.id);
-      toast.success(`${emp.fullName} activated`);
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-    setMenuFor(null);
   }
 
   async function handleDelete(emp: Employee) {
@@ -157,162 +117,119 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
-    setMenuFor(null);
   }
 
   return (
     <>
       <Card>
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-line">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
-            <Input
-              value={search}
+        <div className="flex flex-col gap-3 p-4 border-b border-line sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative sm:w-64">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <Search className="h-3.5 w-3.5 text-text-muted" />
+              </div>
+              <Input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by name, code, email, phone..."
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={departmentId}
               onChange={(e) => {
-                setSearch(e.target.value);
+                setDepartmentId(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by name, code, email, phone..."
-              className="pl-9"
-            />
+              className="sm:w-44"
+            >
+              <option value="">All Departments</option>
+              {departments?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              className="sm:w-36"
+            >
+              <option value="">All Status</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="TERMINATED">Terminated</option>
+            </Select>
           </div>
-          <Select
-            value={departmentId}
-            onChange={(e) => {
-              setDepartmentId(e.target.value);
-              setPage(1);
-            }}
-            className="sm:w-48"
-          >
-            <option value="">All Departments</option>
-            {departments?.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-            className="sm:w-40"
-          >
-            <option value="">All Status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-            <option value="TERMINATED">Terminated</option>
-          </Select>
-          <Button variant="outline" onClick={handleImportFromDevice} loading={importDeviceUsers.isPending}>
-            <DownloadCloud className="h-4 w-4" />
-            Import from Device
-          </Button>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Add Employee
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleImportFromDevice} loading={importDeviceUsers.isPending}>
+              <DownloadCloud className="h-4 w-4" />
+              Import from Device
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              Add Employee
+            </Button>
+          </div>
         </div>
 
         <Table>
           <Thead>
             <tr>
-              <Th>Employee</Th>
+              <Th>Employee ID</Th>
+              <Th>First Name</Th>
               <Th>Department</Th>
-              <Th>Designation</Th>
-              <Th>Shift</Th>
-              <Th>Status</Th>
-              <Th>Device Sync</Th>
-              <Th></Th>
+              <Th>Hired Date</Th>
+              <Th>Employee Type</Th>
+              <Th className="text-center w-12"></Th>
+              <Th className="text-center w-12"></Th>
+              <Th className="text-center w-12"></Th>
             </tr>
           </Thead>
           <Tbody>
             {data?.items.map((emp) => (
               <Tr key={emp.id}>
+                <Td className="font-mono text-xs text-text-muted">{emp.employeeCode}</Td>
                 <Td>
-                  <button onClick={() => openView(emp)} className="flex items-center gap-3 text-left hover:opacity-80">
-                    <Avatar name={emp.fullName} scanFrame />
-                    <div>
-                      <p className="font-medium text-text-primary">{emp.fullName}</p>
-                      <p className="text-xs text-text-muted font-mono">{emp.employeeCode}</p>
-                    </div>
+                  <button onClick={() => onViewEmployee(emp.id)} className="font-medium text-text-primary hover:text-accent hover:underline text-left">
+                    {emp.fullName}
                   </button>
                 </Td>
                 <Td>{emp.department?.name || '—'}</Td>
-                <Td>{emp.designation?.title || '—'}</Td>
-                <Td>{emp.shift ? `${emp.shift.name}` : '—'}</Td>
-                <Td>
-                  <StatusPill label={emp.status} colors={employeeStatusColors[emp.status]} />
-                </Td>
-                <Td>
-                  <StatusPill
-                    label={emp.syncStatus.replace('_', ' ')}
-                    colors={syncStatusColors[emp.syncStatus]}
-                    pulsing={emp.syncStatus === 'PENDING'}
-                  />
-                  {emp.deviceUserId && <p className="mt-1 text-xs font-mono text-text-muted">ID: {emp.deviceUserId}</p>}
-                  {(emp.fingerprintEnrolled || emp.faceEnrolled) && (
-                    <div className="mt-1 flex items-center gap-2 text-text-muted">
-                      {emp.fingerprintEnrolled && (
-                        <span title="Fingerprint enrolled" className="flex items-center gap-1 text-xs">
-                          <Fingerprint className="h-3 w-3" />
-                        </span>
-                      )}
-                      {emp.faceEnrolled && (
-                        <span title="Face enrolled" className="flex items-center gap-1 text-xs">
-                          <Scan className="h-3 w-3" />
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </Td>
-                <Td className="relative text-right">
+                <Td>{formatDate(emp.joiningDate)}</Td>
+                <Td>{EMPLOYMENT_TYPE_LABELS[emp.employmentType] || emp.employmentType || '—'}</Td>
+                <Td className="text-center">
                   <button
-                    onClick={() => setMenuFor(menuFor === emp.id ? null : emp.id)}
+                    onClick={() => setAttendanceFor(emp)}
+                    title="Attendance history"
+                    className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-accent"
+                  >
+                    <Clock className="h-4 w-4" />
+                  </button>
+                </Td>
+                <Td className="text-center">
+                  <button
+                    onClick={() => openEdit(emp)}
+                    title="Edit employee"
                     className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" />
                   </button>
-                  {menuFor === emp.id && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                      <div className="absolute right-4 z-20 mt-1 w-44 rounded-lg border border-line bg-white shadow-popover py-1 text-left">
-                        <button
-                          onClick={() => openView(emp)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface-sunken"
-                        >
-                          <Eye className="h-3.5 w-3.5" /> View Details
-                        </button>
-                        <button
-                          onClick={() => openEdit(emp)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface-sunken"
-                        >
-                          <Pencil className="h-3.5 w-3.5" /> Edit
-                        </button>
-                        {emp.status === 'ACTIVE' ? (
-                          <button
-                            onClick={() => handleDisable(emp)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-warning hover:bg-warning-soft"
-                          >
-                            <Ban className="h-3.5 w-3.5" /> Disable
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleActivate(emp)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-soft"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Activate
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDelete(emp)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger-soft"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
-                      </div>
-                    </>
-                  )}
+                </Td>
+                <Td className="text-center">
+                  <button
+                    onClick={() => handleDelete(emp)}
+                    title="Delete employee"
+                    className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </Td>
               </Tr>
             ))}
@@ -345,9 +262,17 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
       </Card>
 
       <EmployeeFormModal open={modalOpen} onClose={() => setModalOpen(false)} employee={editing} />
+      <AttendanceHistoryModal open={!!attendanceFor} onClose={() => setAttendanceFor(null)} employee={attendanceFor} />
     </>
   );
 }
+
+const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
+  FULL_TIME: 'Full Time',
+  PART_TIME: 'Part Time',
+  CONTRACT: 'Contract',
+  INTERN: 'Intern',
+};
 
 // ---------------------------------------------------------------------------
 // Profile — real API via useEmployee(id), rendered inline instead of a modal.
