@@ -76,4 +76,18 @@ export class UpdateDepartmentDto {
   @IsOptional()
   @IsEnum(OrgUnitStatusDto)
   status?: OrgUnitStatusDto;
+
+  // New sub-departments to add during this edit (Edit Department popup's
+  // "+ Add Sub-Dept" rows) -- same shape and same generated-code handling
+  // as CreateDepartmentDto.subDepartments, applied in the same transaction
+  // as the rest of this update.
+  @IsOptional()
+  @IsArray()
+  subDepartments?: CreateSubDepartmentRowInput[];
+
+  // Existing sub-department ids to delete during this edit (the trash icon
+  // next to an existing row in the Edit Department popup).
+  @IsOptional()
+  @IsArray()
+  removeSubDepartmentIds?: string[];
 }

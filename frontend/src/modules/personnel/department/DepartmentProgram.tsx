@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Building2, CornerDownRight } from 'lucide-react';
+import { Plus, Trash2, Pencil, Building2, CornerDownRight } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,7 @@ import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Tab
 import { useDepartments, useDeleteDepartment } from '@/hooks/useDepartments';
 import { apiErrorMessage } from '@/lib/api';
 import { AddDepartmentModal } from './AddDepartmentModal';
+import { EditDepartmentModal } from './EditDepartmentModal';
 import type { Department } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
@@ -24,6 +25,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
   const { data: departments, isLoading } = useDepartments();
   const deleteDepartment = useDeleteDepartment();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Department | null>(null);
 
   async function handleDelete(dept: Department) {
     const subCount = dept.subDepartments?.length ?? 0;
@@ -58,7 +60,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
               <Th>Code</Th>
               <Th>Manager</Th>
               <Th className="text-right">Employees</Th>
-              <Th className="w-12"></Th>
+              <Th className="w-20"></Th>
             </tr>
           </Thead>
           <Tbody>
@@ -74,14 +76,23 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
                   <Td className="font-mono text-xs text-text-muted">{dept.code}</Td>
                   <Td>{dept.manager?.fullName || '—'}</Td>
                   <Td className="text-right">{dept._count?.employees ?? 0}</Td>
-                  <Td className="text-center">
-                    <button
-                      onClick={() => handleDelete(dept)}
-                      title="Delete department"
-                      className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <Td>
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => setEditing(dept)}
+                        title="Edit department"
+                        className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(dept)}
+                        title="Delete department"
+                        className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </Td>
                 </Tr>
                 {dept.subDepartments?.map((sub) => (
@@ -113,6 +124,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
       </Card>
 
       <AddDepartmentModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <EditDepartmentModal open={!!editing} onClose={() => setEditing(null)} department={editing} />
     </ProgramWorkspace>
   );
 }

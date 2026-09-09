@@ -46,7 +46,11 @@ export function useUpdateDepartment() {
       branchId?: string;
       locationId?: string;
       status?: string;
-    }) => (await api.patch(`/departments/${id}`, payload)).data,
+      // Edit Department popup: new rows to add and existing ids to remove,
+      // applied in the same transaction as the rest of this update.
+      subDepartments?: CreateDepartmentSubRow[];
+      removeSubDepartmentIds?: string[];
+    }): Promise<Department> => (await api.patch(`/departments/${id}`, payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
   });
 }

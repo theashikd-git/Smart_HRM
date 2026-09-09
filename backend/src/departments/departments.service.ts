@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreateDepartmentDto, CreateSubDepartmentRowInput, UpdateDepartmentDto } from './dto/department.dto';
+import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/department.dto';
 
 @Injectable()
 export class DepartmentsService {
@@ -72,20 +72,58 @@ export class DepartmentsService {
     return department;
   }
 
+  /**
+   * Edit Department popup: renaming, changing the manager, adding new
+   * sub-departments, and removing existing ones can all happen in the same
+   * Confirm click -- everything here runs in one transaction, same as
+   * create(), so a duplicate-name row can't leave a half-applied edit.
+   */
   async update(id: string, dto: UpdateDepartmentDto, actorId?: string) {
-    await this.findOne(id);
-    const department = await this.prisma.department.update({
-      where: { id },
-      data: dto,
-      include: this.includeRelations(),
+    const existing = await this.findOne(id);
+
+    const newRows = (dto.subDepartments ?? []).filter((r) => r?.name?.trim());
+    const removeIds = new Set(dto.removeSubDepartmentIds ?? []);
+    const remainingExisting = (existing.subDepartments ?? []).filter((s) => !removeIds.has(s.id));
+    this.assertUniqueSubDepartmentNames([...remainingExisting.map((s) => ({ name: s.name })), ...newRows]);
+
+    const { subDepartments: _subDepartments, removeSubDepartmentIds: _removeIds, ...departmentData } = dto;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (removeIds.size > 0) {
+        await tx.subDepartment.deleteMany({ where: { id: { in: [...removeIds] }, departmentId: id } });
+      }
+
+      const department = await tx.department.update({ where: { id }, data: departmentData });
+
+      for (const row of newRows) {
+        const code = await this.generateSubDepartmentCode(tx, department.code, row.name);
+        await tx.subDepartment.create({
+          data: {
+            departmentId: id,
+            name: row.name.trim(),
+            code,
+            headEmployeeId: row.headEmployeeId || undefined,
+          },
+        });
+      }
+
+      return tx.department.findUniqueOrThrow({ where: { id }, include: this.includeRelations() });
     });
+
     await this.auditService.log({
       userId: actorId,
       action: 'DEPARTMENT_UPDATED',
       entity: 'Department',
       entityId: id,
+      details:
+        [
+          newRows.length ? `added ${newRows.length} sub-department(s)` : null,
+          removeIds.size ? `removed ${removeIds.size} sub-department(s)` : null,
+        ]
+          .filter(Boolean)
+          .join('; ') || undefined,
     });
-    return department;
+    return updated;
   }
 
   async remove(id: string, actorId?: string) {
@@ -117,7 +155,7 @@ export class DepartmentsService {
    * second Radiology-like department would be fine), so this only checks
    * the rows submitted together in this one popup.
    */
-  private assertUniqueSubDepartmentNames(rows: CreateSubDepartmentRowInput[]) {
+  private assertUniqueSubDepartmentNames(rows: { name: string }[]) {
     const seen = new Set<string>();
     for (const row of rows) {
       const key = row.name.trim().toLowerCase();
