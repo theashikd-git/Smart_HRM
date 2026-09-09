@@ -11,10 +11,12 @@ export class SubDepartmentsService {
   ) {}
 
   async create(dto: CreateSubDepartmentDto, actorId?: string) {
-    const existing = await this.prisma.subDepartment.findUnique({ where: { code: dto.code } });
+    const code = dto.code?.trim() || (await this.generateCode(dto.departmentId, dto.name));
+
+    const existing = await this.prisma.subDepartment.findUnique({ where: { code } });
     if (existing) throw new ConflictException('Sub-department code already exists');
 
-    const subDepartment = await this.prisma.subDepartment.create({ data: dto });
+    const subDepartment = await this.prisma.subDepartment.create({ data: { ...dto, code } });
     await this.auditService.log({
       userId: actorId,
       action: 'SUB_DEPARTMENT_CREATED',
@@ -23,6 +25,34 @@ export class SubDepartmentsService {
       details: `Created sub-department ${subDepartment.name}`,
     });
     return subDepartment;
+  }
+
+  /**
+   * Derives a sub-department code from its parent department's code plus
+   * the sub-department's own name (e.g. department "RAD" + name "X-Ray" ->
+   * "RAD-XRAY"), retrying with a numeric suffix on the rare collision.
+   * `code` is globally unique in the schema even though sub-department
+   * *names* only need to be unique within their parent, so this exists to
+   * spare the user from having to invent a code for every row in the Add
+   * Department popup.
+   */
+  private async generateCode(departmentId: string, name: string): Promise<string> {
+    const department = await this.prisma.department.findUnique({ where: { id: departmentId } });
+    const prefix = department?.code || 'SUB';
+    const slug = name
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const base = `${prefix}-${slug || 'SUB'}`.slice(0, 40);
+
+    let candidate = base;
+    let suffix = 1;
+    while (await this.prisma.subDepartment.findUnique({ where: { code: candidate } })) {
+      suffix += 1;
+      candidate = `${base}-${suffix}`;
+    }
+    return candidate;
   }
 
   findAll(departmentId?: string) {

@@ -246,6 +246,7 @@ model Department {
 
   branch         Branch?          @relation(fields: [branchId], references: [id])
   location       Location?        @relation(fields: [locationId], references: [id])
+  manager        Employee?        @relation("DepartmentManager", fields: [headEmployeeId], references: [id])
   employees      Employee[]
   subDepartments SubDepartment[]
   sections       Section[]
@@ -257,15 +258,17 @@ model Department {
 }
 
 model SubDepartment {
-  id           String        @id @default(uuid())
-  departmentId String
-  name         String
-  code         String        @unique
-  status       OrgUnitStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id             String        @id @default(uuid())
+  departmentId   String
+  name           String
+  code           String        @unique
+  headEmployeeId String?
+  status         OrgUnitStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   department Department           @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  manager    Employee?            @relation("SubDepartmentManager", fields: [headEmployeeId], references: [id])
   sections   Section[]
   employees  Employee[]
   superiors  DepartmentSuperior[]
@@ -419,6 +422,8 @@ model Employee {
 
   subordinates      Employee[]           @relation("EmployeeSuperior")
   managedBranches   Branch[]             @relation("BranchManager")
+  managedDepartments    Department[]     @relation("DepartmentManager")
+  managedSubDepartments SubDepartment[]  @relation("SubDepartmentManager")
   superiorRoles     DepartmentSuperior[] @relation("DepartmentSuperiorEmployee")
   attendanceLogs    AttendanceLog[]
   attendanceRecords AttendanceRecord[]

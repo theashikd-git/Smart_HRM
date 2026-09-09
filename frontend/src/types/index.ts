@@ -50,6 +50,8 @@ export interface Department {
   status: OrgUnitStatus;
   branch?: { id: string; name: string } | null;
   location?: { id: string; name: string } | null;
+  manager?: { id: string; fullName: string } | null;
+  subDepartments?: SubDepartment[];
   _count?: { employees: number };
   approvalWorkflow?: LeaveApprovalWorkflow | null;
 }
@@ -59,8 +61,10 @@ export interface SubDepartment {
   name: string;
   code?: string | null;
   departmentId: string;
+  headEmployeeId?: string | null;
   status: OrgUnitStatus;
   department?: { id: string; name: string } | null;
+  manager?: { id: string; fullName: string } | null;
   _count?: { employees: number };
 }
 

@@ -2,6 +2,7 @@ import type { WorkbenchTab } from '@/types/workbench';
 import { EmployeeProgram } from './employee/EmployeeProgram';
 import { ReportsProgram } from './reports/ReportsProgram';
 import { AttendanceProgram } from './attendance/AttendanceProgram';
+import { DepartmentProgram } from './department/DepartmentProgram';
 import { PlaceholderProgram } from './common/PlaceholderProgram';
 import { PLACEHOLDER_CONFIG } from './common/placeholderConfig';
 
@@ -18,6 +19,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <ReportsProgram tab={tab} />;
     case 'attendance':
       return <AttendanceProgram tab={tab} />;
+    case 'org-department':
+      return <DepartmentProgram tab={tab} />;
     default: {
       const config = PLACEHOLDER_CONFIG[tab.programId];
       if (!config) {

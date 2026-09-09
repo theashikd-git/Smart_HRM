@@ -9,6 +9,11 @@ export function useDepartments() {
   });
 }
 
+export interface CreateDepartmentSubRow {
+  name: string;
+  headEmployeeId?: string;
+}
+
 export function useCreateDepartment() {
   const qc = useQueryClient();
   return useMutation({
@@ -19,7 +24,10 @@ export function useCreateDepartment() {
       branchId?: string;
       locationId?: string;
       status?: string;
-    }) => (await api.post('/departments', payload)).data,
+      // Created together with the department in one transaction -- see
+      // the "Add Department" popup's Sub-Departments section.
+      subDepartments?: CreateDepartmentSubRow[];
+    }): Promise<Department> => (await api.post('/departments', payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
   });
 }

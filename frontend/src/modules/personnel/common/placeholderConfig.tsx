@@ -3,7 +3,6 @@ import { DataTableColumn } from '@/components/shell/DataTable';
 import {
   mockBranches,
   mockLocations,
-  mockDepartmentsTable,
   mockSubDepartments,
   mockSections,
   mockDesignations,
@@ -66,19 +65,6 @@ export const PLACEHOLDER_CONFIG: Record<string, PlaceholderConfig> = {
       { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
     ] satisfies DataTableColumn<(typeof mockLocations)[number]>[],
     rows: mockLocations,
-  },
-
-  'org-department': {
-    variant: 'table',
-    rowKey: (r) => r.name,
-    addLabel: 'Add Department',
-    columns: [
-      { key: 'name', header: 'Department' },
-      { key: 'code', header: 'Code' },
-      { key: 'branch', header: 'Branch' },
-      { key: 'employees', header: 'Employees', align: 'right' },
-    ] satisfies DataTableColumn<(typeof mockDepartmentsTable)[number]>[],
-    rows: mockDepartmentsTable,
   },
 
   'org-subdepartment': {
