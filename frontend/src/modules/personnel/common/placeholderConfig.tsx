@@ -11,7 +11,6 @@ import {
   mockShifts,
   mockHolidays,
   mockResignedEmployees,
-  mockRosterAssignments,
 } from '@/data/mock/personnel';
 import type { PlaceholderConfig } from './PlaceholderProgram';
 
@@ -127,20 +126,6 @@ export const PLACEHOLDER_CONFIG: Record<string, PlaceholderConfig> = {
       { key: 'employee', header: 'Employee' },
     ] satisfies DataTableColumn<(typeof mockSuperiors)[number]>[],
     rows: mockSuperiors,
-  },
-
-  roster: {
-    variant: 'table',
-    rowKey: (r) => `${r.employee}-${r.from}`,
-    addLabel: 'Create Roster',
-    columns: [
-      { key: 'employee', header: 'Employee' },
-      { key: 'department', header: 'Department' },
-      { key: 'shift', header: 'Shift' },
-      { key: 'from', header: 'From' },
-      { key: 'to', header: 'To' },
-    ] satisfies DataTableColumn<(typeof mockRosterAssignments)[number]>[],
-    rows: mockRosterAssignments,
   },
 
   shift: {

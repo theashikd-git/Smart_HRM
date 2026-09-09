@@ -20,6 +20,7 @@ import { SubDepartmentsModule } from './sub-departments/sub-departments.module';
 import { SectionsModule } from './sections/sections.module';
 import { GradesModule } from './grades/grades.module';
 import { DepartmentSuperiorsModule } from './department-superiors/department-superiors.module';
+import { RosterModule } from './roster/roster.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { DepartmentSuperiorsModule } from './department-superiors/department-sup
     SectionsModule,
     GradesModule,
     DepartmentSuperiorsModule,
+    RosterModule,
   ],
 })
 export class AppModule {}

@@ -12,6 +12,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { MyLeaveRequestModal } from './MyLeaveRequestModal';
+import { MyCalendarCard } from './MyCalendarCard';
 import { ChangePasswordGate } from './ChangePasswordGate';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -81,6 +82,8 @@ export function EmployeePortalView() {
             Apply for Leave
           </Button>
         </div>
+
+        <MyCalendarCard />
 
         <Card className="mb-4">
           <CardHeader title="Leave Balances" subtitle="Remaining days for the current year" />

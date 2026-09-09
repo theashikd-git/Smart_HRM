@@ -126,6 +126,38 @@ export interface Shift {
   _count?: { employees: number };
 }
 
+export type RosterDayType = 'SHIFT' | 'OFF';
+
+export interface RosterAssignment {
+  id: string;
+  employeeId: string;
+  date: string;
+  type: RosterDayType;
+  shiftId?: string | null;
+  shift?: { id: string; name: string; startTime: string; endTime: string } | null;
+}
+
+export interface RosterEmployee {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  department?: { id: string; name: string } | null;
+  subDepartment?: { id: string; name: string } | null;
+  designation?: { title: string } | null;
+}
+
+export interface RosterAttendanceEntry {
+  employeeId: string;
+  date: string;
+  status: AttendanceStatus;
+}
+
+export interface RosterWeekData {
+  employees: RosterEmployee[];
+  assignments: RosterAssignment[];
+  attendance: RosterAttendanceEntry[];
+}
+
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
 export type SyncStatus = 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
