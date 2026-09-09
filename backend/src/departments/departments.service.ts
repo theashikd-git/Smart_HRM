@@ -79,11 +79,22 @@ export class DepartmentsService {
    * create(), so a duplicate-name row can't leave a half-applied edit.
    */
   async update(id: string, dto: UpdateDepartmentDto, actorId?: string) {
-    const existing = await this.findOne(id);
+    // A light existence + validation check -- not the full includeRelations()
+    // fetch (manager joins, a per-sub-department employee count subquery for
+    // every row) since all this step needs is which sub-department ids/names
+    // already exist. That heavier shape is only fetched once, at the very
+    // end, for the value actually handed back to the caller -- this used to
+    // run twice per save (once here, once again after the transaction),
+    // which was the main reason department saves felt slow.
+    const existing = await this.prisma.department.findUnique({
+      where: { id },
+      select: { id: true, subDepartments: { select: { id: true, name: true } } },
+    });
+    if (!existing) throw new NotFoundException('Department not found');
 
     const newRows = (dto.subDepartments ?? []).filter((r) => r?.name?.trim());
     const removeIds = new Set(dto.removeSubDepartmentIds ?? []);
-    const remainingExisting = (existing.subDepartments ?? []).filter((s) => !removeIds.has(s.id));
+    const remainingExisting = existing.subDepartments.filter((s) => !removeIds.has(s.id));
     this.assertUniqueSubDepartmentNames([...remainingExisting.map((s) => ({ name: s.name })), ...newRows]);
 
     const { subDepartments: _subDepartments, removeSubDepartmentIds: _removeIds, ...departmentData } = dto;
