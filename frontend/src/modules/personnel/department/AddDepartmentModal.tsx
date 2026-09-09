@@ -18,7 +18,6 @@ interface Props {
 interface SubRow {
   key: string;
   name: string;
-  managerId: string;
 }
 
 function codeFromName(name: string): string {
@@ -73,7 +72,7 @@ export function AddDepartmentModal({ open, onClose }: Props) {
 
   function addRow() {
     rowKeyRef.current += 1;
-    setRows((prev) => [...prev, { key: `row-${rowKeyRef.current}`, name: '', managerId: '' }]);
+    setRows((prev) => [...prev, { key: `row-${rowKeyRef.current}`, name: '' }]);
   }
 
   function updateRow(key: string, patch: Partial<SubRow>) {
@@ -126,7 +125,7 @@ export function AddDepartmentModal({ open, onClose }: Props) {
         headEmployeeId: managerId || undefined,
         subDepartments: rows
           .filter((r) => r.name.trim())
-          .map((r) => ({ name: r.name.trim(), headEmployeeId: r.managerId || undefined })),
+          .map((r) => ({ name: r.name.trim() })),
       });
       toast.success(`Department "${name.trim()}" created`);
       handleClose();
@@ -202,18 +201,6 @@ export function AddDepartmentModal({ open, onClose }: Props) {
                     />
                     {errors.rows?.[row.key] && <p className="mt-1 text-xs text-danger">{errors.rows[row.key]}</p>}
                   </div>
-                  <Select
-                    value={row.managerId}
-                    onChange={(e) => updateRow(row.key, { managerId: e.target.value })}
-                    className="w-44 shrink-0"
-                  >
-                    <option value="">No manager</option>
-                    {employees?.items.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.fullName}
-                      </option>
-                    ))}
-                  </Select>
                   <button
                     type="button"
                     onClick={() => removeRow(row.key)}
