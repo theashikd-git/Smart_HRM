@@ -21,6 +21,7 @@ import { SectionsModule } from './sections/sections.module';
 import { GradesModule } from './grades/grades.module';
 import { DepartmentSuperiorsModule } from './department-superiors/department-superiors.module';
 import { RosterModule } from './roster/roster.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { RosterModule } from './roster/roster.module';
     GradesModule,
     DepartmentSuperiorsModule,
     RosterModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

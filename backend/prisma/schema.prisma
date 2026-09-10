@@ -461,6 +461,7 @@ model Employee {
   documents         Document[]
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
+  notifications     Notification[]
   account           User?
 
   @@map("employees")
@@ -726,4 +727,34 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+enum NotificationCategory {
+  LEAVE
+  SHIFT
+}
+
+// Lightweight in-app notification feed for an employee's own portal -- a
+// leave request being approved/rejected/advanced to the next approval tier,
+// or a manager assigning/changing/clearing a day on the Roster, each drops
+// one row here for that employee. Read status is tracked per row rather
+// than a single "last seen" cursor so the bell's unread count and the list
+// itself always agree.
+model Notification {
+  id         String               @id @default(uuid())
+  employeeId String
+  category   NotificationCategory
+  title      String
+  message    String
+  isRead     Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, isRead])
+  @@index([employeeId, createdAt])
+  @@map("notifications")
 }

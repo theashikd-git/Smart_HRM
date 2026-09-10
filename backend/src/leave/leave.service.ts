@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   AdjustLeaveBalanceDto,
   CreateLeaveRequestDto,
@@ -29,11 +30,18 @@ function toNumber(decimal: any): number {
   return decimal === null || decimal === undefined ? 0 : Number(decimal);
 }
 
+function formatDateRange(start: Date, end: Date): string {
+  const s = start.toISOString().slice(0, 10);
+  const e = end.toISOString().slice(0, 10);
+  return s === e ? s : `${s} to ${e}`;
+}
+
 @Injectable()
 export class LeaveService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -567,6 +575,12 @@ export class LeaveService {
           entityId: id,
           details: `${tier.label} approved -- now awaiting ${nextTier.label}`,
         });
+        await this.notificationsService.create(
+          updated.employeeId,
+          'LEAVE',
+          'Leave request update',
+          `${tier.label} approved your ${updated.leaveType.name} request -- now awaiting ${nextTier.label}.`,
+        );
         return this.withTierLabel(updated);
       }
 
@@ -584,6 +598,12 @@ export class LeaveService {
         entityId: id,
         details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s) (final approval at ${tier.label})`,
       });
+      await this.notificationsService.create(
+        updated.employeeId,
+        'LEAVE',
+        'Leave request approved',
+        `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.`,
+      );
       return this.withTierLabel(updated);
     }
 
@@ -601,6 +621,12 @@ export class LeaveService {
       entityId: id,
       details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s)`,
     });
+    await this.notificationsService.create(
+      updated.employeeId,
+      'LEAVE',
+      'Leave request approved',
+      `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.`,
+    );
     return this.withTierLabel(updated);
   }
 
@@ -647,6 +673,13 @@ export class LeaveService {
       entityId: id,
       details: tier ? `Rejected at ${tier.label}: ${dto.reason}` : dto.reason,
     });
+
+    await this.notificationsService.create(
+      updated.employeeId,
+      'LEAVE',
+      'Leave request rejected',
+      `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) was rejected.${dto.reason ? ` Reason: ${dto.reason}` : ''}`,
+    );
 
     return this.withTierLabel(updated);
   }

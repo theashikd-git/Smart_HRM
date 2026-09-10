@@ -8,6 +8,7 @@ import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { UserMenu } from '@/components/shell/UserMenu';
+import { NotificationBell } from './NotificationBell';
 import { useMyLeaveRequests, useMyLeaveBalances, useCancelMyLeaveRequest } from '@/hooks/useLeave';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { apiErrorMessage } from '@/lib/api';
@@ -106,7 +107,10 @@ export function EmployeePortalView() {
           </nav>
         </div>
 
-        <UserMenu />
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <UserMenu />
+        </div>
       </header>
 
       <main className="flex-1 overflow-auto p-4">

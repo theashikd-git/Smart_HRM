@@ -378,3 +378,15 @@ export interface AuditLogEntry {
   createdAt: string;
   user?: { fullName: string; email: string } | null;
 }
+
+export type NotificationCategory = 'LEAVE' | 'SHIFT';
+
+export interface AppNotification {
+  id: string;
+  employeeId: string;
+  category: NotificationCategory;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}

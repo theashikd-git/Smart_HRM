@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RosterQueryDto, UpsertRosterAssignmentDto, RosterDayTypeDto } from './dto/roster.dto';
 
 function startOfDay(date: Date): Date {
@@ -14,6 +15,7 @@ export class RosterService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -118,6 +120,15 @@ export class RosterService {
       details: `${dto.type === RosterDayTypeDto.OFF ? 'Set day off' : 'Assigned shift'} for ${employee.fullName} on ${dateStr}`,
     });
 
+    await this.notificationsService.create(
+      employeeId,
+      'SHIFT',
+      'Duty schedule updated',
+      dto.type === RosterDayTypeDto.OFF
+        ? `You've been scheduled off on ${dateStr}.`
+        : `You've been assigned to ${assignment.shift?.name ?? 'a shift'} on ${dateStr}${assignment.shift ? ` (${assignment.shift.startTime}–${assignment.shift.endTime})` : ''}.`,
+    );
+
     return assignment;
   }
 
@@ -125,7 +136,8 @@ export class RosterService {
     const date = startOfDay(new Date(dateStr));
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
 
-    await this.prisma.rosterAssignment.deleteMany({ where: { employeeId, date } });
+    const { count } = await this.prisma.rosterAssignment.deleteMany({ where: { employeeId, date } });
+    if (count === 0) return { success: true };
 
     await this.auditService.log({
       userId: actorId,
@@ -134,6 +146,13 @@ export class RosterService {
       entityId: `${employeeId}:${dateStr}`,
       details: `Cleared roster assignment for ${dateStr}`,
     });
+
+    await this.notificationsService.create(
+      employeeId,
+      'SHIFT',
+      'Duty schedule updated',
+      `Your assigned duty on ${dateStr} was cleared.`,
+    );
 
     return { success: true };
   }
