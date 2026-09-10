@@ -60,7 +60,10 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
   const approverOptions = approvers.map((u) => ({
     id: u.id,
     label: u.fullName,
-    sublabel: u.employee ? `${u.employee.employeeCode} · ${ROLE_LABELS[u.role] ?? u.role}` : ROLE_LABELS[u.role] ?? u.role,
+    // Searched along with the label (see SearchSelect) -- fold in the
+    // employee ID (if linked), login username, and role so a match on any
+    // of the three finds the right person, not just a name match.
+    sublabel: [u.employee?.employeeCode, u.username, ROLE_LABELS[u.role] ?? u.role].filter(Boolean).join(' · '),
   }));
 
   const [departmentId, setDepartmentId] = useState('');
@@ -254,8 +257,8 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
                           value={tier.approverUserId}
                           onChange={(id) => updateTier(tier.key, { approverUserId: id })}
                           options={approverOptions}
-                          placeholder="Search employee ID or name"
-                          searchPlaceholder="Type an employee ID or name…"
+                          placeholder="Search username, employee ID, or name"
+                          searchPlaceholder="Type a username, employee ID, or name…"
                         />
                       ) : (
                         <div className="flex h-[34px] items-center rounded-md border border-line bg-white px-3 text-xs text-text-muted">
