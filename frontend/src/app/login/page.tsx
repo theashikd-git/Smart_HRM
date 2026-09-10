@@ -16,7 +16,7 @@ export default function LoginPage() {
   const { login, employeeLogin, isLoading, hydrate, hydrated, token, user } = useAuthStore();
   const [mode, setMode] = useState<Mode>('staff');
 
-  const [email, setEmail] = useState('admin@smarthrm.local');
+  const [username, setUsername] = useState('admin@smarthrm.local');
   const [password, setPassword] = useState('Admin@123');
 
   const [employeeCode, setEmployeeCode] = useState('');
@@ -38,7 +38,7 @@ export default function LoginPage() {
   async function handleStaffSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await login(email, password);
+      await login(username, password);
       router.replace('/workbench');
     } catch (err) {
       toast.error(apiErrorMessage(err));
@@ -133,13 +133,12 @@ export default function LoginPage() {
           {mode === 'staff' ? (
             <form onSubmit={handleStaffSubmit} className="mt-6 space-y-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">Email</label>
+                <label className="text-xs font-medium text-text-secondary">Username</label>
                 <Input
-                  type="email"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. admin"
                 />
               </div>
               <div className="flex flex-col gap-1.5">

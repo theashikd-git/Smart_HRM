@@ -110,7 +110,7 @@ const ROLE_LABELS: Record<string, string> = {
   EMPLOYEE: 'Employee (self-service)',
 };
 
-const EMPTY_FORM = { role: 'HR' as string, email: '', fullName: '', password: '', employeeId: '' };
+const EMPTY_FORM = { role: 'HR' as string, username: '', fullName: '', password: '', employeeId: '' };
 
 function UserManagement() {
   const { data: users, isLoading } = useUsers();
@@ -125,14 +125,14 @@ function UserManagement() {
   const selectedEmployee = employees?.items.find((e) => e.id === form.employeeId);
   const canSubmit = isEmployeeAccount
     ? !!form.employeeId
-    : !!form.email && !!form.fullName && form.password.length >= 6;
+    : !!form.username && !!form.fullName && form.password.length >= 6;
 
   async function handleCreate() {
     try {
       await createUser.mutateAsync(
         isEmployeeAccount
           ? { role: 'EMPLOYEE', employeeId: form.employeeId }
-          : { role: form.role as any, email: form.email, fullName: form.fullName, password: form.password },
+          : { role: form.role as any, username: form.username, fullName: form.fullName, password: form.password },
       );
       if (isEmployeeAccount && selectedEmployee) {
         toast.success(
@@ -192,7 +192,7 @@ function UserManagement() {
             <Tr key={u.id}>
               <Td className="font-medium">{u.fullName}</Td>
               <Td className="text-xs font-mono">
-                {u.role === 'EMPLOYEE' ? u.employee?.employeeCode ?? '—' : u.email}
+                {u.role === 'EMPLOYEE' ? u.employee?.employeeCode ?? '—' : u.username}
               </Td>
               <Td>
                 <Badge>{ROLE_LABELS[u.role] ?? u.role}</Badge>
@@ -268,11 +268,10 @@ function UserManagement() {
               <FieldWrap label="Full Name" required>
                 <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />
               </FieldWrap>
-              <FieldWrap label="Email" required>
+              <FieldWrap label="Username" required>
                 <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  value={form.username}
+                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
                 />
               </FieldWrap>
               <FieldWrap label="Password" required hint="Minimum 6 characters">

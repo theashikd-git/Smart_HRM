@@ -39,7 +39,7 @@ export function UserMenu() {
         <div className="absolute right-0 top-10 w-52 rounded-md border border-line bg-white py-1 shadow-popover">
           <div className="border-b border-line px-3 py-2">
             <p className="text-xs font-medium text-text-primary">{name}</p>
-            <p className="text-[11px] text-text-muted">{user?.email || '—'}</p>
+            <p className="text-[11px] text-text-muted">{user?.username || '—'}</p>
             {user?.role && <p className="text-[11px] text-text-muted mt-0.5">{user.role}</p>}
           </div>
           <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-text-secondary hover:bg-surface-sunken">

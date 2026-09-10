@@ -15,7 +15,7 @@ export interface CreateUserPayload {
   role: 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
   // Required for ADMIN/HR/MANAGER; omitted for EMPLOYEE (derived server-side
   // from the linked Employee record).
-  email?: string;
+  username?: string;
   fullName?: string;
   password?: string;
   // Required for EMPLOYEE; optional link for other roles.

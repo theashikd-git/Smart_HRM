@@ -16,14 +16,17 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, ipAddress?: string) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    // The physical User table still stores the login identifier in its
+    // `email` column (see UsersService.create), but the app now treats it as
+    // a generic, non-email "username".
+    const user = await this.prisma.user.findUnique({ where: { email: dto.username } });
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid username or password');
     }
 
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid username or password');
     }
 
     return this.issueSession(user, ipAddress);
@@ -31,7 +34,7 @@ export class AuthService {
 
   /** Employee self-service login -- Employee ID as username, default password
    *  is that same Employee ID (see UsersService.create). Kept as a separate
-   *  entry point from staff login rather than overloading LoginDto's email
+   *  entry point from staff login rather than overloading LoginDto's username
    *  field, since the lookup path (Employee -> linked User) is different. */
   async employeeLogin(dto: EmployeeLoginDto, ipAddress?: string) {
     const employee = await this.prisma.employee.findUnique({ where: { employeeCode: dto.employeeCode } });
@@ -61,7 +64,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, username: user.email, role: user.role };
     const accessToken = this.jwtService.sign(payload);
 
     await this.auditService.log({
@@ -76,7 +79,7 @@ export class AuthService {
       accessToken,
       user: {
         id: user.id,
-        email: user.email,
+        username: user.email,
         fullName: user.fullName,
         role: user.role,
         mustChangePassword: user.mustChangePassword ?? false,
@@ -98,7 +101,9 @@ export class AuthService {
         mustChangePassword: true,
       },
     });
-    return user;
+    if (!user) return user;
+    const { email, ...rest } = user;
+    return { ...rest, username: email };
   }
 
   /** Self-service password change -- available to every role, but the one

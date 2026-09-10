@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export enum RoleDto {
   ADMIN = 'ADMIN',
@@ -10,11 +10,15 @@ export enum RoleDto {
 
 export class CreateUserDto {
   // Required for ADMIN/HR/MANAGER accounts. Omit for EMPLOYEE accounts --
-  // email and password are derived automatically from the linked Employee
+  // username and password are derived automatically from the linked Employee
   // (see UsersService.create), so employees never have to be given one.
   @IsOptional()
-  @IsEmail()
-  email?: string;
+  @IsString()
+  @MinLength(3)
+  @Matches(/^[a-zA-Z0-9._-]+$/, {
+    message: 'username may only contain letters, numbers, dots, underscores and hyphens',
+  })
+  username?: string;
 
   @IsOptional()
   @IsNotEmpty()

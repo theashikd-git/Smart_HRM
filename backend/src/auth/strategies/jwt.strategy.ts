@@ -6,7 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export interface JwtPayload {
   sub: string;
-  email: string;
+  username: string;
   role: string;
 }
 
@@ -28,6 +28,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User no longer active');
     }
-    return { id: user.id, email: user.email, role: user.role, fullName: user.fullName, employeeId: user.employeeId };
+    return { id: user.id, username: user.email, role: user.role, fullName: user.fullName, employeeId: user.employeeId };
   }
 }

@@ -2,7 +2,7 @@ export type Role = 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
 
 export interface User {
   id: string;
-  email: string;
+  username: string;
   fullName: string;
   role: Role;
   isActive?: boolean;
@@ -259,7 +259,7 @@ export interface Paginated<T> {
 
 export interface SystemUser {
   id: string;
-  email: string;
+  username: string;
   fullName: string;
   role: Role;
   isActive: boolean;

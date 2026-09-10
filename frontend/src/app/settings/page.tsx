@@ -110,7 +110,7 @@ function UserManagement() {
   });
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ email: '', fullName: '', password: '', role: 'HR' });
+  const [form, setForm] = useState({ username: '', fullName: '', password: '', role: 'HR' });
 
   const createUser = useMutation({
     mutationFn: async () => (await api.post('/users', form)).data,
@@ -118,7 +118,7 @@ function UserManagement() {
       toast.success('User created');
       qc.invalidateQueries({ queryKey: ['app-users'] });
       setModalOpen(false);
-      setForm({ email: '', fullName: '', password: '', role: 'HR' });
+      setForm({ username: '', fullName: '', password: '', role: 'HR' });
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
@@ -147,7 +147,7 @@ function UserManagement() {
         <Thead>
           <tr>
             <Th>Name</Th>
-            <Th>Email</Th>
+            <Th>Login</Th>
             <Th>Role</Th>
             <Th>Status</Th>
             <Th></Th>
@@ -157,7 +157,7 @@ function UserManagement() {
           {users?.map((u: any) => (
             <Tr key={u.id}>
               <Td className="font-medium">{u.fullName}</Td>
-              <Td className="text-xs font-mono">{u.email}</Td>
+              <Td className="text-xs font-mono">{u.username}</Td>
               <Td>
                 <Badge>{u.role}</Badge>
               </Td>
@@ -190,7 +190,7 @@ function UserManagement() {
             <Button
               loading={createUser.isPending}
               onClick={() => createUser.mutate()}
-              disabled={!form.email || !form.fullName || form.password.length < 6}
+              disabled={!form.username || !form.fullName || form.password.length < 6}
             >
               Create User
             </Button>
@@ -201,11 +201,10 @@ function UserManagement() {
           <FieldWrap label="Full Name" required>
             <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />
           </FieldWrap>
-          <FieldWrap label="Email" required>
+          <FieldWrap label="Username" required>
             <Input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
             />
           </FieldWrap>
           <FieldWrap label="Password" required hint="Minimum 6 characters">

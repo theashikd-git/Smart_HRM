@@ -10,7 +10,7 @@ interface AuthState {
   isLoading: boolean;
   hydrated: boolean;
   hydrate: () => void;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   employeeLogin: (employeeCode: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Patches the signed-in user's own record (e.g. after changing their
@@ -35,10 +35,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  login: async (email: string, password: string) => {
+  login: async (username: string, password: string) => {
     set({ isLoading: true });
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { username, password });
       const { accessToken, user } = res.data;
       localStorage.setItem('smart_hrm_token', accessToken);
       localStorage.setItem('smart_hrm_user', JSON.stringify(user));
