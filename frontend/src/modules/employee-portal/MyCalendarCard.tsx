@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PlusCircle } from 'lucide-react';
 import { useMyRoster } from '@/hooks/useRoster';
 import { useMyLeaveRequests } from '@/hooks/useLeave';
 import { useShifts } from '@/hooks/useShifts';
@@ -40,6 +40,13 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+interface MyCalendarCardProps {
+  /** When given, a small "Apply for Leave" button appears in the top-right
+   * corner of the title bar -- lets the Dashboard tab offer that action
+   * without any other chrome competing with the calendar for space. */
+  onApplyLeave?: () => void;
+}
+
 /**
  * "My Calendar" on the Employee Portal home. Styled to match a specific
  * reference screenshot the user provided pixel-for-pixel (light gray title
@@ -49,10 +56,15 @@ function isoDate(d: Date): string {
  * this card is a deliberate one-off exception to that theme, per an
  * explicit request to replicate the reference image exactly.
  *
+ * Fills the full height of its container (the Dashboard tab gives it the
+ * whole page below the header) so every day cell gets real room -- leave
+ * type + approval status, and shift name + start/end time, are shown
+ * directly in the cell instead of being squeezed into a truncated badge.
+ *
  * Still shows real data inside that chrome: each day's assigned duty
  * (from Roster) and leave status (from the employee's own leave requests).
  */
-export function MyCalendarCard() {
+export function MyCalendarCard({ onApplyLeave }: MyCalendarCardProps) {
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
 
   const gridStart = useMemo(() => {
@@ -95,14 +107,23 @@ export function MyCalendarCard() {
   const monthLabel = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   return (
-    <div className="mb-4 rounded border border-[#e3e3e3] bg-white shadow-sm overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden rounded border border-[#e3e3e3] bg-white shadow-sm">
       {/* Title bar -- light gray strip, olive-green heading, matches the reference exactly */}
-      <div className="border-b border-[#e3e3e3] bg-[#f5f5f6] px-4 py-2.5">
+      <div className="flex shrink-0 items-center justify-between border-b border-[#e3e3e3] bg-[#f5f5f6] px-4 py-2.5">
         <h3 className="text-[15px] font-bold text-[#8ba33f]">My Calendar</h3>
+        {onApplyLeave && (
+          <button
+            onClick={onApplyLeave}
+            className="inline-flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-dark"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            Apply for Leave
+          </button>
+        )}
       </div>
 
       {/* Month title + Today/prev/next controls */}
-      <div className="relative flex items-center justify-center px-4 py-3.5">
+      <div className="relative flex shrink-0 items-center justify-center px-4 py-3.5">
         <span className="text-[26px] leading-none text-[#2d2d2d]">{monthLabel}</span>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           <button
@@ -132,7 +153,7 @@ export function MyCalendarCard() {
       </div>
 
       {/* Weekday header row */}
-      <div className="grid grid-cols-7 border-t border-[#e3e3e3]">
+      <div className="grid shrink-0 grid-cols-7 border-t border-[#e3e3e3]">
         {WEEKDAY_LABELS.map((w) => (
           <div
             key={w}
@@ -143,8 +164,11 @@ export function MyCalendarCard() {
         ))}
       </div>
 
-      {/* Day grid */}
-      <div className="grid grid-cols-7">
+      {/* Day grid -- flex-1 + grid-rows-6 so the 6 weeks split the whole
+          remaining height evenly, giving each cell real room. min-h-0 is
+          the standard flexbox fix that lets a flex child actually shrink
+          to its allotted space instead of growing to fit its content. */}
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6">
         {gridDays.map((day, i) => {
           const dateIso = isoDate(day);
           const inMonth = day.getMonth() === monthDate.getMonth();
@@ -158,47 +182,55 @@ export function MyCalendarCard() {
             <div
               key={i}
               className={cn(
-                'min-h-[68px] border-b border-r border-[#e3e3e3] p-1.5',
+                'flex flex-col overflow-hidden border-b border-r border-[#e3e3e3] p-2',
                 isLastCol && 'border-r-0',
                 isToday && 'bg-[#fdf3d7]',
               )}
             >
-              <div className={cn('text-[13px]', inMonth ? 'text-[#2d2d2d]' : 'text-[#b5b5b5]')}>{day.getDate()}</div>
+              <div className={cn('shrink-0 text-[13px] font-medium', inMonth ? 'text-[#2d2d2d]' : 'text-[#b5b5b5]')}>
+                {day.getDate()}
+              </div>
 
-              <div className="mt-1 flex flex-col gap-0.5">
+              <div className="mt-1 flex flex-1 flex-col gap-1 overflow-hidden">
                 {leave && (
-                  <span
+                  <div
                     className={cn(
-                      'inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] font-medium leading-tight truncate',
+                      'rounded px-1.5 py-1 text-[11px] font-medium leading-tight',
                       leaveStatusColors[leave.status].bg,
                       leaveStatusColors[leave.status].text,
                     )}
-                    title={`${leave.leaveType?.name ?? 'Leave'} — ${leave.status === 'APPROVED' ? 'Approved' : 'Pending approval'}`}
                   >
-                    <span className={cn('h-1 w-1 shrink-0 rounded-full', leaveStatusColors[leave.status].dot)} />
-                    {leave.status === 'APPROVED' ? 'On Leave' : 'Leave (pending)'}
-                  </span>
+                    <div className="flex items-center gap-1">
+                      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', leaveStatusColors[leave.status].dot)} />
+                      <span>{leave.leaveType?.name ?? 'Leave'}</span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] opacity-80">
+                      {leave.status === 'APPROVED' ? 'Approved' : 'Pending approval'}
+                    </div>
+                  </div>
                 )}
 
                 {assignment && assignment.type === 'SHIFT' && (
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] font-medium leading-tight truncate',
-                      shiftC!.bg,
-                      shiftC!.text,
+                  <div className={cn('rounded px-1.5 py-1 text-[11px] font-medium leading-tight', shiftC!.bg, shiftC!.text)}>
+                    <div className="flex items-center gap-1">
+                      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', shiftC!.dot)} />
+                      <span>{assignment.shift?.name ?? 'Shift'}</span>
+                    </div>
+                    {assignment.shift && (
+                      <div className="mt-0.5 text-[10px] opacity-80">
+                        {assignment.shift.startTime}–{assignment.shift.endTime}
+                      </div>
                     )}
-                    title={assignment.shift ? `${assignment.shift.startTime}–${assignment.shift.endTime}` : undefined}
-                  >
-                    <span className={cn('h-1 w-1 shrink-0 rounded-full', shiftC!.dot)} />
-                    {assignment.shift?.name ?? 'Shift'}
-                  </span>
+                  </div>
                 )}
 
                 {assignment && assignment.type === 'OFF' && (
-                  <span className="inline-flex items-center gap-1 rounded bg-[#f0f0f0] px-1 py-0.5 text-[9.5px] font-medium leading-tight text-[#8a8a8a]">
-                    <span className="h-1 w-1 shrink-0 rounded-full bg-[#8a8a8a]" />
-                    Day Off
-                  </span>
+                  <div className="rounded bg-[#f0f0f0] px-1.5 py-1 text-[11px] font-medium leading-tight text-[#8a8a8a]">
+                    <div className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8a8a8a]" />
+                      <span>Day Off</span>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -207,7 +239,7 @@ export function MyCalendarCard() {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-[#e3e3e3] px-4 py-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-[#e3e3e3] px-4 py-2.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8a8a8a]">Legend</span>
         {(shifts ?? []).map((s) => (
           <span key={s.id} className="inline-flex items-center gap-1 text-[11px] text-[#555]">

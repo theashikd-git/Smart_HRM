@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, ShieldCheck, CalendarDays, PlusCircle, Ban, CheckCircle2, XCircle, Clock3, LayoutGrid } from 'lucide-react';
+import { Loader2, ShieldCheck, CalendarDays, PlusCircle, Ban, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
@@ -110,19 +110,7 @@ export function EmployeePortalView() {
       </header>
 
       <main className="flex-1 overflow-auto p-4">
-        {activeTab === 'dashboard' && (
-          <>
-            <div className="mb-4">
-              <h1 className="flex items-center gap-1.5 text-[15px] font-semibold text-text-primary">
-                <LayoutGrid className="h-4 w-4 text-text-secondary" />
-                Dashboard
-              </h1>
-              <p className="text-xs text-text-secondary">Your duty schedule and leave status at a glance</p>
-            </div>
-
-            <MyCalendarCard />
-          </>
-        )}
+        {activeTab === 'dashboard' && <MyCalendarCard onApplyLeave={() => setRequestOpen(true)} />}
 
         {activeTab === 'leave' && (
           <>
