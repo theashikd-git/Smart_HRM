@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, ArrowUp, ArrowDown, GitBranch, Save } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Save, Users2 } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { FieldWrap, Input, Select } from '@/components/ui/Form';
+import { FieldWrap, Input } from '@/components/ui/Form';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { useUsers } from '@/hooks/useUsers';
 import { useLeaveWorkflows, useSaveLeaveWorkflow, useDeleteLeaveWorkflow } from '@/hooks/useLeaveWorkflows';
 import { apiErrorMessage } from '@/lib/api';
@@ -36,11 +37,18 @@ function newTierKey() {
 
 /**
  * Personnel > Leave Management > Leave Workflows -- the per-department
- * approval chain builder. Which tiers a leave request must clear, in order,
- * before it's approved, and who resolves each tier (either "whoever this
- * employee's org chart says is their reporting superior", resolved fresh
- * per request, or one specific named person). Moved here from System
- * Settings so every leave-related admin screen lives under one section.
+ * approval chain builder. Standard, simple flow per tier: write a title,
+ * search-select the person who approves at that step, done -- Tier 1 is
+ * the highest priority (the first reviewer), Tier 2 reviews only after
+ * Tier 1 approves, and so on down the list. A leave request sits at
+ * whichever tier is next; each approval bumps it up to the next tier, and
+ * the final tier's approval marks the whole request Approved and notifies
+ * the employee (see NotificationsService, triggered from LeaveService).
+ *
+ * "Resolve from the employee's reporting chain" is kept as a secondary,
+ * per-tier option for chains that should follow the org chart instead of
+ * a fixed person -- off by default so the common case (title + pick a
+ * person) stays a two-step flow, per the requested design.
  */
 export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
   const { data: departments, isLoading } = useLeaveWorkflows();
@@ -49,12 +57,24 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
   const deleteWorkflow = useDeleteLeaveWorkflow();
 
   const approvers = users?.filter((u) => u.role !== 'EMPLOYEE' && u.isActive) ?? [];
+  const approverOptions = approvers.map((u) => ({
+    id: u.id,
+    label: u.fullName,
+    sublabel: u.employee ? `${u.employee.employeeCode} · ${ROLE_LABELS[u.role] ?? u.role}` : ROLE_LABELS[u.role] ?? u.role,
+  }));
 
   const [departmentId, setDepartmentId] = useState('');
   const [tiers, setTiers] = useState<EditableTier[]>([]);
   const [isActive, setIsActive] = useState(true);
 
   const selectedDepartment = departments?.find((d) => d.id === departmentId);
+  const departmentOptions = (departments ?? []).map((d) => ({
+    id: d.id,
+    label: d.name,
+    sublabel: d.approvalWorkflow
+      ? `${d.approvalWorkflow.tiers.length} tier(s)${d.approvalWorkflow.isActive ? '' : ' — inactive'}`
+      : 'No chain configured yet',
+  }));
 
   useEffect(() => {
     if (!selectedDepartment) {
@@ -80,7 +100,9 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
   }, [departmentId, selectedDepartment?.approvalWorkflow]);
 
   function addTier() {
-    setTiers((list) => [...list, { key: newTierKey(), label: '', type: 'REPORTING_SUPERIOR', approverUserId: '' }]);
+    // Defaults to a specific person -- the standard, simple case (title +
+    // pick someone). "Resolve from reporting chain" is a per-tier opt-in.
+    setTiers((list) => [...list, { key: newTierKey(), label: '', type: 'SPECIFIC_USER', approverUserId: '' }]);
   }
 
   function removeTier(key: string) {
@@ -141,18 +163,17 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
       <Card>
         <CardHeader
           title="Leave Approval Workflows"
-          subtitle="Build each department's approval chain -- the ordered tiers a leave request must clear, in order, before it's approved"
+          subtitle="Who reviews a department's leave requests, and in what order -- Tier 1 goes first; each tier only sees a request once every tier before it has approved"
         />
-        <div className="px-5 pb-5 space-y-4">
+        <div className="px-5 pb-5 space-y-5">
           <FieldWrap label="Department" hint="Pick a department to view or build its approval chain">
-            <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">Select department</option>
-              {departments?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.approvalWorkflow ? `(${d.approvalWorkflow.tiers.length} tier(s)${d.approvalWorkflow.isActive ? '' : ' — inactive'})` : '(no chain configured)'}
-                </option>
-              ))}
-            </Select>
+            <SearchSelect
+              value={departmentId}
+              onChange={setDepartmentId}
+              options={departmentOptions}
+              placeholder="Select department"
+              searchPlaceholder="Search departments…"
+            />
           </FieldWrap>
 
           {!departmentId && !isLoading && (
@@ -166,7 +187,7 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
             <div className="rounded-lg border border-line p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
-                  <GitBranch className="h-3.5 w-3.5" /> Approval chain, in order
+                  <Users2 className="h-3.5 w-3.5" /> Approval chain, Tier 1 first
                 </div>
                 <label className="flex items-center gap-1.5 text-xs text-text-secondary">
                   <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="rounded border-line" />
@@ -176,26 +197,26 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
 
               {tiers.length === 0 && (
                 <p className="text-xs text-text-muted">
-                  No tiers yet. Add one for each approver this department's requests must pass through, in order (e.g.
+                  No tiers yet. Add one for each person this department's requests must pass through, in order (e.g.
                   Supervisor, then Department Manager, then HR Admin).
                 </p>
               )}
 
               {tiers.map((tier, index) => (
-                <div key={tier.key} className="rounded-md border border-line bg-surface-sunken/40 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink text-[10px] font-semibold text-white">
+                <div key={tier.key} className="rounded-md border border-line bg-surface-sunken/40 p-3.5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-white">
                       {index + 1}
                     </span>
-                    <span className="text-xs text-text-muted flex-1">
-                      {index === 0 ? 'First approver' : `After tier ${index}`}
+                    <span className="text-xs font-medium text-text-secondary flex-1">
+                      {index === 0 ? 'Tier 1 · highest priority, reviews first' : `Tier ${index + 1} · reviews after Tier ${index} approves`}
                     </span>
                     <button
                       type="button"
                       onClick={() => moveTier(index, -1)}
                       disabled={index === 0}
                       className="rounded p-1 text-text-muted hover:bg-white disabled:opacity-30"
-                      title="Move up"
+                      title="Move up (higher priority)"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
                     </button>
@@ -204,7 +225,7 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
                       onClick={() => moveTier(index, 1)}
                       disabled={index === tiers.length - 1}
                       className="rounded p-1 text-text-muted hover:bg-white disabled:opacity-30"
-                      title="Move down"
+                      title="Move down (lower priority)"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
                     </button>
@@ -217,37 +238,47 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Tier label, e.g. Supervisor"
-                      value={tier.label}
-                      onChange={(e) => updateTier(tier.key, { label: e.target.value })}
-                    />
-                    <Select
-                      value={tier.type}
-                      onChange={(e) => updateTier(tier.key, { type: e.target.value as LeaveTierType, approverUserId: '' })}
-                    >
-                      <option value="REPORTING_SUPERIOR">Employee&apos;s Reporting Superior</option>
-                      <option value="SPECIFIC_USER">Specific Person</option>
-                    </Select>
-                    {tier.type === 'SPECIFIC_USER' ? (
-                      <Select
-                        value={tier.approverUserId}
-                        onChange={(e) => updateTier(tier.key, { approverUserId: e.target.value })}
-                      >
-                        <option value="">Select approver</option>
-                        {approvers.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.fullName} ({ROLE_LABELS[u.role] ?? u.role})
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <p className="flex items-center text-xs text-text-muted px-1">
-                        Resolved per request from the employee&apos;s org chart
-                      </p>
-                    )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <FieldWrap label="Title">
+                      <Input
+                        placeholder="e.g. Supervisor Review"
+                        value={tier.label}
+                        onChange={(e) => updateTier(tier.key, { label: e.target.value })}
+                      />
+                    </FieldWrap>
+
+                    <FieldWrap label="Approver">
+                      {tier.type === 'SPECIFIC_USER' ? (
+                        <SearchSelect
+                          value={tier.approverUserId}
+                          onChange={(id) => updateTier(tier.key, { approverUserId: id })}
+                          options={approverOptions}
+                          placeholder="Search employee ID or name"
+                          searchPlaceholder="Type an employee ID or name…"
+                        />
+                      ) : (
+                        <div className="flex h-[34px] items-center rounded-md border border-line bg-white px-3 text-xs text-text-muted">
+                          Resolved per request from the employee&apos;s org chart
+                        </div>
+                      )}
+                    </FieldWrap>
                   </div>
+
+                  <label className="mt-2.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={tier.type === 'REPORTING_SUPERIOR'}
+                      onChange={(e) =>
+                        updateTier(tier.key, {
+                          type: e.target.checked ? 'REPORTING_SUPERIOR' : 'SPECIFIC_USER',
+                          approverUserId: '',
+                        })
+                      }
+                      className="rounded border-line"
+                    />
+                    Resolve from the employee&apos;s reporting superior instead of a fixed person
+                  </label>
                 </div>
               ))}
 
