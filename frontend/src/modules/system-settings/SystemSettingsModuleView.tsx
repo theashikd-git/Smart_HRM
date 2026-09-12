@@ -221,7 +221,7 @@ function UserManagement() {
     <Card className="mt-4">
       <CardHeader
         title="System Users"
-        subtitle="Staff accounts (Administrator, HR, Manager) and employee self-service logins"
+        subtitle="Staff accounts (Administrator, HR) and employee self-service logins -- see Superior Management for Manager/Supervisor assignments"
         action={
           <Button
             size="sm"
@@ -310,8 +310,6 @@ function UserManagement() {
             >
               <option value="ADMIN">Administrator</option>
               <option value="HR">HR Officer</option>
-              <option value="MANAGER">Manager</option>
-              <option value="SUPERVISOR">Supervisor</option>
               <option value="EMPLOYEE">Employee (self-service)</option>
             </Select>
           </FieldWrap>
@@ -390,17 +388,11 @@ function UserManagement() {
             <FieldWrap
               label="Role"
               required
-              hint={
-                editingUser.role === 'EMPLOYEE'
-                  ? 'Currently a self-service (employee portal) login. Change this to give them a staff dashboard and let them be picked as a leave approver.'
-                  : undefined
-              }
+              hint="Manager/Supervisor is no longer set here -- see Personnel > Leave Management > Superior Management to name someone a department's Manager or Supervisor."
             >
               <Select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
                 <option value="ADMIN">Administrator</option>
                 <option value="HR">HR Officer</option>
-                <option value="MANAGER">Manager</option>
-                <option value="SUPERVISOR">Supervisor</option>
                 <option value="EMPLOYEE">Employee (self-service)</option>
               </Select>
             </FieldWrap>

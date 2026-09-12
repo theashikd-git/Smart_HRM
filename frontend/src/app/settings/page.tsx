@@ -218,7 +218,6 @@ function UserManagement() {
             <Select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
               <option value="ADMIN">Administrator</option>
               <option value="HR">HR Officer</option>
-              <option value="MANAGER">Manager</option>
             </Select>
           </FieldWrap>
         </div>

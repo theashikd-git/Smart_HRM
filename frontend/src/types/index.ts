@@ -97,7 +97,14 @@ export interface DepartmentSuperior {
   departmentId?: string | null;
   subDepartmentId?: string | null;
   employeeId: string;
-  employee?: { id: string; fullName: string; employeeCode: string } | null;
+  employee?: {
+    id: string;
+    fullName: string;
+    employeeCode: string;
+    // The Employee's linked login, if any -- null means this person has no
+    // account yet and can't be picked as a leave approver until they do.
+    account?: { id: string; isActive: boolean } | null;
+  } | null;
   department?: { id: string; name: string } | null;
   subDepartment?: { id: string; name: string } | null;
   createdAt?: string;

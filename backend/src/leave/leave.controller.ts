@@ -46,14 +46,18 @@ export class LeaveController {
     return this.service.findOne(id);
   }
 
+  // No @Roles here on purpose -- who may actually decide a given request is
+  // no longer tied to the account's login role. It's enforced inside
+  // LeaveService.checkTierAuthorization instead: ADMIN/HR can always
+  // override, and otherwise only the specific person the current tier
+  // resolves to (a System User, or whoever Superior Management names as the
+  // department's Manager/Supervisor) is let through.
   @Patch('requests/:id/approve')
-  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   approve(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.approve(id, user.id, user.role);
   }
 
   @Patch('requests/:id/reject')
-  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   reject(@Param('id') id: string, @Body() dto: RejectLeaveRequestDto, @CurrentUser() user: any) {
     return this.service.reject(id, dto, user.id, user.role);
   }
