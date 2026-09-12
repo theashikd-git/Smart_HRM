@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input } from '@/components/ui/Form';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { useUsers } from '@/hooks/useUsers';
-import { useDepartmentSuperiors } from '@/hooks/useDepartmentSuperiors';
 import { useLeaveWorkflows, useSaveLeaveWorkflow, useDeleteLeaveWorkflow } from '@/hooks/useLeaveWorkflows';
 import { apiErrorMessage } from '@/lib/api';
 import type { LeaveTierType } from '@/types';
@@ -54,59 +53,23 @@ function newTierKey() {
 export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
   const { data: departments, isLoading } = useLeaveWorkflows();
   const { data: users } = useUsers();
-  // Company-wide (no department/sub-department filter) -- Superior
-  // Management is the second source an approver can come from, alongside
-  // System Users (see below).
-  const { data: superiors } = useDepartmentSuperiors();
   const saveWorkflow = useSaveLeaveWorkflow();
   const deleteWorkflow = useDeleteLeaveWorkflow();
 
-  // Approver pool = (System Users: Admin/HR, i.e. every non-employee login)
-  // union (Superior Management: whoever is named a Manager/Supervisor of a
-  // department or sub-department). The two are merged by resolved login id
-  // rather than shown as separate lists, since the same person can appear in
-  // both -- e.g. an HR Officer who is also that department's Manager.
-  // Someone in Superior Management with no linked login yet is skipped: a
-  // leave decision still has to be made by signing in, and Superior
-  // Management alone doesn't create that login (see System Users -> Edit ->
-  // Link to Employee).
-  const usersById = new Map((users ?? []).map((u) => [u.id, u]));
-  const approverMap = new Map<string, { label: string; parts: string[] }>();
-
-  (users ?? [])
-    .filter((u) => u.role !== 'EMPLOYEE' && u.isActive)
-    .forEach((u) => {
-      approverMap.set(u.id, {
-        label: u.fullName,
-        // Searched along with the label (see SearchSelect) -- fold in the
-        // employee ID (if linked), login username, and role so a match on
-        // any of the three finds the right person, not just a name match.
-        parts: [u.employee?.employeeCode, u.username, ROLE_LABELS[u.role] ?? u.role].filter((v): v is string => !!v),
-      });
-    });
-
-  (superiors ?? []).forEach((s) => {
-    const account = s.employee?.account;
-    if (!account || !account.isActive) return;
-    const unit = s.department?.name ?? s.subDepartment?.name;
-    const titleText = unit ? `${s.title} (${unit})` : s.title;
-    const linkedUser = usersById.get(account.id);
-    const existing = approverMap.get(account.id);
-    if (existing) {
-      existing.parts.push(titleText);
-    } else {
-      approverMap.set(account.id, {
-        label: s.employee?.fullName ?? linkedUser?.fullName ?? 'Unknown',
-        parts: [s.employee?.employeeCode, linkedUser?.username, titleText].filter((v): v is string => !!v),
-      });
-    }
-  });
-
-  const approverOptions = Array.from(approverMap.entries()).map(([id, v]) => ({
-    id,
-    label: v.label,
-    sublabel: v.parts.join(' · '),
-  }));
+  // Every active System User is pickable as an approver -- no role
+  // restriction. Anyone can be assigned to a tier as long as they have a
+  // login; whether that's an Administrator, HR Officer, or a plain
+  // Employee (self-service) account doesn't matter here.
+  const approverOptions = (users ?? [])
+    .filter((u) => u.isActive)
+    .map((u) => ({
+      id: u.id,
+      label: u.fullName,
+      // Searched along with the label (see SearchSelect) -- fold in the
+      // employee ID (if linked), login username, and role so a match on
+      // any of the three finds the right person, not just a name match.
+      sublabel: [u.employee?.employeeCode, u.username, ROLE_LABELS[u.role] ?? u.role].filter(Boolean).join(' · '),
+    }));
 
   const [departmentId, setDepartmentId] = useState('');
   const [tiers, setTiers] = useState<EditableTier[]>([]);

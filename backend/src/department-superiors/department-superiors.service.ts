@@ -28,12 +28,7 @@ export class DepartmentSuperiorsService {
     const superior = await this.prisma.departmentSuperior.create({
       data: dto,
       include: {
-        // account: the linked login (if any) -- this is what lets a Leave
-        // Workflow tier's approver picker offer this person, since a leave
-        // decision still has to be made by a logged-in User.
-        employee: {
-          select: { id: true, fullName: true, employeeCode: true, account: { select: { id: true, isActive: true } } },
-        },
+        employee: { select: { id: true, fullName: true, employeeCode: true } },
         department: { select: { id: true, name: true } },
         subDepartment: { select: { id: true, name: true } },
       },
@@ -56,9 +51,7 @@ export class DepartmentSuperiorsService {
       },
       orderBy: { createdAt: 'desc' },
       include: {
-        employee: {
-          select: { id: true, fullName: true, employeeCode: true, account: { select: { id: true, isActive: true } } },
-        },
+        employee: { select: { id: true, fullName: true, employeeCode: true } },
         department: { select: { id: true, name: true } },
         subDepartment: { select: { id: true, name: true } },
       },

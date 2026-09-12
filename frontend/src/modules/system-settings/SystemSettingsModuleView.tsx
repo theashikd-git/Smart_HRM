@@ -221,7 +221,7 @@ function UserManagement() {
     <Card className="mt-4">
       <CardHeader
         title="System Users"
-        subtitle="Staff accounts (Administrator, HR) and employee self-service logins -- see Superior Management for Manager/Supervisor assignments"
+        subtitle="Staff accounts (Administrator, HR, Manager) and employee self-service logins"
         action={
           <Button
             size="sm"
@@ -310,6 +310,8 @@ function UserManagement() {
             >
               <option value="ADMIN">Administrator</option>
               <option value="HR">HR Officer</option>
+              <option value="MANAGER">Manager</option>
+              <option value="SUPERVISOR">Supervisor</option>
               <option value="EMPLOYEE">Employee (self-service)</option>
             </Select>
           </FieldWrap>
@@ -385,14 +387,12 @@ function UserManagement() {
               <Input value={editForm.fullName} onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))} />
             </FieldWrap>
 
-            <FieldWrap
-              label="Role"
-              required
-              hint="Manager/Supervisor is no longer set here -- see Personnel > Leave Management > Superior Management to name someone a department's Manager or Supervisor."
-            >
+            <FieldWrap label="Role" required>
               <Select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
                 <option value="ADMIN">Administrator</option>
                 <option value="HR">HR Officer</option>
+                <option value="MANAGER">Manager</option>
+                <option value="SUPERVISOR">Supervisor</option>
                 <option value="EMPLOYEE">Employee (self-service)</option>
               </Select>
             </FieldWrap>
