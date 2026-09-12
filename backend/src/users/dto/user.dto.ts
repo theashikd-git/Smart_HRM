@@ -55,4 +55,12 @@ export class UpdateUserDto {
   @IsOptional()
   @MinLength(6)
   password?: string;
+
+  // Links (or, sent as an empty string, unlinks) this login to an Employee
+  // record -- lets a staff account (ADMIN/HR/MANAGER/SUPERVISOR) created
+  // without one be tied to their Employee record later, e.g. so they become
+  // searchable by Employee ID when picking a leave approval tier's approver.
+  @IsOptional()
+  @IsString()
+  employeeId?: string;
 }

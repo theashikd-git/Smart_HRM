@@ -136,6 +136,21 @@ export class UsersService {
     if (dto.password) {
       data.passwordHash = await bcrypt.hash(dto.password, 10);
     }
+    if (dto.employeeId !== undefined) {
+      if (dto.employeeId) {
+        const employee = await this.prisma.employee.findUnique({ where: { id: dto.employeeId } });
+        if (!employee) throw new NotFoundException('Employee not found');
+
+        const alreadyLinked = await this.prisma.user.findUnique({ where: { employeeId: dto.employeeId } });
+        if (alreadyLinked && alreadyLinked.id !== id) {
+          throw new ConflictException('This employee already has a login account');
+        }
+        data.employeeId = dto.employeeId;
+      } else {
+        // Empty string -- explicit unlink.
+        data.employeeId = null;
+      }
+    }
 
     const user = await this.prisma.user.update({ where: { id }, data, select: SAFE_SELECT });
 

@@ -33,8 +33,18 @@ export function useCreateUser() {
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...payload }: { id: string; fullName?: string; role?: string; isActive?: boolean; password?: string }) =>
-      (await api.patch<SystemUser>(`/users/${id}`, payload)).data,
+    mutationFn: async ({
+      id,
+      ...payload
+    }: {
+      id: string;
+      fullName?: string;
+      role?: string;
+      isActive?: boolean;
+      password?: string;
+      // '' explicitly unlinks; omit the field entirely to leave it unchanged.
+      employeeId?: string;
+    }) => (await api.patch<SystemUser>(`/users/${id}`, payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['system-users'] }),
   });
 }
