@@ -212,14 +212,14 @@ export class LeaveService {
     let skippedNoPolicy = 0;
     for (const employee of employees) {
       for (const type of leaveTypes) {
-        let allocated: number | null;
+        let allocated: typeof type.daysPerYear;
         if (employee.leaveCategory) {
           const policy = policyByKey.get(`${employee.leaveCategory}:${type.id}`);
           if (!policy) {
             skippedNoPolicy++;
             continue;
           }
-          allocated = policy.daysPerCycle as any;
+          allocated = policy.daysPerCycle;
         } else {
           allocated = type.daysPerYear;
         }
