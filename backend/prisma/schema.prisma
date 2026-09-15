@@ -90,6 +90,25 @@ enum LeaveTierType {
   SPECIFIC_USER      // a fixed User assigned to this tier when the workflow is configured
 }
 
+// The employee's leave-policy category -- distinct from EmploymentType
+// (which is about the job arrangement: full/part time, contract, intern).
+// This is what the Leave Policy screen keys entitlements off of.
+enum LeaveEmployeeCategory {
+  PERMANENT
+  PROVISION   // probation -- fixed or HR-chosen duration before becoming Permanent
+  CONTRACTUAL
+  TRIAL       // HR picks the duration at creation; no leave entitlement during it
+}
+
+// Flags a LeaveType that needs extra handling beyond a plain balance
+// deduction -- Compensatory checks past attendance, Maternity checks
+// tenure/gender and requires an attached document.
+enum LeaveSpecialRule {
+  NONE
+  COMPENSATORY
+  MATERNITY
+}
+
 enum LeaveDecisionType {
   APPROVED
   REJECTED
@@ -428,6 +447,17 @@ model Employee {
   salary           Decimal?       @db.Decimal(12, 2)
   status           EmployeeStatus @default(ACTIVE)
 
+  // Leave policy category -- required going forward (nullable only so this
+  // migration doesn't break existing rows; the Employee form makes it a
+  // required pick for every new hire). trialMonths is set only when
+  // leaveCategory = TRIAL. categorySince anchors the category's own clock
+  // (Provision/Trial period end, Permanent/Contractual anniversary) -- it
+  // starts at joiningDate and is reset whenever HR changes the category
+  // (e.g. Provision -> Permanent, or extending Provision another term).
+  leaveCategory    LeaveEmployeeCategory?
+  trialMonths      Int?
+  categorySince    DateTime?
+
   // Biometric / device sync
   deviceUserId     String?        @unique
   syncStatus       SyncStatus     @default(NOT_SYNCED)
@@ -470,12 +500,13 @@ model Employee {
 model Document {
   id         String   @id @default(uuid())
   employeeId String
-  type       String   // Resume, Contract, Certificate, Identification
+  type       String   // Resume, Contract, Certificate, Identification, Leave Attachment
   fileName   String
   fileUrl    String
   uploadedAt DateTime @default(now())
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveRequests LeaveRequest[]
 
   @@map("documents")
 }
@@ -590,23 +621,55 @@ model AttendanceRecord {
 // ---------------------------------------------------------------------------
 
 model LeaveType {
-  id                  String   @id @default(uuid())
-  name                String   @unique
-  code                String   @unique
-  daysPerYear         Decimal  @db.Decimal(5, 1) @default(0)
-  paid                Boolean  @default(true)
-  carryForward        Boolean  @default(false)
-  maxCarryForwardDays Decimal? @db.Decimal(5, 1)
-  requiresApproval    Boolean  @default(true)
+  id                  String           @id @default(uuid())
+  name                String           @unique
+  code                String           @unique
+  daysPerYear         Decimal          @db.Decimal(5, 1) @default(0)
+  paid                Boolean          @default(true)
+  carryForward        Boolean          @default(false)
+  maxCarryForwardDays Decimal?         @db.Decimal(5, 1)
+  requiresApproval    Boolean          @default(true)
   color               String?
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  isActive            Boolean          @default(true)
+  // NONE = plain balance-based leave type, using daysPerYear/carryForward
+  // above unless a LeaveCategoryPolicy row overrides it for a given
+  // employee category. COMPENSATORY/MATERNITY route through the extra
+  // checks in LeaveService instead of a flat annual allocation.
+  specialRule         LeaveSpecialRule @default(NONE)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  balances LeaveBalance[]
-  requests LeaveRequest[]
+  balances         LeaveBalance[]
+  requests         LeaveRequest[]
+  categoryPolicies LeaveCategoryPolicy[]
 
   @@map("leave_types")
+}
+
+// Per (employee category, leave type) entitlement -- lets Permanent/
+// Provision/Contractual all grant different Casual/Sick/Annual amounts
+// under the same LeaveType row, with their own carry-forward rules. A
+// category with no row for a given leave type gets none of it (this is how
+// Trial ends up with zero Casual/Sick/Annual, and how Provision/Contractual
+// simply don't have an Annual-leave row).
+model LeaveCategoryPolicy {
+  id                  String                @id @default(uuid())
+  leaveCategory       LeaveEmployeeCategory
+  leaveTypeId         String
+  daysPerCycle        Decimal               @db.Decimal(5, 1)
+  carryForward        Boolean               @default(false)
+  maxCarryForwardDays Decimal?              @db.Decimal(5, 1)
+  // Contractual-style: the unused balance rolls over exactly once into the
+  // next cycle, and after that the policy stops granting new days at all
+  // (the employee just spends down whatever's left, then it's gone).
+  carryForwardOnce    Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([leaveCategory, leaveTypeId])
+  @@map("leave_category_policies")
 }
 
 model LeaveBalance {
@@ -644,6 +707,14 @@ model LeaveRequest {
   cancelledAt     DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+
+  // Compensatory leave only: the past on-duty date this request claims
+  // extra hours against (see LeaveService.getCompensatoryEligibility).
+  compensatoryForDate DateTime? @db.Date
+  // Maternity leave only (required by policy, but kept generic so any
+  // future leave type can attach a document the same way).
+  attachmentId        String?
+  attachment          Document? @relation(fields: [attachmentId], references: [id])
 
   employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])

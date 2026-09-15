@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { LeaveBalance, LeaveRequest, LeaveType, Paginated } from '@/types';
+import { LeaveBalance, LeaveCategoryPolicy, LeaveRequest, LeaveType, Paginated } from '@/types';
 
 export interface LeaveQuery {
   employeeId?: string;
@@ -48,6 +48,71 @@ export function useDeactivateLeaveType() {
   });
 }
 
+// -- Leave category policies --------------------------------------------------
+// Per (employee category, leave type) entitlements -- Personnel > Leave
+// Management > Leave Policy.
+
+export function useLeaveCategoryPolicies(leaveCategory?: string) {
+  return useQuery({
+    queryKey: ['leave-category-policies', leaveCategory],
+    queryFn: async () =>
+      (await api.get<LeaveCategoryPolicy[]>('/leave-category-policies', { params: { leaveCategory } })).data,
+  });
+}
+
+export function useCreateLeaveCategoryPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      leaveCategory: string;
+      leaveTypeId: string;
+      daysPerCycle: number;
+      carryForward?: boolean;
+      maxCarryForwardDays?: number;
+      carryForwardOnce?: boolean;
+    }) => (await api.post('/leave-category-policies', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-category-policies'] }),
+  });
+}
+
+export function useUpdateLeaveCategoryPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...payload
+    }: {
+      id: string;
+      daysPerCycle?: number;
+      carryForward?: boolean;
+      maxCarryForwardDays?: number;
+      carryForwardOnce?: boolean;
+    }) => (await api.patch(`/leave-category-policies/${id}`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-category-policies'] }),
+  });
+}
+
+export function useDeleteLeaveCategoryPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/leave-category-policies/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-category-policies'] }),
+  });
+}
+
+// -- Leave attachments (Maternity Leave's required supporting document) -----
+
+export function useUploadLeaveAttachment() {
+  return useMutation({
+    mutationFn: async ({ file, employeeId }: { file: File; employeeId?: string }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (employeeId) formData.append('employeeId', employeeId);
+      return (await api.post<{ id: string; fileName: string }>('/leave/attachments', formData)).data;
+    },
+  });
+}
+
 // -- Leave requests -----------------------------------------------------------
 
 export function useLeaveRequests(query: LeaveQuery) {
@@ -77,6 +142,8 @@ export function useCreateLeaveRequest() {
       session?: string;
       reason?: string;
       overrideBalance?: boolean;
+      compensatoryForDate?: string;
+      attachmentId?: string;
     }) => (await api.post('/leave/requests', payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
@@ -205,6 +272,8 @@ export function useCreateMyLeaveRequest() {
       endDate: string;
       session?: string;
       reason?: string;
+      compensatoryForDate?: string;
+      attachmentId?: string;
     }) => (await api.post('/leave/my/requests', payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-leave-requests'] });

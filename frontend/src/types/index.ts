@@ -199,7 +199,16 @@ export interface Employee {
   // screen show/change their access level (Employee/Supervisor/Manager)
   // directly, instead of a separate trip to System Settings.
   account?: { id: string; role: Role; isActive: boolean } | null;
+  // Which of the 7 leave-policy tracks this employee is on -- required at
+  // creation. trialMonths only applies when leaveCategory is 'TRIAL'.
+  // categorySince anchors that category's own clock (set from joiningDate
+  // at creation, reset to the change date whenever HR changes the category).
+  leaveCategory?: LeaveEmployeeCategory | null;
+  trialMonths?: number | null;
+  categorySince?: string | null;
 }
+
+export type LeaveEmployeeCategory = 'PERMANENT' | 'PROVISION' | 'CONTRACTUAL' | 'TRIAL';
 
 export type DeviceConnectionStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
 
@@ -269,6 +278,8 @@ export interface SystemUser {
   employee?: { id: string; employeeCode: string; fullName: string } | null;
 }
 
+export type LeaveSpecialRule = 'NONE' | 'COMPENSATORY' | 'MATERNITY';
+
 export interface LeaveType {
   id: string;
   name: string;
@@ -280,6 +291,25 @@ export interface LeaveType {
   requiresApproval: boolean;
   color?: string | null;
   isActive: boolean;
+  // NONE (default) for an ordinary leave type. COMPENSATORY/MATERNITY opt
+  // this leave type into its own eligibility check in LeaveService.create
+  // instead of (COMPENSATORY) or in addition to (MATERNITY) the normal
+  // pooled-balance check.
+  specialRule: LeaveSpecialRule;
+}
+
+// Per (employee category, leave type) entitlement -- admin-configurable
+// rather than hardcoded, since the 7-type leave policy's day counts differ
+// by employee category (e.g. Permanent Casual = 10, Provision Casual = 5).
+export interface LeaveCategoryPolicy {
+  id: string;
+  leaveCategory: LeaveEmployeeCategory;
+  leaveTypeId: string;
+  leaveType: LeaveType;
+  daysPerCycle: number;
+  carryForward: boolean;
+  maxCarryForwardDays?: number | null;
+  carryForwardOnce: boolean;
 }
 
 export type LeaveSession = 'FULL_DAY' | 'FIRST_HALF' | 'SECOND_HALF';

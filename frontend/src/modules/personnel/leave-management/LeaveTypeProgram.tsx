@@ -23,6 +23,13 @@ const EMPTY_TYPE_FORM = {
   maxCarryForwardDays: '',
   requiresApproval: true,
   color: '#22c55e',
+  specialRule: 'NONE' as string,
+};
+
+const SPECIAL_RULE_LABELS: Record<string, string> = {
+  NONE: 'None',
+  COMPENSATORY: 'Compensatory (checked against past attendance)',
+  MATERNITY: 'Maternity (tenure + document required)',
 };
 
 /**
@@ -53,6 +60,7 @@ export function LeaveTypeProgram({ tab }: { tab: WorkbenchTab }) {
         maxCarryForwardDays: form.carryForward && form.maxCarryForwardDays ? Number(form.maxCarryForwardDays) : undefined,
         requiresApproval: form.requiresApproval,
         color: form.color,
+        specialRule: form.specialRule as any,
       });
       toast.success('Leave type created');
       setModalOpen(false);
@@ -102,6 +110,7 @@ export function LeaveTypeProgram({ tab }: { tab: WorkbenchTab }) {
               <Th>Days / Year</Th>
               <Th>Paid</Th>
               <Th>Carry Forward</Th>
+              <Th>Special Rule</Th>
               <Th>Approval</Th>
               <Th>Status</Th>
               <Th></Th>
@@ -126,6 +135,9 @@ export function LeaveTypeProgram({ tab }: { tab: WorkbenchTab }) {
                   {type.carryForward
                     ? `Up to ${type.maxCarryForwardDays ?? '—'} day(s)`
                     : 'No'}
+                </Td>
+                <Td className="text-xs text-text-secondary">
+                  {type.specialRule && type.specialRule !== 'NONE' ? SPECIAL_RULE_LABELS[type.specialRule] : '—'}
                 </Td>
                 <Td>{type.requiresApproval ? 'Required' : 'Auto-approved'}</Td>
                 <Td>
@@ -226,6 +238,16 @@ export function LeaveTypeProgram({ tab }: { tab: WorkbenchTab }) {
                 />
               </FieldWrap>
             )}
+            <FieldWrap
+              label="Special Rule"
+              hint="Compensatory/Maternity replace the normal balance check with their own eligibility check"
+            >
+              <Select value={form.specialRule} onChange={(e) => setForm((f) => ({ ...f, specialRule: e.target.value }))}>
+                <option value="NONE">None (ordinary balance-based leave)</option>
+                <option value="COMPENSATORY">Compensatory</option>
+                <option value="MATERNITY">Maternity</option>
+              </Select>
+            </FieldWrap>
           </div>
         </Modal>
       </Card>

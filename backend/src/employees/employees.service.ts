@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
@@ -27,12 +27,25 @@ export class EmployeesService {
       if (deviceIdTaken) throw new ConflictException('Device User ID is already assigned to another employee');
     }
 
+    if (dto.leaveCategory === 'TRIAL' && !dto.trialMonths) {
+      throw new BadRequestException('trialMonths is required when leaveCategory is TRIAL');
+    }
+
+    const joiningDate = dto.joiningDate ? new Date(dto.joiningDate) : undefined;
+
     const employee = await this.prisma.employee.create({
       data: {
         ...dto,
         employeeCode,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
-        joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
+        joiningDate,
+        // Anchors the leave-category clock: Permanent's 1-year mark,
+        // Provision's 6-month mark, Contractual's 1-year carry-forward
+        // mark, and Trial's custom duration are all measured from here.
+        // Uses the joining date when one was given so a backdated hire
+        // starts its clock correctly instead of from today.
+        categorySince: joiningDate ?? new Date(),
+        trialMonths: dto.leaveCategory === 'TRIAL' ? dto.trialMonths : undefined,
         syncStatus: 'PENDING',
       },
       include: this.includeRelations(),
@@ -109,7 +122,7 @@ export class EmployeesService {
   }
 
   async update(id: string, dto: UpdateEmployeeDto, actorId?: string) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
 
     if (dto.employeeCode) {
       const codeTaken = await this.prisma.employee.findUnique({ where: { employeeCode: dto.employeeCode } });
@@ -125,12 +138,22 @@ export class EmployeesService {
       }
     }
 
+    const nextCategory = dto.leaveCategory ?? current.leaveCategory;
+    if (nextCategory === 'TRIAL' && !(dto.trialMonths ?? current.trialMonths)) {
+      throw new BadRequestException('trialMonths is required when leaveCategory is TRIAL');
+    }
+    const categoryChanged = dto.leaveCategory && dto.leaveCategory !== current.leaveCategory;
+
     const employee = await this.prisma.employee.update({
       where: { id },
       data: {
         ...dto,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
         joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
+        // A category change starts a fresh clock (e.g. Provision ->
+        // Permanent should count the 1-year mark from today, not from
+        // whenever they originally joined as Provision).
+        ...(categoryChanged ? { categorySince: new Date() } : {}),
         syncStatus: 'PENDING',
       },
       include: this.includeRelations(),

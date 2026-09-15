@@ -22,4 +22,16 @@ export class SelfCreateLeaveRequestDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  // Required when leaveType.specialRule === COMPENSATORY: the past on-duty
+  // date this compensatory day is being claimed against.
+  @IsOptional()
+  @IsDateString()
+  compensatoryForDate?: string;
+
+  // Required when leaveType.specialRule === MATERNITY: the uploaded
+  // supporting document's id.
+  @IsOptional()
+  @IsString()
+  attachmentId?: string;
 }

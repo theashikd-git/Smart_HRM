@@ -180,23 +180,50 @@ export class LeaveService {
   }
 
   /**
-   * Creates a balance row (at the leave type's default annual entitlement)
-   * for every active employee x active leave type combination that doesn't
-   * already have one for the given year. Safe to re-run -- existing rows
-   * are left untouched. Entitlements are NOT prorated by joining date in
-   * this pass; adjust individual balances via adjustBalance() for
-   * mid-year hires if you need that.
+   * Creates a balance row for every active employee x active leave type
+   * combination that doesn't already have one for the given year. Safe to
+   * re-run -- existing rows are left untouched.
+   *
+   * Compensatory and Maternity leave types are never pooled balances (they're
+   * granted per-request against their own eligibility check -- see
+   * checkCompensatoryEligibility/checkMaternityEligibility) and are skipped
+   * here entirely.
+   *
+   * For every other leave type: an employee with a leaveCategory set draws
+   * their entitlement from that (leaveCategory, leaveType) row in
+   * LeaveCategoryPolicy -- and if HR hasn't configured a policy row for that
+   * combination, no balance is created for it (nothing to allocate). An
+   * employee with no leaveCategory (not yet migrated to the 7-type policy)
+   * falls back to the leave type's flat daysPerYear, as before.
+   *
+   * Entitlements are NOT prorated by joining date in this pass; adjust
+   * individual balances via adjustBalance() for mid-year hires if needed.
    */
   async initializeBalances(dto: InitializeBalancesDto, actorId?: string) {
     const year = dto.year ?? new Date().getFullYear();
     const leaveTypes = await this.prisma.leaveType.findMany({
-      where: { isActive: true, ...(dto.leaveTypeId ? { id: dto.leaveTypeId } : {}) },
+      where: { isActive: true, specialRule: 'NONE', ...(dto.leaveTypeId ? { id: dto.leaveTypeId } : {}) },
     });
     const employees = await this.prisma.employee.findMany({ where: { status: 'ACTIVE' } });
+    const policies = await this.prisma.leaveCategoryPolicy.findMany();
+    const policyByKey = new Map(policies.map((p) => [`${p.leaveCategory}:${p.leaveTypeId}`, p]));
 
     let created = 0;
+    let skippedNoPolicy = 0;
     for (const employee of employees) {
       for (const type of leaveTypes) {
+        let allocated: number | null;
+        if (employee.leaveCategory) {
+          const policy = policyByKey.get(`${employee.leaveCategory}:${type.id}`);
+          if (!policy) {
+            skippedNoPolicy++;
+            continue;
+          }
+          allocated = policy.daysPerCycle as any;
+        } else {
+          allocated = type.daysPerYear;
+        }
+
         const existing = await this.prisma.leaveBalance.findUnique({
           where: { employeeId_leaveTypeId_year: { employeeId: employee.id, leaveTypeId: type.id, year } },
         });
@@ -206,7 +233,7 @@ export class LeaveService {
             employeeId: employee.id,
             leaveTypeId: type.id,
             year,
-            allocated: type.daysPerYear,
+            allocated,
             carriedForward: 0,
             used: 0,
           },
@@ -219,10 +246,16 @@ export class LeaveService {
       userId: actorId,
       action: 'LEAVE_BALANCES_INITIALIZED',
       entity: 'LeaveBalance',
-      details: `Created ${created} balance record(s) for ${year}`,
+      details: `Created ${created} balance record(s) for ${year} (${skippedNoPolicy} skipped -- no matching category policy)`,
     });
 
-    return { year, employeesConsidered: employees.length, leaveTypesConsidered: leaveTypes.length, created };
+    return {
+      year,
+      employeesConsidered: employees.length,
+      leaveTypesConsidered: leaveTypes.length,
+      created,
+      skippedNoPolicy,
+    };
   }
 
   // -------------------------------------------------------------------
@@ -279,6 +312,57 @@ export class LeaveService {
   // Requests
   // -------------------------------------------------------------------
 
+  /** Compensatory Leave eligibility: the claimed date must be a day the
+   *  employee actually completed a shift (both check-in and check-out
+   *  recorded) with unpaid overtime on it -- that overtime is what's being
+   *  converted into a day off instead of extra pay. */
+  private async checkCompensatoryEligibility(employeeId: string, compensatoryForDate?: string) {
+    if (!compensatoryForDate) {
+      throw new BadRequestException(
+        'compensatoryForDate is required for Compensatory Leave -- the past duty date this day off is being claimed against',
+      );
+    }
+    const date = startOfDay(new Date(compensatoryForDate));
+    const attendance = await this.prisma.attendanceRecord.findUnique({
+      where: { employeeId_date: { employeeId, date } },
+    });
+    if (!attendance || !attendance.checkIn || !attendance.checkOut) {
+      throw new BadRequestException(
+        `No completed duty (check-in and check-out) was recorded for ${compensatoryForDate} -- ` +
+          `Compensatory Leave can only be claimed against a day actually worked`,
+      );
+    }
+    if (!attendance.overtimeMinutes || attendance.overtimeMinutes <= 0) {
+      throw new BadRequestException(
+        `No overtime was recorded for ${compensatoryForDate} -- Compensatory Leave is only for duty ` +
+          `time that wasn't already paid out as overtime`,
+      );
+    }
+  }
+
+  /** Maternity Leave eligibility: 2 years' tenure from the hire date, only
+   *  for female employees, capped at 112 days, and a supporting document is
+   *  mandatory. */
+  private checkMaternityEligibility(employee: { joiningDate: Date | null; gender: string | null }, totalDays: number, attachmentId?: string) {
+    if ((employee.gender ?? '').toLowerCase() !== 'female') {
+      throw new BadRequestException('Maternity Leave is only available to female employees');
+    }
+    if (!employee.joiningDate) {
+      throw new BadRequestException('This employee has no joining date on file, so tenure for Maternity Leave cannot be verified');
+    }
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    if (startOfDay(employee.joiningDate) > startOfDay(twoYearsAgo)) {
+      throw new BadRequestException('Maternity Leave requires at least 2 years of tenure from the hire date');
+    }
+    if (totalDays > 112) {
+      throw new BadRequestException('Maternity Leave cannot exceed 112 days per request');
+    }
+    if (!attachmentId) {
+      throw new BadRequestException('A supporting document is required to apply for Maternity Leave');
+    }
+  }
+
   async create(dto: CreateLeaveRequestDto, actorId?: string) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: dto.employeeId },
@@ -311,14 +395,27 @@ export class LeaveService {
 
     const year = startDate.getFullYear();
     if (!dto.overrideBalance) {
-      const balance = await this.ensureBalance(dto.employeeId, dto.leaveTypeId, year);
-      const remaining =
-        toNumber(balance.allocated) + toNumber(balance.carriedForward) - toNumber(balance.used);
-      if (totalDays > remaining) {
-        throw new BadRequestException(
-          `${employee.fullName} only has ${remaining} day(s) of ${leaveType.name} remaining for ${year} ` +
-            `(requested ${totalDays}). Pass overrideBalance: true to approve anyway.`,
-        );
+      if (leaveType.specialRule === 'COMPENSATORY') {
+        // Earned per claimed date, not drawn from a pooled yearly balance --
+        // eligibility is the previous duty day's attendance, not a day count.
+        await this.checkCompensatoryEligibility(dto.employeeId, dto.compensatoryForDate);
+      } else if (leaveType.specialRule === 'MATERNITY') {
+        // Its own tenure/gender/document eligibility, not a pooled balance --
+        // up to 112 days per request rather than a per-year allocation.
+        this.checkMaternityEligibility(employee, totalDays, dto.attachmentId);
+      } else if (leaveType.paid) {
+        // Unpaid Leave (paid: false) skips the balance check entirely --
+        // "anyone can apply" per the leave policy, since there's nothing to
+        // run out of.
+        const balance = await this.ensureBalance(dto.employeeId, dto.leaveTypeId, year);
+        const remaining =
+          toNumber(balance.allocated) + toNumber(balance.carriedForward) - toNumber(balance.used);
+        if (totalDays > remaining) {
+          throw new BadRequestException(
+            `${employee.fullName} only has ${remaining} day(s) of ${leaveType.name} remaining for ${year} ` +
+              `(requested ${totalDays}). Pass overrideBalance: true to approve anyway.`,
+          );
+        }
       }
     }
 
@@ -337,6 +434,8 @@ export class LeaveService {
         appliedById: actorId,
         status: needsApproval ? 'PENDING' : 'APPROVED',
         currentTierOrder: workflow ? workflow.tiers[0].order : null,
+        compensatoryForDate: dto.compensatoryForDate ? startOfDay(new Date(dto.compensatoryForDate)) : undefined,
+        attachmentId: dto.attachmentId,
         ...(needsApproval ? {} : { decidedById: actorId, decidedAt: new Date() }),
       },
       include: this.includeRelations(),
@@ -385,10 +484,11 @@ export class LeaveService {
           shift: { select: { weekendRule: true } },
         },
       },
-      leaveType: { select: { id: true, name: true, code: true, color: true, paid: true } },
+      leaveType: { select: { id: true, name: true, code: true, color: true, paid: true, specialRule: true } },
       appliedBy: { select: { id: true, fullName: true } },
       decidedBy: { select: { id: true, fullName: true } },
       decisions: { orderBy: { decidedAt: 'asc' as const }, include: { approver: { select: { id: true, fullName: true } } } },
+      attachment: { select: { id: true, fileName: true, fileUrl: true } },
     };
   }
 

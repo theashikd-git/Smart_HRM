@@ -37,6 +37,8 @@ const EMPTY_FORM = {
   salary: '',
   rfidCardNumber: '',
   deviceUserId: '',
+  leaveCategory: '',
+  trialMonths: '',
 };
 
 export function EmployeeFormModal({ open, onClose, employee }: Props) {
@@ -71,6 +73,8 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
         salary: employee.salary?.toString() || '',
         rfidCardNumber: employee.rfidCardNumber || '',
         deviceUserId: employee.deviceUserId || '',
+        leaveCategory: employee.leaveCategory || '',
+        trialMonths: employee.trialMonths?.toString() || '',
       });
     } else {
       setForm({ ...EMPTY_FORM, employeeCode: String(Math.floor(1000 + Math.random() * 9000)) });
@@ -91,6 +95,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       designationId: form.designationId || undefined,
       shiftId: form.shiftId || undefined,
       deviceUserId: form.deviceUserId || undefined,
+      trialMonths: form.leaveCategory === 'TRIAL' && form.trialMonths ? Number(form.trialMonths) : undefined,
     };
 
     try {
@@ -222,6 +227,30 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
             <option value="INTERN">Intern</option>
           </Select>
         </FieldWrap>
+        <FieldWrap
+          label="Employee Type"
+          required
+          hint="Which leave policy this employee follows -- Permanent, Provision (6-month probation), Contractual, or Trial"
+        >
+          <Select value={form.leaveCategory} onChange={(e) => set('leaveCategory', e.target.value)} required>
+            <option value="">Select</option>
+            <option value="PERMANENT">Permanent</option>
+            <option value="PROVISION">Provision (Probation)</option>
+            <option value="CONTRACTUAL">Contractual</option>
+            <option value="TRIAL">Trial</option>
+          </Select>
+        </FieldWrap>
+        {form.leaveCategory === 'TRIAL' && (
+          <FieldWrap label="Trial Duration (months)" required hint="How many months this employee's trial period runs">
+            <Input
+              type="number"
+              min={1}
+              value={form.trialMonths}
+              onChange={(e) => set('trialMonths', e.target.value)}
+              required
+            />
+          </FieldWrap>
+        )}
         <FieldWrap label="Salary">
           <Input type="number" value={form.salary} onChange={(e) => set('salary', e.target.value)} />
         </FieldWrap>

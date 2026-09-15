@@ -26,6 +26,7 @@ export class LeaveTypesService {
         maxCarryForwardDays: dto.maxCarryForwardDays,
         requiresApproval: dto.requiresApproval ?? true,
         color: dto.color,
+        specialRule: dto.specialRule ?? 'NONE',
       },
     });
 

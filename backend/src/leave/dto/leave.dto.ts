@@ -24,6 +24,26 @@ export enum LeaveRequestStatusDto {
   CANCELLED = 'CANCELLED',
 }
 
+// Mirrors Prisma's LeaveSpecialRule enum. NONE is the ordinary
+// balance-and-approve flow; COMPENSATORY and MATERNITY each have their own
+// eligibility check in LeaveService.create beyond the normal balance check.
+export enum LeaveSpecialRuleDto {
+  NONE = 'NONE',
+  COMPENSATORY = 'COMPENSATORY',
+  MATERNITY = 'MATERNITY',
+}
+
+// Mirrors Prisma's LeaveEmployeeCategory enum -- see employees/dto/employee.dto.ts
+// for the employee-side counterpart (LeaveEmployeeCategoryDto). Duplicated
+// here rather than imported across module boundaries, matching this
+// codebase's existing pattern of each feature module defining its own DTOs.
+export enum LeaveEmployeeCategoryDto {
+  PERMANENT = 'PERMANENT',
+  PROVISION = 'PROVISION',
+  CONTRACTUAL = 'CONTRACTUAL',
+  TRIAL = 'TRIAL',
+}
+
 // ---------------------------------------------------------------------------
 // Leave types
 // ---------------------------------------------------------------------------
@@ -62,6 +82,13 @@ export class CreateLeaveTypeDto {
   @IsOptional()
   @IsString()
   color?: string;
+
+  // NONE (default) for an ordinary leave type. COMPENSATORY/MATERNITY opt
+  // this leave type into the matching special eligibility check instead of
+  // (COMPENSATORY) or in addition to (MATERNITY) the normal balance check.
+  @IsOptional()
+  @IsEnum(LeaveSpecialRuleDto)
+  specialRule?: LeaveSpecialRuleDto;
 }
 
 export class UpdateLeaveTypeDto {
@@ -74,6 +101,7 @@ export class UpdateLeaveTypeDto {
   @IsOptional() @IsBoolean() requiresApproval?: boolean;
   @IsOptional() @IsString() color?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsEnum(LeaveSpecialRuleDto) specialRule?: LeaveSpecialRuleDto;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +138,20 @@ export class CreateLeaveRequestDto {
   @IsOptional()
   @IsBoolean()
   overrideBalance?: boolean;
+
+  // Required when leaveType.specialRule === COMPENSATORY: the past on-duty
+  // date this compensatory day is being claimed against. Checked in
+  // LeaveService.create against that date's AttendanceRecord.
+  @IsOptional()
+  @IsDateString()
+  compensatoryForDate?: string;
+
+  // Required when leaveType.specialRule === MATERNITY: the uploaded
+  // supporting document's id (see the leave attachments upload endpoint),
+  // stored as LeaveRequest.attachmentId.
+  @IsOptional()
+  @IsString()
+  attachmentId?: string;
 }
 
 export class RejectLeaveRequestDto {
@@ -175,4 +217,49 @@ export class InitializeBalancesDto {
   @IsOptional()
   @IsString()
   leaveTypeId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Leave category policies -- per (employee category, leave type) entitlement,
+// admin-configurable rather than seeded/hardcoded. LeaveService's balance
+// allocator looks these rows up instead of LeaveType.daysPerYear whenever an
+// employee has a leaveCategory set.
+// ---------------------------------------------------------------------------
+
+export class CreateLeaveCategoryPolicyDto {
+  @IsNotEmpty()
+  @IsEnum(LeaveEmployeeCategoryDto)
+  leaveCategory: LeaveEmployeeCategoryDto;
+
+  @IsNotEmpty()
+  @IsString()
+  leaveTypeId: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  daysPerCycle: number;
+
+  @IsOptional()
+  @IsBoolean()
+  carryForward?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCarryForwardDays?: number;
+
+  // Contractual's "carry forward once, then stop adding" rule: when true,
+  // the carry-forward only happens on the first anniversary and never again
+  // after that.
+  @IsOptional()
+  @IsBoolean()
+  carryForwardOnce?: boolean;
+}
+
+export class UpdateLeaveCategoryPolicyDto {
+  @IsOptional() @IsNumber() @Min(0) daysPerCycle?: number;
+  @IsOptional() @IsBoolean() carryForward?: boolean;
+  @IsOptional() @IsNumber() @Min(0) maxCarryForwardDays?: number;
+  @IsOptional() @IsBoolean() carryForwardOnce?: boolean;
 }
