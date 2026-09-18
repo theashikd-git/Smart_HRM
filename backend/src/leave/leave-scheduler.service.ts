@@ -25,15 +25,20 @@ function isSameMonthDay(a: Date, b: Date): boolean {
 }
 
 /**
- * The two scheduled jobs the 7-type leave policy needs beyond what happens
- * at request-time (LeaveService.create's balance/eligibility checks):
+ * The two scheduled jobs the leave policy needs beyond what happens at
+ * request-time (LeaveService.create's balance/eligibility checks). Both
+ * read behavior off the employee's EmployeeCategory row (accruesRollover /
+ * hasFixedPeriod) instead of hardcoding category names, so an HR-added
+ * category picks up the right scheduled behavior automatically:
  *
- *  1. Anniversary balance rollover for PERMANENT/CONTRACTUAL employees --
- *     each employee's own hire/category anniversary is their personal
- *     "leave year" boundary (confirmed with HR: anniversary-based, not a
- *     shared calendar-year reset), so this runs daily and only acts on
- *     employees whose anniversary is today.
- *  2. HR notification 2 weeks before a PROVISION or TRIAL period ends, via
+ *  1. Anniversary balance rollover for any category with accruesRollover
+ *     (Permanent/Contractual by default) -- each employee's own hire/
+ *     category anniversary is their personal "leave year" boundary
+ *     (confirmed with HR: anniversary-based, not a shared calendar-year
+ *     reset), so this runs daily and only acts on employees whose
+ *     anniversary is today.
+ *  2. HR notification 2 weeks before any hasFixedPeriod category's period
+ *     ends (Provision's probation, Trial's trial period, by default), via
  *     the existing Audit Log (see LeaveModule's AuditModule import) rather
  *     than a new staff-facing notification -- most ADMIN/HR accounts have
  *     no linked Employee record, and the Notification model is keyed by
@@ -83,23 +88,24 @@ export class LeaveSchedulerService {
   }
 
   /**
-   * For every active PERMANENT/CONTRACTUAL employee whose categorySince
-   * anniversary is today: carries forward each policy-eligible leave type's
-   * unused balance into the new personal leave year, per that
+   * For every active employee in an accruesRollover category whose
+   * categorySince anniversary is today: carries forward each policy-eligible
+   * leave type's unused balance into the new personal leave year, per that
    * (category, leaveType) row in LeaveCategoryPolicy --
    *   - carryForward: false (e.g. Permanent's Casual/Sick) -> resets to 0,
    *     nothing carried.
    *   - carryForward: true with maxCarryForwardDays set (Permanent's Annual
    *     Leave: 16/year, up to 8 carried, the rest forfeited) -> carries
    *     min(leftover, maxCarryForwardDays).
-   *   - carryForwardOnce: true (Contractual's Casual/Sick: 10/year, carried
-   *     forward exactly once) -> only acts on the employee's very first
-   *     anniversary; from the second anniversary onward this leave type is
-   *     left alone entirely (no new allocation, nothing swept away either).
+   *   - carryForwardOnce: true (Contractual-style: 10/year, carried forward
+   *     exactly once) -> only acts on the employee's very first anniversary;
+   *     from the second anniversary onward this leave type is left alone
+   *     entirely (no new allocation, nothing swept away either).
    */
   async runAnniversaryRollover(today: Date = new Date()) {
     const employees = await this.prisma.employee.findMany({
-      where: { status: 'ACTIVE', leaveCategory: { in: ['PERMANENT', 'CONTRACTUAL'] }, categorySince: { not: null } },
+      where: { status: 'ACTIVE', leaveCategory: { is: { accruesRollover: true } }, categorySince: { not: null } },
+      include: { leaveCategory: true },
     });
     const dueToday = employees.filter((e) => e.categorySince && isSameMonthDay(e.categorySince, today));
     if (dueToday.length === 0) return { processed: 0 };
@@ -107,9 +113,9 @@ export class LeaveSchedulerService {
     const policies = await this.prisma.leaveCategoryPolicy.findMany({ include: { leaveType: true } });
     const policyByCategory = new Map<string, typeof policies>();
     for (const p of policies) {
-      const list = policyByCategory.get(p.leaveCategory) ?? [];
+      const list = policyByCategory.get(p.leaveCategoryId) ?? [];
       list.push(p);
-      policyByCategory.set(p.leaveCategory, list);
+      policyByCategory.set(p.leaveCategoryId, list);
     }
 
     const toYear = today.getFullYear();
@@ -118,10 +124,10 @@ export class LeaveSchedulerService {
 
     for (const employee of dueToday) {
       const employmentYears = today.getFullYear() - employee.categorySince!.getFullYear();
-      const categoryPolicies = policyByCategory.get(employee.leaveCategory!) ?? [];
+      const categoryPolicies = policyByCategory.get(employee.leaveCategoryId!) ?? [];
 
       for (const policy of categoryPolicies) {
-        if (employee.leaveCategory === 'CONTRACTUAL' && policy.carryForwardOnce && employmentYears > 1) {
+        if (policy.carryForwardOnce && employmentYears > 1) {
           // Already rolled over once on their first anniversary -- from the
           // second anniversary onward this leave type gets no further
           // action (no new grant, nothing else carried).
@@ -164,7 +170,7 @@ export class LeaveSchedulerService {
         action: 'LEAVE_ANNIVERSARY_ROLLOVER',
         entity: 'Employee',
         entityId: employee.id,
-        details: `${employee.fullName}: leave balances rolled over for their ${employmentYears}-year ${employee.leaveCategory} anniversary`,
+        details: `${employee.fullName}: leave balances rolled over for their ${employmentYears}-year ${employee.leaveCategory?.name} anniversary`,
       });
     }
 
@@ -172,35 +178,34 @@ export class LeaveSchedulerService {
   }
 
   /**
-   * Flags, via the Audit Log, every PROVISION employee whose 6-month
-   * probation ends in exactly 2 weeks and every TRIAL employee whose
-   * HR/admin-chosen trial duration ends in exactly 2 weeks -- so HR can
-   * decide (Provision) to extend for another 6 months or confirm as
-   * Permanent, or (Trial) act before the trial runs out.
+   * Flags, via the Audit Log, every employee in a hasFixedPeriod category
+   * (Provision's probation, Trial's trial period, by default) whose period
+   * ends in exactly 2 weeks -- so HR can decide whether to extend,
+   * transition, or otherwise act before it runs out. The period's length is
+   * the category's own defaultPeriodMonths, unless this specific employee
+   * has their own trialMonths override (e.g. HR picking a custom Trial
+   * length per hire).
    */
   async notifyUpcomingPeriodEndings(today: Date = new Date()) {
     const employees = await this.prisma.employee.findMany({
-      where: { status: 'ACTIVE', leaveCategory: { in: ['PROVISION', 'TRIAL'] }, categorySince: { not: null } },
+      where: { status: 'ACTIVE', leaveCategory: { is: { hasFixedPeriod: true } }, categorySince: { not: null } },
+      include: { leaveCategory: true },
     });
 
     let notified = 0;
     for (const employee of employees) {
-      const periodEnd =
-        employee.leaveCategory === 'PROVISION'
-          ? addMonths(employee.categorySince!, 6)
-          : addMonths(employee.categorySince!, employee.trialMonths ?? 0);
+      const periodMonths = employee.trialMonths ?? employee.leaveCategory?.defaultPeriodMonths;
+      if (!periodMonths) continue; // no duration to count down (HR hasn't set one for this employee yet)
 
+      const periodEnd = addMonths(employee.categorySince!, periodMonths);
       if (daysBetween(today, periodEnd) !== 14) continue;
 
-      const periodLabel = employee.leaveCategory === 'PROVISION' ? 'Provision (probation)' : 'Trial';
+      const categoryName = employee.leaveCategory?.name ?? 'category';
       await this.auditService.log({
         action: 'LEAVE_PERIOD_ENDING_SOON',
         entity: 'Employee',
         entityId: employee.id,
-        details:
-          employee.leaveCategory === 'PROVISION'
-            ? `${employee.fullName}'s Provision period ends ${periodEnd.toISOString().slice(0, 10)} (2 weeks from now) -- decide whether to extend another 6 months or confirm as Permanent`
-            : `${employee.fullName}'s Trial period ends ${periodEnd.toISOString().slice(0, 10)} (2 weeks from now) -- ${periodLabel} is about to run out`,
+        details: `${employee.fullName}'s ${categoryName} period ends ${periodEnd.toISOString().slice(0, 10)} (2 weeks from now) -- decide whether to extend, transition them to another category, or otherwise act before it runs out`,
       });
       notified++;
     }

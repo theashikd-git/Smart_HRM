@@ -15,28 +15,31 @@ export class LeaveCategoryPolicyService {
   ) {}
 
   async create(dto: CreateLeaveCategoryPolicyDto, actorId?: string) {
+    const category = await this.prisma.employeeCategory.findUnique({ where: { id: dto.leaveCategoryId } });
+    if (!category) throw new NotFoundException('Employee category not found');
+
     const leaveType = await this.prisma.leaveType.findUnique({ where: { id: dto.leaveTypeId } });
     if (!leaveType) throw new NotFoundException('Leave type not found');
 
     const existing = await this.prisma.leaveCategoryPolicy.findUnique({
-      where: { leaveCategory_leaveTypeId: { leaveCategory: dto.leaveCategory, leaveTypeId: dto.leaveTypeId } },
+      where: { leaveCategoryId_leaveTypeId: { leaveCategoryId: dto.leaveCategoryId, leaveTypeId: dto.leaveTypeId } },
     });
     if (existing) {
       throw new ConflictException(
-        `A policy for ${dto.leaveCategory} + ${leaveType.name} already exists -- edit it instead of creating another`,
+        `A policy for ${category.name} + ${leaveType.name} already exists -- edit it instead of creating another`,
       );
     }
 
     const policy = await this.prisma.leaveCategoryPolicy.create({
       data: {
-        leaveCategory: dto.leaveCategory,
+        leaveCategoryId: dto.leaveCategoryId,
         leaveTypeId: dto.leaveTypeId,
         daysPerCycle: dto.daysPerCycle,
         carryForward: dto.carryForward ?? false,
         maxCarryForwardDays: dto.maxCarryForwardDays,
         carryForwardOnce: dto.carryForwardOnce ?? false,
       },
-      include: { leaveType: true },
+      include: { leaveType: true, leaveCategory: true },
     });
 
     await this.auditService.log({
@@ -44,7 +47,7 @@ export class LeaveCategoryPolicyService {
       action: 'LEAVE_CATEGORY_POLICY_CREATED',
       entity: 'LeaveCategoryPolicy',
       entityId: policy.id,
-      details: `Set ${dto.leaveCategory} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days`,
+      details: `Set ${category.name} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days`,
     });
 
     return policy;
@@ -59,6 +62,9 @@ export class LeaveCategoryPolicyService {
    * auto-generated unique code.
    */
   async quickAdd(dto: QuickAddLeaveCategoryPolicyDto, actorId?: string) {
+    const category = await this.prisma.employeeCategory.findUnique({ where: { id: dto.leaveCategoryId } });
+    if (!category) throw new NotFoundException('Employee category not found');
+
     const name = dto.leaveName.trim();
     if (!name) throw new BadRequestException('Leave name is required');
 
@@ -86,29 +92,29 @@ export class LeaveCategoryPolicyService {
         action: 'LEAVE_TYPE_CREATED',
         entity: 'LeaveType',
         entityId: leaveType.id,
-        details: `Created leave type "${name}" inline while setting up the ${dto.leaveCategory} leave policy`,
+        details: `Created leave type "${name}" inline while setting up the ${category.name} leave policy`,
       });
     }
 
     const existing = await this.prisma.leaveCategoryPolicy.findUnique({
-      where: { leaveCategory_leaveTypeId: { leaveCategory: dto.leaveCategory, leaveTypeId: leaveType.id } },
+      where: { leaveCategoryId_leaveTypeId: { leaveCategoryId: dto.leaveCategoryId, leaveTypeId: leaveType.id } },
     });
     if (existing) {
       throw new ConflictException(
-        `${leaveType.name} is already configured for ${dto.leaveCategory} -- edit it instead of adding it again`,
+        `${leaveType.name} is already configured for ${category.name} -- edit it instead of adding it again`,
       );
     }
 
     const policy = await this.prisma.leaveCategoryPolicy.create({
       data: {
-        leaveCategory: dto.leaveCategory,
+        leaveCategoryId: dto.leaveCategoryId,
         leaveTypeId: leaveType.id,
         daysPerCycle: dto.daysPerCycle,
         carryForward: dto.carryForward ?? false,
         maxCarryForwardDays: dto.maxCarryForwardDays,
         carryForwardOnce: dto.carryForwardOnce ?? false,
       },
-      include: { leaveType: true },
+      include: { leaveType: true, leaveCategory: true },
     });
 
     await this.auditService.log({
@@ -116,7 +122,7 @@ export class LeaveCategoryPolicyService {
       action: 'LEAVE_CATEGORY_POLICY_CREATED',
       entity: 'LeaveCategoryPolicy',
       entityId: policy.id,
-      details: `Set ${dto.leaveCategory} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days${createdNewType ? ' (new leave type)' : ''}`,
+      details: `Set ${category.name} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days${createdNewType ? ' (new leave type)' : ''}`,
     });
 
     return policy;
@@ -144,16 +150,19 @@ export class LeaveCategoryPolicyService {
     return code;
   }
 
-  findAll(leaveCategory?: string) {
+  findAll(leaveCategoryId?: string) {
     return this.prisma.leaveCategoryPolicy.findMany({
-      where: leaveCategory ? { leaveCategory: leaveCategory as any } : undefined,
-      include: { leaveType: true },
-      orderBy: [{ leaveCategory: 'asc' }, { leaveType: { name: 'asc' } }],
+      where: leaveCategoryId ? { leaveCategoryId } : undefined,
+      include: { leaveType: true, leaveCategory: true },
+      orderBy: [{ leaveCategory: { name: 'asc' } }, { leaveType: { name: 'asc' } }],
     });
   }
 
   async findOne(id: string) {
-    const policy = await this.prisma.leaveCategoryPolicy.findUnique({ where: { id }, include: { leaveType: true } });
+    const policy = await this.prisma.leaveCategoryPolicy.findUnique({
+      where: { id },
+      include: { leaveType: true, leaveCategory: true },
+    });
     if (!policy) throw new NotFoundException('Leave category policy not found');
     return policy;
   }
@@ -163,7 +172,7 @@ export class LeaveCategoryPolicyService {
     const policy = await this.prisma.leaveCategoryPolicy.update({
       where: { id },
       data: dto,
-      include: { leaveType: true },
+      include: { leaveType: true, leaveCategory: true },
     });
     await this.auditService.log({
       userId: actorId,

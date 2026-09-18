@@ -199,16 +199,39 @@ export interface Employee {
   // screen show/change their access level (Employee/Supervisor/Manager)
   // directly, instead of a separate trip to System Settings.
   account?: { id: string; role: Role; isActive: boolean } | null;
-  // Which of the 7 leave-policy tracks this employee is on -- required at
-  // creation. trialMonths only applies when leaveCategory is 'TRIAL'.
+  // Which employee-type track this employee is on -- required at creation.
+  // These are no longer a fixed 4-value enum: HR can create/rename categories
+  // via the Employee Categories admin screen, so leaveCategoryId points at a
+  // real EmployeeCategory row. trialMonths is only relevant when that
+  // category's hasFixedPeriod is true and it has no defaultPeriodMonths (HR
+  // must then pick a length per employee -- Trial's original design).
   // categorySince anchors that category's own clock (set from joiningDate
   // at creation, reset to the change date whenever HR changes the category).
-  leaveCategory?: LeaveEmployeeCategory | null;
+  leaveCategoryId?: string | null;
+  leaveCategory?: EmployeeCategory | null;
   trialMonths?: number | null;
   categorySince?: string | null;
 }
 
-export type LeaveEmployeeCategory = 'PERMANENT' | 'PROVISION' | 'CONTRACTUAL' | 'TRIAL';
+// HR-editable employee-type category (Permanent/Provision/Contractual/Trial
+// by default, but HR can add more or rename these). The behavior flags are
+// what LeaveSchedulerService reads instead of hardcoding category names:
+//  - accruesRollover: gets an anniversary-based leave balance rollover.
+//  - hasFixedPeriod: has a probation/trial-style period that HR gets an
+//    Audit Log heads-up about 2 weeks before it ends.
+//  - defaultPeriodMonths: that period's length, when every employee in this
+//    category shares one (e.g. Provision's fixed 6 months). Leave it unset
+//    for a category where HR picks the length per employee (Trial) --
+//    Employee.trialMonths is then required per hire.
+export interface EmployeeCategory {
+  id: string;
+  name: string;
+  code: string;
+  accruesRollover: boolean;
+  hasFixedPeriod: boolean;
+  defaultPeriodMonths?: number | null;
+  isActive: boolean;
+}
 
 export type DeviceConnectionStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
 
@@ -303,7 +326,8 @@ export interface LeaveType {
 // by employee category (e.g. Permanent Casual = 10, Provision Casual = 5).
 export interface LeaveCategoryPolicy {
   id: string;
-  leaveCategory: LeaveEmployeeCategory;
+  leaveCategoryId: string;
+  leaveCategory: EmployeeCategory;
   leaveTypeId: string;
   leaveType: LeaveType;
   daysPerCycle: number;

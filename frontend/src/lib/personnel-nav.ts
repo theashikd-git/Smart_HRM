@@ -138,7 +138,10 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
     children: [
       { type: 'leaf', id: 'superior-management', label: 'Superior Management', programId: 'superior-management' },
       { type: 'leaf', id: 'leave-workflows', label: 'Leave Workflows', programId: 'leave-workflows' },
-      { type: 'leaf', id: 'leave-type', label: 'Leave Type', programId: 'leave-type' },
+      // Leave Type is no longer a separate menu entry -- Leave Policy now
+      // creates/renames leave types inline (see LeavePolicyProgram). The
+      // 'leave-type' program/route itself is left intact (PROGRAM_META below,
+      // ProgramRouter) in case it's ever needed again, just not linked here.
       { type: 'leaf', id: 'leave-policy', label: 'Leave Policy', programId: 'leave-policy' },
     ],
   },

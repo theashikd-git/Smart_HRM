@@ -27,9 +27,9 @@ export class EmployeesService {
       if (deviceIdTaken) throw new ConflictException('Device User ID is already assigned to another employee');
     }
 
-    if (dto.leaveCategory === 'TRIAL' && !dto.trialMonths) {
-      throw new BadRequestException('trialMonths is required when leaveCategory is TRIAL');
-    }
+    const category = await this.prisma.employeeCategory.findUnique({ where: { id: dto.leaveCategoryId } });
+    if (!category) throw new BadRequestException('Employee category not found');
+    this.assertTrialMonths(category, dto.trialMonths);
 
     const joiningDate = dto.joiningDate ? new Date(dto.joiningDate) : undefined;
 
@@ -45,7 +45,7 @@ export class EmployeesService {
         // Uses the joining date when one was given so a backdated hire
         // starts its clock correctly instead of from today.
         categorySince: joiningDate ?? new Date(),
-        trialMonths: dto.leaveCategory === 'TRIAL' ? dto.trialMonths : undefined,
+        trialMonths: category.hasFixedPeriod ? dto.trialMonths : undefined,
         syncStatus: 'PENDING',
       },
       include: this.includeRelations(),
@@ -138,11 +138,13 @@ export class EmployeesService {
       }
     }
 
-    const nextCategory = dto.leaveCategory ?? current.leaveCategory;
-    if (nextCategory === 'TRIAL' && !(dto.trialMonths ?? current.trialMonths)) {
-      throw new BadRequestException('trialMonths is required when leaveCategory is TRIAL');
+    const nextCategoryId = dto.leaveCategoryId ?? current.leaveCategoryId;
+    if (nextCategoryId) {
+      const nextCategory = await this.prisma.employeeCategory.findUnique({ where: { id: nextCategoryId } });
+      if (!nextCategory) throw new BadRequestException('Employee category not found');
+      this.assertTrialMonths(nextCategory, dto.trialMonths ?? current.trialMonths ?? undefined);
     }
-    const categoryChanged = dto.leaveCategory && dto.leaveCategory !== current.leaveCategory;
+    const categoryChanged = dto.leaveCategoryId != null && dto.leaveCategoryId !== current.leaveCategoryId;
 
     const employee = await this.prisma.employee.update({
       where: { id },
@@ -253,11 +255,23 @@ export class EmployeesService {
     return String(Date.now()).slice(-6);
   }
 
+  // A fixed-period category (Provision's probation, Trial's trial period)
+  // needs a duration to count down: the category's own defaultPeriodMonths
+  // if it has one, otherwise HR must give this specific employee one via
+  // trialMonths (mirrors the old hardcoded "TRIAL requires trialMonths"
+  // rule, generalized to any category that opts into a fixed period).
+  private assertTrialMonths(category: { hasFixedPeriod: boolean; defaultPeriodMonths: number | null }, trialMonths?: number) {
+    if (category.hasFixedPeriod && category.defaultPeriodMonths == null && !trialMonths) {
+      throw new BadRequestException('trialMonths is required for this employee category');
+    }
+  }
+
   private includeRelations() {
     return {
       department: { select: { id: true, name: true, code: true } },
       designation: { select: { id: true, title: true } },
       shift: { select: { id: true, name: true, startTime: true, endTime: true } },
+      leaveCategory: true,
       // The employee's own login account (if any) -- lets the Employee
       // profile screen show/change their access level (Employee, Supervisor,
       // Manager) without a separate trip to System Settings.

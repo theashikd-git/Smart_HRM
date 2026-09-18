@@ -8,7 +8,6 @@ import {
   IsOptional,
   IsString,
   Min,
-  ValidateIf,
 } from 'class-validator';
 
 export enum EmploymentTypeDto {
@@ -22,17 +21,6 @@ export enum EmployeeStatusDto {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   TERMINATED = 'TERMINATED',
-}
-
-// Mirrors Prisma's LeaveEmployeeCategory enum. Chosen at employee creation
-// (and changeable later by HR) -- this is what LeaveCategoryPolicy and the
-// balance scheduler key off of, entirely separate from EmploymentTypeDto
-// (full time/part time/contract/intern), which is about the job itself.
-export enum LeaveEmployeeCategoryDto {
-  PERMANENT = 'PERMANENT',
-  PROVISION = 'PROVISION',
-  CONTRACTUAL = 'CONTRACTUAL',
-  TRIAL = 'TRIAL',
 }
 
 export class CreateEmployeeDto {
@@ -78,17 +66,17 @@ export class CreateEmployeeDto {
   @IsString()
   deviceUserId?: string;
 
-  // Required for every new hire -- which of the 7 leave-policy tracks they're
-  // on. trialMonths is required alongside it only when the category is
-  // TRIAL (validated in EmployeesService.create, since class-validator's
-  // @ValidateIf needs the sibling property name known at decoration time,
-  // which is fine here but the service still double-checks before writing).
+  // Required for every new hire -- which HR-configurable employee-type
+  // category (Permanent/Provision/Contractual/Trial, or any HR has added)
+  // they're on. Whether trialMonths is also required depends on that
+  // category's own hasFixedPeriod/defaultPeriodMonths -- EmployeesService
+  // .create() loads the category and enforces it there, since the DTO
+  // can't see another table's row at validation time.
   @IsNotEmpty()
-  @IsEnum(LeaveEmployeeCategoryDto)
-  leaveCategory: LeaveEmployeeCategoryDto;
+  @IsString()
+  leaveCategoryId: string;
 
-  @ValidateIf((o) => o.leaveCategory === LeaveEmployeeCategoryDto.TRIAL)
-  @IsNotEmpty()
+  @IsOptional()
   @IsInt()
   @Min(1)
   trialMonths?: number;
@@ -124,10 +112,9 @@ export class UpdateEmployeeDto {
   @IsString()
   deviceUserId?: string;
 
-  @IsOptional() @IsEnum(LeaveEmployeeCategoryDto) leaveCategory?: LeaveEmployeeCategoryDto;
+  @IsOptional() @IsString() leaveCategoryId?: string;
 
-  @ValidateIf((o) => o.leaveCategory === LeaveEmployeeCategoryDto.TRIAL)
-  @IsNotEmpty()
+  @IsOptional()
   @IsInt()
   @Min(1)
   trialMonths?: number;

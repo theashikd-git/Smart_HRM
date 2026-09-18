@@ -39,8 +39,8 @@ export class LeaveCategoryPolicyController {
   }
 
   @Get()
-  findAll(@Query('leaveCategory') leaveCategory?: string) {
-    return this.service.findAll(leaveCategory);
+  findAll(@Query('leaveCategoryId') leaveCategoryId?: string) {
+    return this.service.findAll(leaveCategoryId);
   }
 
   @Get(':id')

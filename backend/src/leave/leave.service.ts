@@ -206,15 +206,15 @@ export class LeaveService {
     });
     const employees = await this.prisma.employee.findMany({ where: { status: 'ACTIVE' } });
     const policies = await this.prisma.leaveCategoryPolicy.findMany();
-    const policyByKey = new Map(policies.map((p) => [`${p.leaveCategory}:${p.leaveTypeId}`, p]));
+    const policyByKey = new Map(policies.map((p) => [`${p.leaveCategoryId}:${p.leaveTypeId}`, p]));
 
     let created = 0;
     let skippedNoPolicy = 0;
     for (const employee of employees) {
       for (const type of leaveTypes) {
         let allocated: typeof type.daysPerYear;
-        if (employee.leaveCategory) {
-          const policy = policyByKey.get(`${employee.leaveCategory}:${type.id}`);
+        if (employee.leaveCategoryId) {
+          const policy = policyByKey.get(`${employee.leaveCategoryId}:${type.id}`);
           if (!policy) {
             skippedNoPolicy++;
             continue;

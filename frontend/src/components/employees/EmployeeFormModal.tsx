@@ -11,6 +11,7 @@ import { useCreateEmployee, useUpdateEmployee } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDesignations } from '@/hooks/useDesignations';
 import { useShifts } from '@/hooks/useShifts';
+import { useEmployeeCategories } from '@/hooks/useLeave';
 import { apiErrorMessage } from '@/lib/api';
 import { Employee } from '@/types';
 
@@ -50,7 +51,7 @@ const EMPTY_FORM = {
   salary: '',
   rfidCardNumber: '',
   deviceUserId: '',
-  leaveCategory: '',
+  leaveCategoryId: '',
   trialMonths: '',
 };
 
@@ -76,6 +77,8 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const { data: departments } = useDepartments();
   const { data: designations } = useDesignations();
   const { data: shifts } = useShifts();
+  const { data: employeeCategories } = useEmployeeCategories();
+  const selectedCategory = employeeCategories?.find((c) => c.id === form.leaveCategoryId);
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
 
@@ -105,7 +108,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
         salary: employee.salary?.toString() || '',
         rfidCardNumber: employee.rfidCardNumber || '',
         deviceUserId: employee.deviceUserId || '',
-        leaveCategory: employee.leaveCategory || '',
+        leaveCategoryId: employee.leaveCategoryId || '',
         trialMonths: employee.trialMonths?.toString() || '',
       });
     } else {
@@ -141,14 +144,14 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       toast.error('Gender and Phone are required, under Private Information');
       return;
     }
-    if (!form.leaveCategory) {
+    if (!form.leaveCategoryId) {
       setActiveTab('leave');
       toast.error('Select an Employee Type, under Leave Group');
       return;
     }
-    if (form.leaveCategory === 'TRIAL' && !form.trialMonths) {
+    if (selectedCategory?.hasFixedPeriod && !selectedCategory?.defaultPeriodMonths && !form.trialMonths) {
       setActiveTab('leave');
-      toast.error('Enter the Trial Duration, under Leave Group');
+      toast.error('Enter the Duration, under Leave Group');
       return;
     }
 
@@ -161,7 +164,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       designationId: form.designationId || undefined,
       shiftId: form.shiftId || undefined,
       deviceUserId: form.deviceUserId || undefined,
-      trialMonths: form.leaveCategory === 'TRIAL' && form.trialMonths ? Number(form.trialMonths) : undefined,
+      trialMonths: selectedCategory?.hasFixedPeriod && form.trialMonths ? Number(form.trialMonths) : undefined,
     };
 
     try {
@@ -371,21 +374,31 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
           <FieldWrap
             label="Employee Type"
             required
-            hint="Which leave policy this employee follows -- Permanent, Provision (6-month probation), Contractual, or Trial"
+            hint="Which leave policy this employee follows -- set up under Personnel > Leave Management > Leave Policy"
           >
-            <Select value={form.leaveCategory} onChange={(e) => set('leaveCategory', e.target.value)}>
+            <Select value={form.leaveCategoryId} onChange={(e) => set('leaveCategoryId', e.target.value)}>
               <option value="">Select</option>
-              <option value="PERMANENT">Permanent</option>
-              <option value="PROVISION">Provision (Probation)</option>
-              <option value="CONTRACTUAL">Contractual</option>
-              <option value="TRIAL">Trial</option>
+              {employeeCategories?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </Select>
           </FieldWrap>
-          {form.leaveCategory === 'TRIAL' && (
-            <FieldWrap label="Trial Duration (months)" required hint="How many months this employee's trial period runs">
+          {selectedCategory?.hasFixedPeriod && (
+            <FieldWrap
+              label="Duration (months)"
+              required={!selectedCategory.defaultPeriodMonths}
+              hint={
+                selectedCategory.defaultPeriodMonths
+                  ? `Defaults to ${selectedCategory.defaultPeriodMonths} months -- override here if this employee's period differs`
+                  : "How many months this employee's period runs"
+              }
+            >
               <Input
                 type="number"
                 min={1}
+                placeholder={selectedCategory.defaultPeriodMonths ? String(selectedCategory.defaultPeriodMonths) : undefined}
                 value={form.trialMonths}
                 onChange={(e) => set('trialMonths', e.target.value)}
               />

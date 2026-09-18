@@ -93,11 +93,34 @@ enum LeaveTierType {
 // The employee's leave-policy category -- distinct from EmploymentType
 // (which is about the job arrangement: full/part time, contract, intern).
 // This is what the Leave Policy screen keys entitlements off of.
-enum LeaveEmployeeCategory {
-  PERMANENT
-  PROVISION   // probation -- fixed or HR-chosen duration before becoming Permanent
-  CONTRACTUAL
-  TRIAL       // HR picks the duration at creation; no leave entitlement during it
+// Employee-type categories (Permanent, Provision, Contractual, Trial by
+// default) -- HR-configurable rather than a fixed list, since different
+// hospitals name and structure these differently. The two flags below are
+// what LeaveSchedulerService reads instead of hardcoding category names:
+//  - accruesRollover: does this category build up a leave balance that
+//    carries across the employee's personal anniversary (Permanent/
+//    Contractual-style)? Off for temporary/probationary categories that
+//    don't accrue long-term balance.
+//  - hasFixedPeriod: is this a temporary status HR needs to revisit before
+//    it ends (Provision's probation, Trial's trial period)? When on,
+//    defaultPeriodMonths is the default length (an individual employee's
+//    own Employee.trialMonths overrides it, e.g. HR picking a custom Trial
+//    length per hire).
+model EmployeeCategory {
+  id                  String   @id @default(uuid())
+  name                String   @unique
+  code                String   @unique
+  accruesRollover     Boolean  @default(true)
+  hasFixedPeriod      Boolean  @default(false)
+  defaultPeriodMonths Int?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employees        Employee[]
+  categoryPolicies LeaveCategoryPolicy[]
+
+  @@map("employee_categories")
 }
 
 // Flags a LeaveType that needs extra handling beyond a plain balance
@@ -454,7 +477,7 @@ model Employee {
   // (Provision/Trial period end, Permanent/Contractual anniversary) -- it
   // starts at joiningDate and is reset whenever HR changes the category
   // (e.g. Provision -> Permanent, or extending Provision another term).
-  leaveCategory    LeaveEmployeeCategory?
+  leaveCategoryId  String?
   trialMonths      Int?
   categorySince    DateTime?
 
@@ -478,6 +501,7 @@ model Employee {
   designation      Designation?   @relation(fields: [designationId], references: [id])
   shift            Shift?         @relation(fields: [shiftId], references: [id])
   reportingSuperior Employee?     @relation("EmployeeSuperior", fields: [reportingSuperiorId], references: [id])
+  leaveCategory     EmployeeCategory? @relation(fields: [leaveCategoryId], references: [id])
 
   subordinates      Employee[]           @relation("EmployeeSuperior")
   managedBranches   Branch[]             @relation("BranchManager")
@@ -653,22 +677,23 @@ model LeaveType {
 // Trial ends up with zero Casual/Sick/Annual, and how Provision/Contractual
 // simply don't have an Annual-leave row).
 model LeaveCategoryPolicy {
-  id                  String                @id @default(uuid())
-  leaveCategory       LeaveEmployeeCategory
+  id                  String   @id @default(uuid())
+  leaveCategoryId     String
   leaveTypeId         String
-  daysPerCycle        Decimal               @db.Decimal(5, 1)
-  carryForward        Boolean               @default(false)
-  maxCarryForwardDays Decimal?              @db.Decimal(5, 1)
-  // Contractual-style: the unused balance rolls over exactly once into the
-  // next cycle, and after that the policy stops granting new days at all
-  // (the employee just spends down whatever's left, then it's gone).
-  carryForwardOnce    Boolean               @default(false)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  daysPerCycle        Decimal  @db.Decimal(5, 1)
+  carryForward        Boolean  @default(false)
+  maxCarryForwardDays Decimal? @db.Decimal(5, 1)
+  // A category-wide default: the unused balance rolls over exactly once
+  // into the next cycle, and after that the policy stops granting new days
+  // at all (the employee just spends down whatever's left, then it's gone).
+  carryForwardOnce    Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  leaveCategory EmployeeCategory @relation(fields: [leaveCategoryId], references: [id])
+  leaveType     LeaveType        @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
 
-  @@unique([leaveCategory, leaveTypeId])
+  @@unique([leaveCategoryId, leaveTypeId])
   @@map("leave_category_policies")
 }
 

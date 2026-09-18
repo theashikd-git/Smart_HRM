@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { LeaveBalance, LeaveCategoryPolicy, LeaveRequest, LeaveType, Paginated } from '@/types';
+import { EmployeeCategory, LeaveBalance, LeaveCategoryPolicy, LeaveRequest, LeaveType, Paginated } from '@/types';
 
 export interface LeaveQuery {
   employeeId?: string;
@@ -48,15 +48,67 @@ export function useDeactivateLeaveType() {
   });
 }
 
+// -- Employee categories -------------------------------------------------------
+// Permanent/Provision/Contractual/Trial by default -- HR can add new ones or
+// rename existing ones from the Leave Policy screen (Personnel > Leave
+// Management). Employee.leaveCategoryId and LeaveCategoryPolicy.leaveCategoryId
+// both point at these rows.
+
+export function useEmployeeCategories(includeInactive = false) {
+  return useQuery({
+    queryKey: ['employee-categories', includeInactive],
+    queryFn: async () =>
+      (await api.get<EmployeeCategory[]>('/employee-categories', { params: { includeInactive } })).data,
+  });
+}
+
+export function useCreateEmployeeCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      accruesRollover?: boolean;
+      hasFixedPeriod?: boolean;
+      defaultPeriodMonths?: number;
+    }) => (await api.post('/employee-categories', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-categories'] }),
+  });
+}
+
+export function useUpdateEmployeeCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...payload
+    }: {
+      id: string;
+      name?: string;
+      accruesRollover?: boolean;
+      hasFixedPeriod?: boolean;
+      defaultPeriodMonths?: number;
+    }) => (await api.patch(`/employee-categories/${id}`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-categories'] }),
+  });
+}
+
+export function useDeactivateEmployeeCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/employee-categories/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-categories'] }),
+  });
+}
+
 // -- Leave category policies --------------------------------------------------
 // Per (employee category, leave type) entitlements -- Personnel > Leave
 // Management > Leave Policy.
 
-export function useLeaveCategoryPolicies(leaveCategory?: string) {
+export function useLeaveCategoryPolicies(leaveCategoryId?: string) {
   return useQuery({
-    queryKey: ['leave-category-policies', leaveCategory],
+    queryKey: ['leave-category-policies', leaveCategoryId],
     queryFn: async () =>
-      (await api.get<LeaveCategoryPolicy[]>('/leave-category-policies', { params: { leaveCategory } })).data,
+      (await api.get<LeaveCategoryPolicy[]>('/leave-category-policies', { params: { leaveCategoryId } })).data,
   });
 }
 
@@ -64,7 +116,7 @@ export function useCreateLeaveCategoryPolicy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      leaveCategory: string;
+      leaveCategoryId: string;
       leaveTypeId: string;
       daysPerCycle: number;
       carryForward?: boolean;
@@ -107,7 +159,7 @@ export function useQuickAddLeaveCategoryPolicy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      leaveCategory: string;
+      leaveCategoryId: string;
       leaveName: string;
       daysPerCycle: number;
       carryForward?: boolean;

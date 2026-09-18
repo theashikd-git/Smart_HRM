@@ -33,17 +33,6 @@ export enum LeaveSpecialRuleDto {
   MATERNITY = 'MATERNITY',
 }
 
-// Mirrors Prisma's LeaveEmployeeCategory enum -- see employees/dto/employee.dto.ts
-// for the employee-side counterpart (LeaveEmployeeCategoryDto). Duplicated
-// here rather than imported across module boundaries, matching this
-// codebase's existing pattern of each feature module defining its own DTOs.
-export enum LeaveEmployeeCategoryDto {
-  PERMANENT = 'PERMANENT',
-  PROVISION = 'PROVISION',
-  CONTRACTUAL = 'CONTRACTUAL',
-  TRIAL = 'TRIAL',
-}
-
 // ---------------------------------------------------------------------------
 // Leave types
 // ---------------------------------------------------------------------------
@@ -228,8 +217,8 @@ export class InitializeBalancesDto {
 
 export class CreateLeaveCategoryPolicyDto {
   @IsNotEmpty()
-  @IsEnum(LeaveEmployeeCategoryDto)
-  leaveCategory: LeaveEmployeeCategoryDto;
+  @IsString()
+  leaveCategoryId: string;
 
   @IsNotEmpty()
   @IsString()
@@ -271,8 +260,8 @@ export class UpdateLeaveCategoryPolicyDto {
 // call, instead of requiring a separate trip to Leave Type first.
 export class QuickAddLeaveCategoryPolicyDto {
   @IsNotEmpty()
-  @IsEnum(LeaveEmployeeCategoryDto)
-  leaveCategory: LeaveEmployeeCategoryDto;
+  @IsString()
+  leaveCategoryId: string;
 
   @IsNotEmpty()
   @IsString()
