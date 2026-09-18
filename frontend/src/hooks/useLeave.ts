@@ -336,6 +336,17 @@ export function useMyLeaveBalances(year?: number) {
   });
 }
 
+// Only the leave types this employee is actually eligible for (their own
+// employee category's configured policy, plus special-rule types everyone
+// can apply for) -- what the Apply for Leave dropdown should offer, instead
+// of useLeaveTypes()'s full unfiltered list.
+export function useMyEligibleLeaveTypes() {
+  return useQuery({
+    queryKey: ['my-eligible-leave-types'],
+    queryFn: async () => (await api.get<LeaveType[]>('/leave/my/leave-types')).data,
+  });
+}
+
 export function useCreateMyLeaveRequest() {
   const qc = useQueryClient();
   return useMutation({

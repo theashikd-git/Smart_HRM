@@ -6,14 +6,19 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select, Textarea } from '@/components/ui/Form';
 import { useCreateMyLeaveRequest, useMyLeaveBalances, useUploadLeaveAttachment } from '@/hooks/useLeave';
-import { useLeaveTypes } from '@/hooks/useLeave';
+import { useMyEligibleLeaveTypes } from '@/hooks/useLeave';
 import { apiErrorMessage } from '@/lib/api';
 
 /** The employee-portal equivalent of NewLeaveRequestModal -- same shape,
  *  but always applies for the signed-in employee's own record (no employee
- *  picker, no HR-only balance override) via the /leave/my/requests route. */
+ *  picker, no HR-only balance override) via the /leave/my/requests route.
+ *  The leave-type dropdown is scoped to what useMyEligibleLeaveTypes returns
+ *  -- only the leaves configured for this employee's own employee category
+ *  (Permanent/Provision/etc, set on their profile), plus special-rule types
+ *  (Compensatory/Maternity) that apply regardless of category -- instead of
+ *  every active leave type in the system. */
 export function MyLeaveRequestModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { data: leaveTypes } = useLeaveTypes();
+  const { data: leaveTypes } = useMyEligibleLeaveTypes();
   const { data: balances } = useMyLeaveBalances();
   const createRequest = useCreateMyLeaveRequest();
 

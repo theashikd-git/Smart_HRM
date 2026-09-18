@@ -123,6 +123,17 @@ export class LeaveController {
     return this.service.getBalances(user.employeeId, year ? parseInt(year, 10) : undefined);
   }
 
+  // Only the leave types the signed-in employee is actually eligible for --
+  // scoped to their own employee category's configured policy (plus the
+  // special-rule types everyone can apply for) -- so the Apply for Leave
+  // dropdown doesn't show entitlements from other categories.
+  @Get('my/leave-types')
+  @Roles('EMPLOYEE')
+  findMyEligibleLeaveTypes(@CurrentUser() user: any) {
+    this.assertLinkedEmployee(user);
+    return this.service.getMyEligibleLeaveTypes(user.employeeId);
+  }
+
   @Post('my/requests')
   @Roles('EMPLOYEE')
   createMyRequest(@Body() dto: SelfCreateLeaveRequestDto, @CurrentUser() user: any) {

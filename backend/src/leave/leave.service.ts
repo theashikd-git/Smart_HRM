@@ -98,6 +98,44 @@ export class LeaveService {
   // Balances
   // -------------------------------------------------------------------
 
+  /**
+   * Which leave types the signed-in employee can actually pick when
+   * applying for leave themselves -- replaces showing every active
+   * LeaveType regardless of their employee category. Two buckets:
+   *  - Pooled types with a LeaveCategoryPolicy row for the employee's own
+   *    category (e.g. Permanent's Casual/Sick/Annual) -- the same set
+   *    initializeBalances allocates a balance for.
+   *  - Special-rule types (Compensatory, Maternity) -- never pooled per
+   *    category (see checkCompensatoryEligibility/checkMaternityEligibility
+   *    below), so every employee sees them regardless of category.
+   * An employee with no leaveCategoryId assigned yet falls back to every
+   * active leave type, matching initializeBalances's own fallback.
+   */
+  async getMyEligibleLeaveTypes(employeeId: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    if (!employee.leaveCategoryId) {
+      return this.prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+    }
+
+    const [policies, specialTypes] = await Promise.all([
+      this.prisma.leaveCategoryPolicy.findMany({
+        where: { leaveCategoryId: employee.leaveCategoryId, leaveType: { isActive: true } },
+        include: { leaveType: true },
+      }),
+      this.prisma.leaveType.findMany({
+        where: { isActive: true, specialRule: { not: 'NONE' } },
+      }),
+    ]);
+
+    const byId = new Map<string, (typeof specialTypes)[number]>();
+    for (const p of policies) byId.set(p.leaveType.id, p.leaveType);
+    for (const t of specialTypes) byId.set(t.id, t);
+
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   async getBalances(employeeId: string, year?: number) {
     const targetYear = year ?? new Date().getFullYear();
     const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
