@@ -21,14 +21,13 @@ interface Props {
   employee?: Employee | null;
 }
 
-type TabId = 'private' | 'device' | 'attendance' | 'payroll' | 'leave';
+type TabId = 'private' | 'device' | 'attendance' | 'payroll';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'private', label: 'Private Information' },
   { id: 'device', label: 'Device Access Settings' },
   { id: 'attendance', label: 'Attendance Settings' },
   { id: 'payroll', label: 'Payroll Settings' },
-  { id: 'leave', label: 'Leave Group' },
 ];
 
 const EMPTY_FORM = {
@@ -64,11 +63,13 @@ const EMPTY_FORM = {
  * concept, and reporting lines are set from Personnel > Superior
  * Management, not from this form.
  *
- * Required fields are checked by hand in handleSubmit (not HTML5
- * `required`) because some of them live inside a tab -- a browser skips
- * validating a hidden/display:none field, so if we relied on `required`
- * alone someone could save with an empty Gender or Employee Type just by
- * never opening that tab.
+ * Employee Type (and its Duration override) live on the front page --
+ * always visible, not behind a tab -- since every employee needs one set.
+ * Required fields still living inside a tab (Gender, Phone) are checked by
+ * hand in handleSubmit (not HTML5 `required`), because a browser skips
+ * validating a hidden/display:none field -- relying on `required` alone
+ * would let someone save with an empty Gender just by never opening that
+ * tab.
  */
 export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -145,13 +146,11 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       return;
     }
     if (!form.leaveCategoryId) {
-      setActiveTab('leave');
-      toast.error('Select an Employee Type, under Leave Group');
+      toast.error('Select an Employee Type');
       return;
     }
     if (selectedCategory?.hasFixedPeriod && !selectedCategory?.defaultPeriodMonths && !form.trialMonths) {
-      setActiveTab('leave');
-      toast.error('Enter the Duration, under Leave Group');
+      toast.error('Enter the Duration');
       return;
     }
 
@@ -251,6 +250,39 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
             <FieldWrap label="Hired Date">
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
+            <FieldWrap
+              label="Employee Type"
+              required
+              hint="Which leave policy this employee follows -- set up under Personnel > Leave Management > Leave Policy"
+            >
+              <Select value={form.leaveCategoryId} onChange={(e) => set('leaveCategoryId', e.target.value)}>
+                <option value="">Select</option>
+                {employeeCategories?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </FieldWrap>
+            {selectedCategory?.hasFixedPeriod && (
+              <FieldWrap
+                label="Duration (months)"
+                required={!selectedCategory.defaultPeriodMonths}
+                hint={
+                  selectedCategory.defaultPeriodMonths
+                    ? `Defaults to ${selectedCategory.defaultPeriodMonths} months -- override here if this employee's period differs`
+                    : "How many months this employee's period runs"
+                }
+              >
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder={selectedCategory.defaultPeriodMonths ? String(selectedCategory.defaultPeriodMonths) : undefined}
+                  value={form.trialMonths}
+                  onChange={(e) => set('trialMonths', e.target.value)}
+                />
+              </FieldWrap>
+            )}
           </div>
 
           <div className="flex sm:flex-col items-center gap-2 sm:w-32 shrink-0">
@@ -370,41 +402,6 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
           </FieldWrap>
         </div>
 
-        <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4', activeTab !== 'leave' && 'hidden')}>
-          <FieldWrap
-            label="Employee Type"
-            required
-            hint="Which leave policy this employee follows -- set up under Personnel > Leave Management > Leave Policy"
-          >
-            <Select value={form.leaveCategoryId} onChange={(e) => set('leaveCategoryId', e.target.value)}>
-              <option value="">Select</option>
-              {employeeCategories?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </FieldWrap>
-          {selectedCategory?.hasFixedPeriod && (
-            <FieldWrap
-              label="Duration (months)"
-              required={!selectedCategory.defaultPeriodMonths}
-              hint={
-                selectedCategory.defaultPeriodMonths
-                  ? `Defaults to ${selectedCategory.defaultPeriodMonths} months -- override here if this employee's period differs`
-                  : "How many months this employee's period runs"
-              }
-            >
-              <Input
-                type="number"
-                min={1}
-                placeholder={selectedCategory.defaultPeriodMonths ? String(selectedCategory.defaultPeriodMonths) : undefined}
-                value={form.trialMonths}
-                onChange={(e) => set('trialMonths', e.target.value)}
-              />
-            </FieldWrap>
-          )}
-        </div>
       </form>
     </Modal>
   );
