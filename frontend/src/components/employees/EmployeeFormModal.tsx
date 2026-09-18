@@ -239,14 +239,6 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
                 ))}
               </Select>
             </FieldWrap>
-            <FieldWrap label="Employment Type">
-              <Select value={form.employmentType} onChange={(e) => set('employmentType', e.target.value)}>
-                <option value="FULL_TIME">Full Time</option>
-                <option value="PART_TIME">Part Time</option>
-                <option value="CONTRACT">Contract</option>
-                <option value="INTERN">Intern</option>
-              </Select>
-            </FieldWrap>
             <FieldWrap label="Hired Date">
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
