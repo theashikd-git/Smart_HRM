@@ -242,11 +242,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
             <FieldWrap label="Hired Date">
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
-            <FieldWrap
-              label="Employee Type"
-              required
-              hint="Which leave policy this employee follows -- set up under Personnel > Leave Management > Leave Policy"
-            >
+            <FieldWrap label="Employee Type" required>
               <Select value={form.leaveCategoryId} onChange={(e) => set('leaveCategoryId', e.target.value)}>
                 <option value="">Select</option>
                 {employeeCategories?.map((c) => (
