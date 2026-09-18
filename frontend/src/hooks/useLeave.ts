@@ -100,6 +100,27 @@ export function useDeleteLeaveCategoryPolicy() {
   });
 }
 
+// One-step "+ Add Leave" under an employee-category section -- names a leave
+// (existing or brand new) and its entitlement in a single call, instead of
+// requiring a separate trip to the Leave Type screen first.
+export function useQuickAddLeaveCategoryPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      leaveCategory: string;
+      leaveName: string;
+      daysPerCycle: number;
+      carryForward?: boolean;
+      maxCarryForwardDays?: number;
+      carryForwardOnce?: boolean;
+    }) => (await api.post('/leave-category-policies/quick-add', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leave-category-policies'] });
+      qc.invalidateQueries({ queryKey: ['leave-types'] });
+    },
+  });
+}
+
 // -- Leave attachments (Maternity Leave's required supporting document) -----
 
 export function useUploadLeaveAttachment() {

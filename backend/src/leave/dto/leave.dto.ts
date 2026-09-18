@@ -263,3 +263,36 @@ export class UpdateLeaveCategoryPolicyDto {
   @IsOptional() @IsNumber() @Min(0) maxCarryForwardDays?: number;
   @IsOptional() @IsBoolean() carryForwardOnce?: boolean;
 }
+
+// One-step version used by the Leave Policy screen's inline "+ Add Leave"
+// under an employee-type section: names a leave (existing or brand new --
+// LeaveCategoryPolicyService looks it up by name and creates it if it
+// doesn't exist yet) and its entitlement for that category in a single
+// call, instead of requiring a separate trip to Leave Type first.
+export class QuickAddLeaveCategoryPolicyDto {
+  @IsNotEmpty()
+  @IsEnum(LeaveEmployeeCategoryDto)
+  leaveCategory: LeaveEmployeeCategoryDto;
+
+  @IsNotEmpty()
+  @IsString()
+  leaveName: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  daysPerCycle: number;
+
+  @IsOptional()
+  @IsBoolean()
+  carryForward?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCarryForwardDays?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  carryForwardOnce?: boolean;
+}
