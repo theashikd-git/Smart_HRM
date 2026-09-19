@@ -501,6 +501,8 @@ export class LeaveService {
     // apply the same balance/attendance side effects immediately.
     if (request.status === 'APPROVED') {
       await this.applyApprovalSideEffects(request);
+    } else if (workflow) {
+      await this.notifyTierApprover(workflow.tiers[0], employee.id, employee.fullName, leaveType.name);
     }
 
     return this.withTierLabel(request);
@@ -721,6 +723,33 @@ export class LeaveService {
     return { allowed: (canRescue && resolvedApproverId == null) || resolvedApproverId === actorId, resolvedApproverId, tier };
   }
 
+  /** Notifies whoever is currently the resolved approver for `tier` that a
+   *  request is waiting on them -- fired once when a request is first
+   *  created (Tier 1) and again every time it advances to a new tier (see
+   *  create() and approve()). Only reaches an approver signed in through
+   *  the Employee Portal (their User account is linked to an Employee
+   *  record) -- there's no notification channel yet for a pure staff
+   *  account with no linked Employee (the staff side has no notification
+   *  bell at all today), so this is a no-op for one of those until that's
+   *  built. */
+  private async notifyTierApprover(
+    tier: { type: string; approverUserId: string | null },
+    applicantEmployeeId: string,
+    applicantFullName: string,
+    leaveTypeName: string,
+  ) {
+    const approverUserId = await this.resolveTierApprover(tier, applicantEmployeeId);
+    if (!approverUserId) return;
+    const approverUser = await this.prisma.user.findUnique({ where: { id: approverUserId } });
+    if (!approverUser?.employeeId) return;
+    await this.notificationsService.create(
+      approverUser.employeeId,
+      'LEAVE',
+      'Leave request awaiting your decision',
+      `${applicantFullName} applied for ${leaveTypeName} -- it's awaiting your decision.`,
+    );
+  }
+
   async approve(id: string, actorId: string, actorRole: string) {
     const request = await this.findOne(id);
     if (request.status !== 'PENDING') {
@@ -764,6 +793,7 @@ export class LeaveService {
           'Leave request update',
           `${tier.label} approved your ${updated.leaveType.name} request -- now awaiting ${nextTier.label}.`,
         );
+        await this.notifyTierApprover(nextTier, updated.employeeId, updated.employee.fullName, updated.leaveType.name);
         return this.withTierLabel(updated);
       }
 
