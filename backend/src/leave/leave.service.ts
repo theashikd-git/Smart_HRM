@@ -320,22 +320,27 @@ export class LeaveService {
 
   /** Resolves which User is currently the approver for a given tier on a
    *  given request's employee. Returns null if unresolvable (e.g. a
-   *  REPORTING_SUPERIOR tier where the employee has no reportingSuperior
-   *  assigned, or their superior has no login of their own) -- callers
-   *  treat null as "only ADMIN/HR can act on this tier right now". */
+   *  REPORTING_SUPERIOR tier where the employee's department has no
+   *  Department Manager set, or that manager has no login of their own) --
+   *  callers treat null as "only ADMIN/HR can act on this tier right now". */
   private async resolveTierApprover(
     tier: { type: string; approverUserId: string | null },
     employeeId: string,
   ): Promise<string | null> {
     if (tier.type === 'SPECIFIC_USER') return tier.approverUserId;
 
-    // REPORTING_SUPERIOR: dynamic, resolved from the employee's own org-chart
-    // supervisor at decision time (not fixed when the workflow was built).
+    // REPORTING_SUPERIOR: dynamic, resolved at decision time from the
+    // employee's own department's configured Manager (Department.manager,
+    // set via Add/Edit Department's "Department Manager" field) -- NOT
+    // Employee.reportingSuperiorId, which nothing in the product ever sets
+    // (there's no per-employee "reporting superior" assignment screen).
+    // Departments are already set up with exactly one Manager each, so this
+    // is what actually resolves a "Manager" tier for real.
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
-      include: { reportingSuperior: { include: { account: true } } },
+      include: { department: { include: { manager: { include: { account: true } } } } },
     });
-    return employee?.reportingSuperior?.account?.id ?? null;
+    return employee?.department?.manager?.account?.id ?? null;
   }
 
   /** Attaches a human-readable label for the request's current tier (for

@@ -1,10 +1,14 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { CalendarClock, ClipboardEdit, Timer, CalendarDays, ChevronRight } from 'lucide-react';
 import { useMissingPunches } from '@/hooks/useAttendance';
+import { useLeavePendingCount } from '@/hooks/useLeave';
 
 export function PendingApprovals() {
+  const router = useRouter();
   const { data: missingPunches, isLoading } = useMissingPunches();
+  const { data: pendingLeaveCount, isLoading: leaveLoading } = useLeavePendingCount();
 
   const rows = [
     {
@@ -13,10 +17,32 @@ export function PendingApprovals() {
       icon: ClipboardEdit,
       count: isLoading ? undefined : missingPunches?.length ?? 0,
       available: true,
+      onClick: undefined as (() => void) | undefined,
     },
-    { id: 'leave', label: 'Leave Requests', icon: CalendarClock, count: undefined, available: false },
-    { id: 'overtime', label: 'Overtime Requests', icon: Timer, count: undefined, available: false },
-    { id: 'roster', label: 'Roster Changes', icon: CalendarDays, count: undefined, available: false },
+    {
+      id: 'leave',
+      label: 'Leave Requests',
+      icon: CalendarClock,
+      count: leaveLoading ? undefined : pendingLeaveCount ?? 0,
+      available: true,
+      onClick: () => router.push('/leave'),
+    },
+    {
+      id: 'overtime',
+      label: 'Overtime Requests',
+      icon: Timer,
+      count: undefined,
+      available: false,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      id: 'roster',
+      label: 'Roster Changes',
+      icon: CalendarDays,
+      count: undefined,
+      available: false,
+      onClick: undefined as (() => void) | undefined,
+    },
   ];
 
   return (
@@ -41,6 +67,7 @@ export function PendingApprovals() {
               <button
                 type="button"
                 disabled={!item.available}
+                onClick={item.onClick}
                 className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-surface-sunken hover:text-accent-dark disabled:opacity-30 disabled:hover:bg-transparent"
                 aria-label={`View ${item.label}`}
               >
