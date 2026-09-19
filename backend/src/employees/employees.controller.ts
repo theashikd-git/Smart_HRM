@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -6,6 +6,23 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
+
+// HR can create/edit employees, but granting Administrator-level access
+// (a staff login with role ADMIN) through the Employee Role field is kept
+// to actual Administrators -- otherwise an HR account could mint a new
+// full-admin login for someone through the employee form, bypassing
+// System Settings > Users, which is ADMIN-only for exactly this reason.
+// Only used on create() -- there's no "current" record yet, so any
+// ADMINISTRATOR selection is necessarily a new escalation. update() does
+// the equivalent check itself (see EmployeesService.update), comparing
+// against the employee's *current* Employee Role so that HR can still
+// save an unrelated field on an employee who is already an Administrator
+// without re-triggering this guard on every save.
+function assertCanSetAdministratorRole(dto: { employeeRole?: string }, user: any) {
+  if (dto.employeeRole === 'ADMINISTRATOR' && user.role !== 'ADMIN') {
+    throw new ForbiddenException('Only an Administrator can set Employee Role to Administrator');
+  }
+}
 
 @ApiTags('Employees')
 @ApiBearerAuth()
@@ -17,6 +34,7 @@ export class EmployeesController {
   @Post()
   @Roles('ADMIN', 'HR')
   create(@Body() dto: CreateEmployeeDto, @CurrentUser() user: any) {
+    assertCanSetAdministratorRole(dto, user);
     return this.employeesService.create(dto, user.id);
   }
 
@@ -33,7 +51,7 @@ export class EmployeesController {
   @Patch(':id')
   @Roles('ADMIN', 'HR')
   update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto, @CurrentUser() user: any) {
-    return this.employeesService.update(id, dto, user.id);
+    return this.employeesService.update(id, dto, user.id, user.role);
   }
 
   @Post(':id/disable')

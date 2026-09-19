@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
 import { useCreateEmployee, useUpdateEmployee, useResetEmployeePassword } from '@/hooks/useEmployees';
+import { useAuthStore } from '@/lib/auth-store';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDesignations } from '@/hooks/useDesignations';
 import { useShifts } from '@/hooks/useShifts';
@@ -52,6 +53,12 @@ const EMPTY_FORM = {
   deviceUserId: '',
   leaveCategoryId: '',
   trialMonths: '',
+  // Cosmetic label (Employee/Manager/Supervisor -> still an Employee ID
+  // login) unless Administrator, which provisions/uses a real staff login
+  // instead -- see the EmployeeRole type in @/types for the full story.
+  employeeRole: 'EMPLOYEE',
+  staffUsername: '',
+  staffPassword: '',
 };
 
 /**
@@ -83,6 +90,12 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const resetPassword = useResetEmployeePassword();
+  // Only an actual Administrator can hand out a new Administrator login
+  // from this form (mirrors the backend guard in EmployeesController) --
+  // an HR user can still see/keep an existing Administrator's role, just
+  // not switch someone else into it.
+  const viewerRole = useAuthStore((s) => s.user?.role);
+  const wasAdministrator = employee?.employeeRole === 'ADMINISTRATOR';
 
   const isEdit = !!employee;
   const saving = createEmployee.isPending || updateEmployee.isPending;
@@ -157,6 +170,9 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
         deviceUserId: employee.deviceUserId || '',
         leaveCategoryId: employee.leaveCategoryId || '',
         trialMonths: employee.trialMonths?.toString() || '',
+        employeeRole: employee.employeeRole || 'EMPLOYEE',
+        staffUsername: '',
+        staffPassword: '',
       });
     } else {
       setForm({ ...EMPTY_FORM, employeeCode: String(Math.floor(1000 + Math.random() * 9000)) });
@@ -200,6 +216,16 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       return;
     }
 
+    // Only require staff credentials when this is an actual *new*
+    // Administrator conversion -- if the employee is already an
+    // Administrator and nothing here changed, staffUsername/staffPassword
+    // are left blank on purpose (backend keeps the existing login as-is).
+    const becomingAdministrator = form.employeeRole === 'ADMINISTRATOR' && !wasAdministrator;
+    if (becomingAdministrator && (!form.staffUsername.trim() || !form.staffPassword.trim())) {
+      toast.error('Enter a staff username and password for the new Administrator login');
+      return;
+    }
+
     const payload: any = {
       ...form,
       photo: form.photo || undefined,
@@ -210,6 +236,8 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       shiftId: form.shiftId || undefined,
       deviceUserId: form.deviceUserId || undefined,
       trialMonths: selectedCategory?.hasFixedPeriod && form.trialMonths ? Number(form.trialMonths) : undefined,
+      staffUsername: form.staffUsername.trim() || undefined,
+      staffPassword: form.staffPassword.trim() || undefined,
     };
 
     try {
@@ -293,6 +321,39 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
             <FieldWrap label="Hired Date">
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
+            <FieldWrap
+              label="Employee Role"
+              hint={
+                form.employeeRole === 'ADMINISTRATOR'
+                  ? 'Logs in with a staff username/password instead of an Employee ID'
+                  : "Logs in with their Employee ID, same as always -- this is just a label (not the same as the real Supervisor/Manager permissions granted from this employee's profile page, under Account & Access)"
+              }
+            >
+              <Select value={form.employeeRole} onChange={(e) => set('employeeRole', e.target.value)}>
+                <option value="EMPLOYEE">Employee</option>
+                <option value="MANAGER">Manager</option>
+                <option value="SUPERVISOR">Supervisor</option>
+                {(viewerRole === 'ADMIN' || wasAdministrator) && <option value="ADMINISTRATOR">Administrator</option>}
+              </Select>
+            </FieldWrap>
+            {form.employeeRole === 'ADMINISTRATOR' && (
+              <>
+                <FieldWrap
+                  label="Staff Username"
+                  required={!wasAdministrator}
+                  hint={wasAdministrator ? 'Leave blank to keep the current username' : undefined}
+                >
+                  <Input value={form.staffUsername} onChange={(e) => set('staffUsername', e.target.value)} />
+                </FieldWrap>
+                <FieldWrap
+                  label="Staff Password"
+                  required={!wasAdministrator}
+                  hint={wasAdministrator ? 'Leave blank to keep the current password' : undefined}
+                >
+                  <Input type="password" value={form.staffPassword} onChange={(e) => set('staffPassword', e.target.value)} />
+                </FieldWrap>
+              </>
+            )}
             <FieldWrap label="Employee Type" required>
               <Select value={form.leaveCategoryId} onChange={(e) => set('leaveCategoryId', e.target.value)}>
                 <option value="">Select</option>

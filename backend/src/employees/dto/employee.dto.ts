@@ -7,7 +7,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export enum EmploymentTypeDto {
@@ -15,6 +17,18 @@ export enum EmploymentTypeDto {
   PART_TIME = 'PART_TIME',
   CONTRACT = 'CONTRACT',
   INTERN = 'INTERN',
+}
+
+// EMPLOYEE/MANAGER/SUPERVISOR -> ordinary Employee ID self-service login
+// (Manager/Supervisor are a label only here -- see the schema's
+// EmployeeRole enum for why they don't grant real staff permissions).
+// ADMINISTRATOR -> a staff login (role ADMIN), using staffUsername/
+// staffPassword below instead of an Employee ID.
+export enum EmployeeRoleDto {
+  EMPLOYEE = 'EMPLOYEE',
+  MANAGER = 'MANAGER',
+  SUPERVISOR = 'SUPERVISOR',
+  ADMINISTRATOR = 'ADMINISTRATOR',
 }
 
 export enum EmployeeStatusDto {
@@ -80,6 +94,27 @@ export class CreateEmployeeDto {
   @IsInt()
   @Min(1)
   trialMonths?: number;
+
+  // Decides the kind of login provisioned for this hire (see EmployeeRole
+  // in the schema) -- defaults to EMPLOYEE (Employee ID self-service login)
+  // when omitted, same as before this field existed.
+  @IsOptional()
+  @IsEnum(EmployeeRoleDto)
+  employeeRole?: EmployeeRoleDto;
+
+  // Required (by EmployeesService, not here -- validation depends on
+  // employeeRole above) only when employeeRole is ADMINISTRATOR; ignored
+  // otherwise.
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9._-]+$/, {
+    message: 'staffUsername may only contain letters, numbers, dots, underscores and hyphens',
+  })
+  staffUsername?: string;
+
+  @IsOptional()
+  @MinLength(6)
+  staffPassword?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -118,6 +153,25 @@ export class UpdateEmployeeDto {
   @IsInt()
   @Min(1)
   trialMonths?: number;
+
+  @IsOptional()
+  @IsEnum(EmployeeRoleDto)
+  employeeRole?: EmployeeRoleDto;
+
+  // Only used (and only required) when employeeRole is being set/changed to
+  // ADMINISTRATOR and this employee doesn't already have a staff login with
+  // credentials -- see EmployeesService.update. Leave blank to keep an
+  // existing Administrator's current username/password unchanged.
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9._-]+$/, {
+    message: 'staffUsername may only contain letters, numbers, dots, underscores and hyphens',
+  })
+  staffUsername?: string;
+
+  @IsOptional()
+  @MinLength(6)
+  staffPassword?: string;
 }
 
 export class EmployeeQueryDto {

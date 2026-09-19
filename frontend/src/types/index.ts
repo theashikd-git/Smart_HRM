@@ -161,6 +161,13 @@ export interface RosterWeekData {
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
 export type SyncStatus = 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
+// Picked on the Add/Edit Employee form -- EMPLOYEE/MANAGER/SUPERVISOR are
+// just a label (all three log in with just their Employee ID, no extra
+// permission); ADMINISTRATOR gets a real staff login instead. Not the same
+// thing as a login's actual access level (Role, below) -- that's the
+// separate "Account & Access" control on the employee profile page, which
+// grants real Supervisor/Manager approval permissions via a staff login.
+export type EmployeeRole = 'EMPLOYEE' | 'MANAGER' | 'SUPERVISOR' | 'ADMINISTRATOR';
 
 export interface Employee {
   id: string;
@@ -211,6 +218,9 @@ export interface Employee {
   leaveCategory?: EmployeeCategory | null;
   trialMonths?: number | null;
   categorySince?: string | null;
+  // Job-title-style label, defaults to EMPLOYEE. See the EmployeeRole type
+  // above for what it does and doesn't control.
+  employeeRole?: EmployeeRole;
 }
 
 // HR-editable employee-type category (Permanent/Provision/Contractual/Trial

@@ -41,6 +41,23 @@ enum EmploymentType {
   INTERN
 }
 
+// Picked on the Add/Edit Employee form (under Hired Date) -- decides which
+// kind of login this person gets, see EmployeesService/UsersService:
+//   EMPLOYEE/MANAGER/SUPERVISOR -> the ordinary Employee ID self-service
+//     login (role EMPLOYEE on the User table). Manager/Supervisor are just
+//     a label here -- they do NOT grant the real Manager/Supervisor staff
+//     permissions (leave approval, reports access); a person who actually
+//     needs those still needs a staff account with that Role, same as
+//     today, via this field set to ADMINISTRATOR or via System Settings.
+//   ADMINISTRATOR -> a staff login (role ADMIN) with a chosen username and
+//     password instead of an Employee ID, provisioned right from this form.
+enum EmployeeRole {
+  EMPLOYEE
+  MANAGER
+  SUPERVISOR
+  ADMINISTRATOR
+}
+
 enum SyncStatus {
   NOT_SYNCED
   PENDING
@@ -469,6 +486,11 @@ model Employee {
   employmentType   EmploymentType @default(FULL_TIME)
   salary           Decimal?       @db.Decimal(12, 2)
   status           EmployeeStatus @default(ACTIVE)
+
+  // Which kind of login this person gets -- see the EmployeeRole enum
+  // above for what each value means and EmployeesService/UsersService for
+  // how it's provisioned.
+  employeeRole     EmployeeRole   @default(EMPLOYEE)
 
   // Leave policy category -- required going forward (nullable only so this
   // migration doesn't break existing rows; the Employee form makes it a

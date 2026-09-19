@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
@@ -19,6 +19,8 @@ export class EmployeesService {
   ) {}
 
   async create(dto: CreateEmployeeDto, actorId?: string) {
+    const { staffUsername, staffPassword, ...employeeData } = dto;
+
     const employeeCode = dto.employeeCode?.trim() || (await this.generateEmployeeCode());
 
     const existing = await this.prisma.employee.findUnique({ where: { employeeCode } });
@@ -33,11 +35,19 @@ export class EmployeesService {
     if (!category) throw new BadRequestException('Employee category not found');
     this.assertTrialMonths(category, dto.trialMonths);
 
+    // Fail before creating anything if Administrator was picked without the
+    // credentials it needs -- staffUsername/staffPassword aren't columns on
+    // Employee, so they're stripped out of employeeData above and handled
+    // separately below, after the employee row (and its Employee ID) exist.
+    if (dto.employeeRole === 'ADMINISTRATOR' && (!staffUsername || !staffPassword)) {
+      throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
+    }
+
     const joiningDate = dto.joiningDate ? new Date(dto.joiningDate) : undefined;
 
     const employee = await this.prisma.employee.create({
       data: {
-        ...dto,
+        ...employeeData,
         employeeCode,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
         joiningDate,
@@ -75,13 +85,23 @@ export class EmployeesService {
     // turn a device hiccup into an unhandled rejection.
     this.deviceSyncService.pushNewEmployee(employee.id).catch(() => undefined);
 
-    // Auto-provision this employee's self-service login -- username and
+    // Provision this employee's login based on Employee Role:
+    // EMPLOYEE/MANAGER/SUPERVISOR (or omitted, same default as before this
+    // field existed) get the ordinary self-service login -- username and
     // default password are both their Employee ID (see UsersService.create's
     // EMPLOYEE branch), with mustChangePassword set so they're forced to
-    // change it on first login. Never let a login-provisioning hiccup turn
-    // into a failed employee creation; HR can still add the account by hand
-    // from System Settings if this one call happens to fail.
-    await this.usersService.create({ role: 'EMPLOYEE' as any, employeeId: employee.id }, actorId).catch((err) => {
+    // change it on first login. ADMINISTRATOR instead gets a staff login
+    // (role ADMIN) with the username/password HR entered on this form --
+    // already validated above, so staffUsername/staffPassword are safe to
+    // use here. Never let a login-provisioning hiccup turn into a failed
+    // employee creation; HR can still add the account by hand from System
+    // Settings (or via Reset Password, which self-heals a missing login) if
+    // this one call happens to fail.
+    const loginPayload =
+      dto.employeeRole === 'ADMINISTRATOR'
+        ? { role: 'ADMIN' as any, username: staffUsername, fullName: employee.fullName, password: staffPassword, employeeId: employee.id }
+        : { role: 'EMPLOYEE' as any, employeeId: employee.id };
+    await this.usersService.create(loginPayload, actorId).catch((err) => {
       this.logger.error(`Failed to auto-provision login for employee ${employee.id}: ${err?.message ?? err}`);
     });
 
@@ -139,8 +159,19 @@ export class EmployeesService {
     return employee;
   }
 
-  async update(id: string, dto: UpdateEmployeeDto, actorId?: string) {
+  async update(id: string, dto: UpdateEmployeeDto, actorId?: string, actorRole?: string) {
+    const { staffUsername, staffPassword, ...employeeData } = dto;
+
     const current = await this.findOne(id);
+
+    // Only an Administrator can *promote* someone to Administrator through
+    // this field -- but compare against the employee's current Employee
+    // Role first, so HR saving an unrelated field on an employee who is
+    // already an Administrator doesn't get blocked just because the form
+    // resubmits the unchanged value.
+    if (dto.employeeRole === 'ADMINISTRATOR' && current.employeeRole !== 'ADMINISTRATOR' && actorRole !== 'ADMIN') {
+      throw new ForbiddenException('Only an Administrator can set Employee Role to Administrator');
+    }
 
     if (dto.employeeCode) {
       const codeTaken = await this.prisma.employee.findUnique({ where: { employeeCode: dto.employeeCode } });
@@ -164,10 +195,21 @@ export class EmployeesService {
     }
     const categoryChanged = dto.leaveCategoryId != null && dto.leaveCategoryId !== current.leaveCategoryId;
 
+    // Fail before writing anything if Employee Role is being set to
+    // Administrator and there's neither an existing staff login for this
+    // employee nor fresh credentials to create one with.
+    if (dto.employeeRole === 'ADMINISTRATOR') {
+      const existingLogin = await this.prisma.user.findUnique({ where: { employeeId: id } });
+      const alreadyStaffLogin = existingLogin && existingLogin.role !== 'EMPLOYEE';
+      if (!alreadyStaffLogin && (!staffUsername || !staffPassword)) {
+        throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
+      }
+    }
+
     const employee = await this.prisma.employee.update({
       where: { id },
       data: {
-        ...dto,
+        ...employeeData,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
         joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
         // A category change starts a fresh clock (e.g. Provision ->
@@ -203,6 +245,17 @@ export class EmployeesService {
       await this.leaveService.initializeBalances({ employeeId: id }, actorId).catch((err) => {
         this.logger.error(`Failed to initialize leave balances for employee ${id}: ${err?.message ?? err}`);
       });
+    }
+
+    // Keep this employee's login in sync with Employee Role, if it was
+    // included on this save -- converts between the Employee ID login and
+    // an Administrator staff login as needed (see
+    // UsersService.syncLoginForEmployeeRole). Deliberately not
+    // caught-and-logged like the device/leave-balance calls above: a
+    // missing-credentials failure here needs to reach HR immediately, not
+    // be silently swallowed, since it means the login change didn't happen.
+    if (dto.employeeRole !== undefined) {
+      await this.usersService.syncLoginForEmployeeRole(id, dto.employeeRole, staffUsername, staffPassword, actorId);
     }
 
     return this.findOne(id);

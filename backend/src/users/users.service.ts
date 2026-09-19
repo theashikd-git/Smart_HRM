@@ -235,6 +235,133 @@ export class UsersService {
     return { tempPassword, created: false };
   }
 
+  /**
+   * Keeps an employee's login in sync with their Employee Role, set on the
+   * Add/Edit Employee form. EMPLOYEE/MANAGER/SUPERVISOR all use the
+   * ordinary Employee ID self-service login (role EMPLOYEE) -- Employee
+   * Role is just a label for these three, exactly like before this field
+   * existed. ADMINISTRATOR instead gets a staff login (role ADMIN) with
+   * the given username/password, logging in like an HR/Admin user rather
+   * than through the employee portal.
+   *
+   * An employee can only ever be linked to one User row (unique employeeId
+   * constraint), so switching between the two buckets converts the
+   * existing login in place instead of trying to create a second one.
+   * Already the right kind of login, with no new credentials supplied?
+   * This is a no-op -- it never rewrites a password nobody asked to change.
+   */
+  async syncLoginForEmployeeRole(
+    employeeId: string,
+    employeeRole: string,
+    staffUsername?: string,
+    staffPassword?: string,
+    actorId?: string,
+  ): Promise<void> {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const wantsAdmin = employeeRole === 'ADMINISTRATOR';
+    const existing = await this.prisma.user.findUnique({ where: { employeeId } });
+
+    if (!existing) {
+      if (wantsAdmin) {
+        if (!staffUsername || !staffPassword) {
+          throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
+        }
+        await this.create(
+          {
+            role: 'ADMIN' as any,
+            username: staffUsername,
+            fullName: employee.fullName,
+            password: staffPassword,
+            employeeId,
+          },
+          actorId,
+        );
+      } else {
+        await this.create({ role: 'EMPLOYEE' as any, employeeId }, actorId);
+      }
+      return;
+    }
+
+    const existingIsStaffLogin = existing.role !== 'EMPLOYEE';
+    if (wantsAdmin === existingIsStaffLogin) {
+      // Already the right kind of login. Only touch it if HR explicitly
+      // supplied fresh Administrator credentials to change.
+      if (wantsAdmin && (staffUsername || staffPassword)) {
+        await this.applyStaffCredentials(existing.id, employee.fullName, staffUsername, staffPassword, actorId);
+      }
+      return;
+    }
+
+    // Converting between an Employee ID login and a staff login for the
+    // same employee -- update the existing row in place rather than create
+    // a second, conflicting one (employeeId is unique per User).
+    if (wantsAdmin) {
+      if (!staffUsername || !staffPassword) {
+        throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
+      }
+      await this.applyStaffCredentials(existing.id, employee.fullName, staffUsername, staffPassword, actorId, 'ADMIN');
+    } else {
+      await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          role: 'EMPLOYEE',
+          email: `${employee.employeeCode}@employee.smarthrm.local`,
+          fullName: employee.fullName,
+          passwordHash: await bcrypt.hash(employee.employeeCode, 10),
+          mustChangePassword: true,
+        },
+      });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'USER_UPDATED',
+        entity: 'User',
+        entityId: existing.id,
+        details: `Converted login for ${employee.fullName} (${employee.employeeCode}) to an Employee ID login (Employee Role changed)`,
+      });
+    }
+  }
+
+  // Shared by syncLoginForEmployeeRole's "update an existing staff login's
+  // credentials" paths -- role is only passed (and only changed) when
+  // converting an Employee ID login into a staff one.
+  private async applyStaffCredentials(
+    userId: string,
+    fullName: string,
+    staffUsername?: string,
+    staffPassword?: string,
+    actorId?: string,
+    role?: string,
+  ): Promise<void> {
+    if (staffUsername) {
+      const usernameTaken = await this.prisma.user.findUnique({ where: { email: staffUsername } });
+      if (usernameTaken && usernameTaken.id !== userId) {
+        throw new ConflictException('A user with this username already exists');
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(role ? { role: role as any } : {}),
+        ...(staffUsername ? { email: staffUsername } : {}),
+        fullName,
+        ...(staffPassword ? { passwordHash: await bcrypt.hash(staffPassword, 10) } : {}),
+      },
+    });
+
+    await this.auditService.log({
+      userId: actorId,
+      action: 'USER_UPDATED',
+      entity: 'User',
+      entityId: userId,
+      details: role
+        ? `Converted login for ${fullName} to an Administrator staff login (Employee Role changed)`
+        : `Updated staff login credentials for ${fullName} (Employee Role)`,
+    });
+  }
+
   // 8 characters, unambiguous alphabet (no 0/O/1/I/l) so HR can read it
   // aloud or write it down for the employee without mixing up characters.
   private generateTempPassword(): string {
