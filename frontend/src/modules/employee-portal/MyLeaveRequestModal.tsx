@@ -25,7 +25,6 @@ export function MyLeaveRequestModal({ open, onClose }: { open: boolean; onClose:
   const [leaveTypeId, setLeaveTypeId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [session, setSession] = useState<'FULL_DAY' | 'FIRST_HALF' | 'SECOND_HALF'>('FULL_DAY');
   const [reason, setReason] = useState('');
   const [compensatoryForDate, setCompensatoryForDate] = useState('');
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -37,15 +36,10 @@ export function MyLeaveRequestModal({ open, onClose }: { open: boolean; onClose:
   const isMaternity = selectedLeaveType?.specialRule === 'MATERNITY';
 
   useEffect(() => {
-    if (session !== 'FULL_DAY' && startDate) setEndDate(startDate);
-  }, [session, startDate]);
-
-  useEffect(() => {
     if (!open) {
       setLeaveTypeId('');
       setStartDate('');
       setEndDate('');
-      setSession('FULL_DAY');
       setReason('');
       setCompensatoryForDate('');
       setAttachmentFile(null);
@@ -76,7 +70,6 @@ export function MyLeaveRequestModal({ open, onClose }: { open: boolean; onClose:
         leaveTypeId,
         startDate,
         endDate,
-        session,
         reason: reason || undefined,
         compensatoryForDate: isCompensatory ? compensatoryForDate : undefined,
         attachmentId,
@@ -132,19 +125,10 @@ export function MyLeaveRequestModal({ open, onClose }: { open: boolean; onClose:
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              disabled={session !== 'FULL_DAY'}
               required
             />
           </FieldWrap>
         </div>
-
-        <FieldWrap label="Session">
-          <Select value={session} onChange={(e) => setSession(e.target.value as any)}>
-            <option value="FULL_DAY">Full Day</option>
-            <option value="FIRST_HALF">First Half</option>
-            <option value="SECOND_HALF">Second Half</option>
-          </Select>
-        </FieldWrap>
 
         {isCompensatory && (
           <FieldWrap
