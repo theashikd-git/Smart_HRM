@@ -235,6 +235,7 @@ export function useApproveLeaveRequest() {
       qc.invalidateQueries({ queryKey: ['leave-balances'] });
       qc.invalidateQueries({ queryKey: ['leave-pending-count'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['my-approvals'] });
     },
   });
 }
@@ -247,7 +248,19 @@ export function useRejectLeaveRequest() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       qc.invalidateQueries({ queryKey: ['leave-pending-count'] });
+      qc.invalidateQueries({ queryKey: ['my-approvals'] });
     },
+  });
+}
+
+// Requests currently awaiting a decision from the signed-in login itself
+// (see LeaveController.findMyApprovals) -- for the Employee Portal's
+// "Approvals" tab, distinct from useMyLeaveRequests (that employee's own
+// history) and from the staff-only /leave list.
+export function useMyApprovals() {
+  return useQuery({
+    queryKey: ['my-approvals'],
+    queryFn: async () => (await api.get<LeaveRequest[]>('/leave/my/approvals')).data,
   });
 }
 

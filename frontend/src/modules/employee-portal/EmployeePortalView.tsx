@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, ShieldCheck, CalendarDays, PlusCircle, Ban, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
+import { Loader2, ShieldCheck, CalendarDays, PlusCircle, Ban, CheckCircle2, XCircle, Clock3, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
@@ -9,7 +9,13 @@ import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { NotificationBell } from './NotificationBell';
-import { useMyLeaveRequests, useMyLeaveBalances, useCancelMyLeaveRequest } from '@/hooks/useLeave';
+import {
+  useMyLeaveRequests,
+  useMyLeaveBalances,
+  useCancelMyLeaveRequest,
+  useMyApprovals,
+  useApproveLeaveRequest,
+} from '@/hooks/useLeave';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
@@ -17,10 +23,12 @@ import { MyLeaveRequestModal } from './MyLeaveRequestModal';
 import { MyCalendarCard } from './MyCalendarCard';
 import { ChangePasswordGate } from './ChangePasswordGate';
 import { useAuthStore } from '@/lib/auth-store';
+import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
+import { LeaveRequest } from '@/types';
 
-type PortalTab = 'dashboard' | 'leave';
+type PortalTab = 'dashboard' | 'leave' | 'approvals';
 
-const TABS: { id: PortalTab; label: string }[] = [
+const BASE_TABS: { id: PortalTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'leave', label: 'Leave' },
 ];
@@ -47,6 +55,14 @@ export function EmployeePortalView() {
   const { data: balances } = useMyLeaveBalances();
   const cancelRequest = useCancelMyLeaveRequest();
 
+  // Only shown once there's something to act on -- most employees are never
+  // named a workflow approver, so a permanently-visible empty tab would
+  // just be clutter for them. See LeaveController.findMyApprovals.
+  const { data: approvals, isLoading: approvalsLoading } = useMyApprovals();
+  const approveRequest = useApproveLeaveRequest();
+  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const TABS = approvals && approvals.length > 0 ? [...BASE_TABS, { id: 'approvals' as const, label: 'Approvals' }] : BASE_TABS;
+
   if (!ready) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-surface">
@@ -66,6 +82,15 @@ export function EmployeePortalView() {
     try {
       await cancelRequest.mutateAsync(id);
       toast.success('Leave request cancelled');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  async function handleApprove(id: string) {
+    try {
+      await approveRequest.mutateAsync(id);
+      toast.success('Leave request approved');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -115,6 +140,64 @@ export function EmployeePortalView() {
 
       <main className="flex-1 overflow-auto p-4">
         {activeTab === 'dashboard' && <MyCalendarCard onApplyLeave={() => setRequestOpen(true)} />}
+
+        {activeTab === 'approvals' && (
+          <>
+            <div className="mb-4">
+              <h1 className="text-[15px] font-semibold text-text-primary">Approvals</h1>
+              <p className="text-xs text-text-secondary">Requests currently waiting on your decision</p>
+            </div>
+
+            <Card>
+              <Table>
+                <Thead>
+                  <tr>
+                    <Th>Employee</Th>
+                    <Th>Leave Type</Th>
+                    <Th>Dates</Th>
+                    <Th>Days</Th>
+                    <Th>Stage</Th>
+                    <Th></Th>
+                  </tr>
+                </Thead>
+                <Tbody>
+                  {approvals?.map((request) => (
+                    <Tr key={request.id}>
+                      <Td>{request.employee?.fullName}</Td>
+                      <Td>
+                        <Badge>{request.leaveType?.name}</Badge>
+                      </Td>
+                      <Td className="text-xs">
+                        {formatDate(request.startDate)}
+                        {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                      </Td>
+                      <Td>{request.totalDays}</Td>
+                      <Td className="text-xs text-text-muted">{request.currentTierLabel ?? '—'}</Td>
+                      <Td className="text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => setRejectTarget(request)}>
+                            Reject
+                          </Button>
+                          <Button size="sm" onClick={() => handleApprove(request.id)} loading={approveRequest.isPending}>
+                            Approve
+                          </Button>
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+
+              {!approvalsLoading && (approvals?.length ?? 0) === 0 && (
+                <EmptyState
+                  icon={<ClipboardCheck className="h-8 w-8" />}
+                  title="Nothing waiting on you"
+                  subtitle="Requests assigned to you for approval will show up here."
+                />
+              )}
+            </Card>
+          </>
+        )}
 
         {activeTab === 'leave' && (
           <>
@@ -232,6 +315,7 @@ export function EmployeePortalView() {
       </main>
 
       <MyLeaveRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
+      <RejectLeaveModal request={rejectTarget} onClose={() => setRejectTarget(null)} />
     </div>
   );
 }

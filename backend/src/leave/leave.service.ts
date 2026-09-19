@@ -581,6 +581,36 @@ export class LeaveService {
     return items.map((r) => this.withTierLabel(r));
   }
 
+  /** Every PENDING request currently awaiting a decision from this specific
+   *  User -- for the Employee portal's "Approvals" tab, so an employee who
+   *  was named a workflow approver (a SPECIFIC_USER tier pointing at their
+   *  own account, or a REPORTING_SUPERIOR tier resolving to them as their
+   *  department's Manager) can act on it via their Employee ID login,
+   *  without needing a staff account or access to the staff-only Leave
+   *  screen. Walks every open request and re-resolves its current tier the
+   *  same way checkTierAuthorization does -- there's no single Prisma
+   *  filter for this since SPECIFIC_USER and REPORTING_SUPERIOR tiers
+   *  resolve differently, and it's fine at hospital scale (at most a few
+   *  dozen requests are ever open at once). */
+  async findMyApprovals(userId: string) {
+    const pending = await this.prisma.leaveRequest.findMany({
+      where: { status: 'PENDING', currentTierOrder: { not: null } },
+      include: this.includeRelations(),
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const mine: (typeof pending)[number][] = [];
+    for (const request of pending) {
+      const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
+      const tier = workflow?.tiers.find((t) => t.order === request.currentTierOrder);
+      if (!tier) continue;
+      const resolvedApproverId = await this.resolveTierApprover(tier, request.employeeId);
+      if (resolvedApproverId === userId) mine.push(request);
+    }
+
+    return mine.map((r) => this.withTierLabel(r));
+  }
+
   async findOne(id: string) {
     const request = await this.prisma.leaveRequest.findUnique({
       where: { id },

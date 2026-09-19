@@ -116,6 +116,18 @@ export class LeaveController {
     return this.service.findAllForEmployee(user.employeeId);
   }
 
+  // Requests currently awaiting a decision from THIS login specifically --
+  // not scoped to the caller's own Employee record like the routes above,
+  // since being a workflow approver is about the User account, not which
+  // employee they are. Lets an employee who was named as a SPECIFIC_USER
+  // approver (or resolves as a REPORTING_SUPERIOR/department Manager) act
+  // on it from the Employee Portal, without a staff account.
+  @Get('my/approvals')
+  @Roles('EMPLOYEE')
+  findMyApprovals(@CurrentUser() user: any) {
+    return this.service.findMyApprovals(user.id);
+  }
+
   @Get('my/balances')
   @Roles('EMPLOYEE')
   findMyBalances(@CurrentUser() user: any, @Query('year') year?: string) {
