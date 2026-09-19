@@ -321,14 +321,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
             <FieldWrap label="Hired Date">
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
-            <FieldWrap
-              label="Employee Role"
-              hint={
-                form.employeeRole === 'ADMINISTRATOR'
-                  ? 'Logs in with a staff username/password instead of an Employee ID'
-                  : "Logs in with their Employee ID, same as always -- this is just a label (not the same as the real Supervisor/Manager permissions granted from this employee's profile page, under Account & Access)"
-              }
-            >
+            <FieldWrap label="Employee Role">
               <Select value={form.employeeRole} onChange={(e) => set('employeeRole', e.target.value)}>
                 <option value="EMPLOYEE">Employee</option>
                 <option value="MANAGER">Manager</option>
