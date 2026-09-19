@@ -54,6 +54,24 @@ function carryForwardSummary(policy: LeaveCategoryPolicy) {
   return `Carries forward${policy.maxCarryForwardDays != null ? `, up to ${policy.maxCarryForwardDays} day(s)` : ''}`;
 }
 
+// Says when the "Days" entitlement below is actually granted -- the cycle
+// itself isn't a field on the leave, it comes entirely from the employee
+// category (fixed period like Provision's 6-month probation, or an
+// anniversary-based year like Permanent). Used as a hint on the Days field
+// so it reads as "16 days, granted each year" instead of a bare number that
+// could be mistaken for a validity window.
+function cycleLengthLabel(category?: EmployeeCategory | null): string {
+  if (!category) return 'each cycle';
+  if (category.hasFixedPeriod) {
+    return category.defaultPeriodMonths
+      ? `once, over the ${category.defaultPeriodMonths}-month period`
+      : 'once, over the period set per employee';
+  }
+  return category.accruesRollover
+    ? "each year, from the employee's own hire/category-change anniversary"
+    : 'each cycle';
+}
+
 // One-line summary of what a category's flags mean for the scheduler --
 // shown under its name so HR can tell at a glance what creating/editing a
 // category actually does (LeaveSchedulerService reads these same flags
@@ -345,7 +363,11 @@ export function LeavePolicyProgram({ tab }: { tab: WorkbenchTab }) {
                           onChange={(e) => setAddForm((f) => ({ ...f, leaveName: e.target.value }))}
                         />
                       </FieldWrap>
-                      <FieldWrap label="Days" required>
+                      <FieldWrap
+                        label="Days Granted"
+                        required
+                        hint={`How many days of this leave the employee gets, granted ${cycleLengthLabel(category)} -- not a validity window`}
+                      >
                         <Input
                           type="number"
                           min={0}
@@ -488,7 +510,11 @@ export function LeavePolicyProgram({ tab }: { tab: WorkbenchTab }) {
               onChange={(e) => setEditForm((f) => ({ ...f, leaveName: e.target.value }))}
             />
           </FieldWrap>
-          <FieldWrap label="Days" required>
+          <FieldWrap
+            label="Days Granted"
+            required
+            hint={`How many days of this leave the employee gets, granted ${cycleLengthLabel(editing?.leaveCategory)} -- not a validity window`}
+          >
             <Input
               type="number"
               min={0}
