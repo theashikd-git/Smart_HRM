@@ -1,6 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { LeaveService } from './leave.service';
 import {
   CreateLeaveCategoryPolicyDto,
   UpdateLeaveCategoryPolicyDto,
@@ -9,10 +10,26 @@ import {
 
 @Injectable()
 export class LeaveCategoryPolicyService {
+  private readonly logger = new Logger(LeaveCategoryPolicyService.name);
+
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private leaveService: LeaveService,
   ) {}
+
+  // A new policy row (e.g. "Permanent gets 16 days Annual Leave") only
+  // describes the entitlement -- the actual LeaveBalance rows employees'
+  // portals read from don't exist until initializeBalances runs. Without
+  // this, every employee already in that category keeps showing "0 day(s)
+  // remaining" for the newly-configured leave until someone happens to
+  // re-run initialization by hand. Scoped to this one leave type, so it
+  // only ever creates rows for employees who don't have one yet this year.
+  private async backfillBalancesFor(leaveTypeId: string, actorId?: string) {
+    await this.leaveService.initializeBalances({ leaveTypeId }, actorId).catch((err: any) => {
+      this.logger.error(`Failed to backfill leave balances for leave type ${leaveTypeId}: ${err?.message ?? err}`);
+    });
+  }
 
   async create(dto: CreateLeaveCategoryPolicyDto, actorId?: string) {
     const category = await this.prisma.employeeCategory.findUnique({ where: { id: dto.leaveCategoryId } });
@@ -49,6 +66,8 @@ export class LeaveCategoryPolicyService {
       entityId: policy.id,
       details: `Set ${category.name} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days`,
     });
+
+    await this.backfillBalancesFor(leaveType.id, actorId);
 
     return policy;
   }
@@ -124,6 +143,8 @@ export class LeaveCategoryPolicyService {
       entityId: policy.id,
       details: `Set ${category.name} entitlement for ${leaveType.name} to ${dto.daysPerCycle} days${createdNewType ? ' (new leave type)' : ''}`,
     });
+
+    await this.backfillBalancesFor(leaveType.id, actorId);
 
     return policy;
   }

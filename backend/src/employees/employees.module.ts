@@ -4,9 +4,10 @@ import { EmployeesController } from './employees.controller';
 import { AuditModule } from '../audit/audit.module';
 import { DevicesModule } from '../devices/devices.module';
 import { UsersModule } from '../users/users.module';
+import { LeaveModule } from '../leave/leave.module';
 
 @Module({
-  imports: [AuditModule, DevicesModule, UsersModule],
+  imports: [AuditModule, DevicesModule, UsersModule, LeaveModule],
   providers: [EmployeesService],
   controllers: [EmployeesController],
   exports: [EmployeesService],

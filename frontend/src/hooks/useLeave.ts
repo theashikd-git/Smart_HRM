@@ -296,12 +296,29 @@ export function useAdjustLeaveBalance() {
   });
 }
 
+export interface InitializeLeaveBalancesResult {
+  year: number;
+  employeesConsidered: number;
+  leaveTypesConsidered: number;
+  created: number;
+  skippedNoPolicy: number;
+}
+
+// Backfills the actual LeaveBalance rows employee portals read from, from
+// whatever LeaveCategoryPolicy rows HR has configured -- without this,
+// configuring a policy (or adding/moving an employee into a category)
+// doesn't by itself grant anything, and the portal just shows "0 day(s)
+// remaining". Safe to re-run any time: only fills in rows that don't exist
+// yet for the given year, never overwrites an existing balance.
 export function useInitializeLeaveBalances() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { year?: number; leaveTypeId?: string }) =>
-      (await api.post('/leave/balances/initialize', payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-balances'] }),
+    mutationFn: async (payload: { year?: number; leaveTypeId?: string; employeeId?: string }) =>
+      (await api.post<InitializeLeaveBalancesResult>('/leave/balances/initialize', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leave-balances'] });
+      qc.invalidateQueries({ queryKey: ['my-leave-balances'] });
+    },
   });
 }
 

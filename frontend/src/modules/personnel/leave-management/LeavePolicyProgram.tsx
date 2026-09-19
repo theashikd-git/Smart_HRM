@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { PlusCircle, Trash2, Pencil, Info } from 'lucide-react';
+import { PlusCircle, Trash2, Pencil, Info, RefreshCw } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { Card, CardHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +19,7 @@ import {
   useEmployeeCategories,
   useCreateEmployeeCategory,
   useUpdateEmployeeCategory,
+  useInitializeLeaveBalances,
 } from '@/hooks/useLeave';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiErrorMessage } from '@/lib/api';
@@ -110,6 +111,7 @@ export function LeavePolicyProgram({ tab }: { tab: WorkbenchTab }) {
   const updateLeaveType = useUpdateLeaveType();
   const createCategory = useCreateEmployeeCategory();
   const updateCategory = useUpdateEmployeeCategory();
+  const initializeBalances = useInitializeLeaveBalances();
   const queryClient = useQueryClient();
 
   const [addingCategory, setAddingCategory] = useState<string | null>(null);
@@ -286,15 +288,47 @@ export function LeavePolicyProgram({ tab }: { tab: WorkbenchTab }) {
     }
   }
 
+  // Configuring a policy above only describes the entitlement -- it
+  // doesn't by itself create the LeaveBalance rows employee portals read
+  // from (that only happens for brand-new employees and brand-new policies,
+  // going forward). This is the catch-up button for everything already
+  // configured: employees added, or moved into a category, before their
+  // balance got granted. Safe to click any time -- it only fills in rows
+  // that don't exist yet for the current year, never touches one that does.
+  async function handleSyncBalances() {
+    try {
+      const result = await initializeBalances.mutateAsync({});
+      if (result.created > 0) {
+        toast.success(`Granted ${result.created} leave balance(s) for ${result.year} that were missing`);
+      } else {
+        toast.success('Everyone already has their leave balances for this year -- nothing to grant');
+      }
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
   return (
     <ProgramWorkspace
       title={tab.title}
       breadcrumb={tab.breadcrumb}
       actions={
-        <Button size="sm" variant="outline" onClick={openAddCategory}>
-          <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
-          Add Category
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            loading={initializeBalances.isPending}
+            onClick={handleSyncBalances}
+            title="Grant this year's leave balances to anyone whose category/policy was configured after they were added"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Sync Leave Balances
+          </Button>
+          <Button size="sm" variant="outline" onClick={openAddCategory}>
+            <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+            Add Category
+          </Button>
+        </div>
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

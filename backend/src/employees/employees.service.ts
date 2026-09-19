@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
 import { UsersService } from '../users/users.service';
+import { LeaveService } from '../leave/leave.service';
 import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class EmployeesService {
     private auditService: AuditService,
     private deviceSyncService: DeviceSyncService,
     private usersService: UsersService,
+    private leaveService: LeaveService,
   ) {}
 
   async create(dto: CreateEmployeeDto, actorId?: string) {
@@ -81,6 +83,16 @@ export class EmployeesService {
     // from System Settings if this one call happens to fail.
     await this.usersService.create({ role: 'EMPLOYEE' as any, employeeId: employee.id }, actorId).catch((err) => {
       this.logger.error(`Failed to auto-provision login for employee ${employee.id}: ${err?.message ?? err}`);
+    });
+
+    // Grant this employee's actual leave balances now, from whatever
+    // LeaveCategoryPolicy rows exist for their category -- without this, an
+    // employee shows "0 day(s) remaining" for every leave type even though
+    // HR configured (e.g.) Permanent's Annual/Casual/Sick, because nothing
+    // else ever creates the LeaveBalance rows the portal reads from. Scoped
+    // to just this employee, so it's cheap enough to await inline.
+    await this.leaveService.initializeBalances({ employeeId: employee.id }, actorId).catch((err) => {
+      this.logger.error(`Failed to initialize leave balances for employee ${employee.id}: ${err?.message ?? err}`);
     });
 
     return this.findOne(employee.id);
@@ -181,6 +193,17 @@ export class EmployeesService {
     // device responds, and a FAILED sync can still be retried from the
     // Device page or the scheduled auto-retry.
     this.deviceSyncService.pushUpdate(id).catch(() => undefined);
+
+    // A category change (e.g. Provision -> Permanent) can newly qualify
+    // this employee for leave types they had no LeaveCategoryPolicy row for
+    // before -- grant those balances now rather than leaving them at 0 until
+    // someone happens to re-run initialization. Existing balances (from the
+    // old category, or already granted this year) are left untouched.
+    if (categoryChanged) {
+      await this.leaveService.initializeBalances({ employeeId: id }, actorId).catch((err) => {
+        this.logger.error(`Failed to initialize leave balances for employee ${id}: ${err?.message ?? err}`);
+      });
+    }
 
     return this.findOne(id);
   }

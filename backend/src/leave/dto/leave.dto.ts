@@ -206,6 +206,13 @@ export class InitializeBalancesDto {
   @IsOptional()
   @IsString()
   leaveTypeId?: string;
+
+  // Restrict initialization to one employee (e.g. right after they're
+  // created, or after their leave category changes); omit to sweep every
+  // active employee.
+  @IsOptional()
+  @IsString()
+  employeeId?: string;
 }
 
 // ---------------------------------------------------------------------------

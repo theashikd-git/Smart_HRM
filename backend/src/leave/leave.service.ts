@@ -219,7 +219,10 @@ export class LeaveService {
 
   /**
    * Creates a balance row for every active employee x active leave type
-   * combination that doesn't already have one for the given year. Safe to
+   * combination that doesn't already have one for the given year (or, with
+   * employeeId/leaveTypeId set, just that one employee and/or leave type --
+   * used to backfill a single employee right after creation/category change,
+   * or every employee missing a newly-configured leave policy). Safe to
    * re-run -- existing rows are left untouched.
    *
    * Compensatory and Maternity leave types are never pooled balances (they're
@@ -242,7 +245,9 @@ export class LeaveService {
     const leaveTypes = await this.prisma.leaveType.findMany({
       where: { isActive: true, specialRule: 'NONE', ...(dto.leaveTypeId ? { id: dto.leaveTypeId } : {}) },
     });
-    const employees = await this.prisma.employee.findMany({ where: { status: 'ACTIVE' } });
+    const employees = await this.prisma.employee.findMany({
+      where: { status: 'ACTIVE', ...(dto.employeeId ? { id: dto.employeeId } : {}) },
+    });
     const policies = await this.prisma.leaveCategoryPolicy.findMany();
     const policyByKey = new Map(policies.map((p) => [`${p.leaveCategoryId}:${p.leaveTypeId}`, p]));
 
