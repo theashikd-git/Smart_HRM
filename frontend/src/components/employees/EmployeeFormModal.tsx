@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { User as UserIcon } from 'lucide-react';
+import { User as UserIcon, KeyRound, Copy, Check } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
-import { useCreateEmployee, useUpdateEmployee } from '@/hooks/useEmployees';
+import { useCreateEmployee, useUpdateEmployee, useResetEmployeePassword } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDesignations } from '@/hooks/useDesignations';
 import { useShifts } from '@/hooks/useShifts';
@@ -82,12 +82,50 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const selectedCategory = employeeCategories?.find((c) => c.id === form.leaveCategoryId);
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
+  const resetPassword = useResetEmployeePassword();
 
   const isEdit = !!employee;
   const saving = createEmployee.isPending || updateEmployee.isPending;
 
+  // Set once a reset succeeds -- shown inline so HR can read/copy it before
+  // closing the modal (it's a one-time value, never retrievable again after
+  // this). Cleared whenever the modal is reopened for a different employee.
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleResetPassword() {
+    if (!employee) return;
+    if (
+      !confirm(
+        `Reset the portal password for ${employee.fullName}? Their current password will stop working immediately, and they'll need to set a new one on next sign-in.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const { tempPassword: next } = await resetPassword.mutateAsync(employee.id);
+      setTempPassword(next);
+      setCopied(false);
+      toast.success('Password reset -- share the temporary password below with the employee');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  async function handleCopyTempPassword() {
+    if (!tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Could not copy -- select and copy it manually');
+    }
+  }
+
   useEffect(() => {
     setActiveTab('private');
+    setTempPassword(null);
     if (employee) {
       setForm({
         employeeCode: employee.employeeCode || '',
@@ -374,6 +412,43 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
           >
             <Input value={form.deviceUserId} onChange={(e) => set('deviceUserId', e.target.value)} />
           </FieldWrap>
+
+          {isEdit && employee && (
+            <div className="sm:col-span-2 rounded-lg border border-line p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Employee Portal Login</p>
+                  <p className="text-xs text-text-secondary">
+                    If {employee.fullName.split(' ')[0]} forgot their password, reset it here and give them the
+                    temporary password shown below -- they'll be asked to set their own on next sign-in.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={resetPassword.isPending}
+                  onClick={handleResetPassword}
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Reset Password
+                </Button>
+              </div>
+
+              {tempPassword && (
+                <div className="flex items-center justify-between gap-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
+                  <div>
+                    <p className="text-xs text-amber-800">Temporary password (shown once -- copy it now)</p>
+                    <p className="font-mono text-sm font-semibold tracking-wide text-amber-900">{tempPassword}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={handleCopyTempPassword}>
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4', activeTab !== 'attendance' && 'hidden')}>

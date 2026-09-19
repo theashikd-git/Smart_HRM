@@ -48,6 +48,16 @@ export class EmployeesController {
     return this.employeesService.activate(id, user.id);
   }
 
+  // HR/Admin "forgot password" reset for this employee's self-service
+  // portal login -- returns a fresh temporary password once, for HR to
+  // relay to the employee; the employee is then forced to set their own
+  // on next sign-in.
+  @Post(':id/reset-password')
+  @Roles('ADMIN', 'HR')
+  resetPassword(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.employeesService.resetPassword(id, user.id);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   remove(@Param('id') id: string, @CurrentUser() user: any) {

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
@@ -162,6 +163,48 @@ export class UsersService {
     });
 
     return toSafeUser(user);
+  }
+
+  /**
+   * HR/Admin "forgot password" reset for an employee's self-service login.
+   * Generates a fresh temporary password, forces the employee to set their
+   * own on next sign-in (same mustChangePassword gate as a brand-new
+   * account, see create() above), and hands the plaintext password back
+   * ONCE so HR/Admin can relay it to the employee -- it's hashed
+   * immediately and never stored or logged in plain text.
+   */
+  async resetPasswordByEmployeeId(employeeId: string, actorId?: string) {
+    const user = await this.prisma.user.findUnique({ where: { employeeId } });
+    if (!user || user.role !== 'EMPLOYEE') {
+      throw new NotFoundException('This employee does not have a self-service login yet');
+    }
+
+    const tempPassword = this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustChangePassword: true },
+    });
+
+    await this.auditService.log({
+      userId: actorId,
+      action: 'USER_PASSWORD_RESET',
+      entity: 'User',
+      entityId: user.id,
+      details: `Password reset for employee login ${user.email}`,
+    });
+
+    return { tempPassword };
+  }
+
+  // 8 characters, unambiguous alphabet (no 0/O/1/I/l) so HR can read it
+  // aloud or write it down for the employee without mixing up characters.
+  private generateTempPassword(): string {
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    return Array.from(crypto.randomBytes(8))
+      .map((b) => alphabet[b % alphabet.length])
+      .join('');
   }
 
   async remove(id: string, actorId?: string) {

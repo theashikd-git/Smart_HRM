@@ -64,6 +64,17 @@ export function useActivateEmployee() {
   });
 }
 
+// HR/Admin "forgot password" reset for an employee's self-service portal
+// login -- the backend generates a fresh temporary password, forces the
+// employee to set their own on next sign-in, and returns the temporary
+// password ONCE here so it can be shown to HR to relay to the employee.
+export function useResetEmployeePassword() {
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ tempPassword: string }>(`/employees/${id}/reset-password`)).data,
+  });
+}
+
 export interface DeleteEmployeeResult {
   success: boolean;
   // Present only when the employee had been pushed to a biometric device --

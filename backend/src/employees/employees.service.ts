@@ -219,6 +219,17 @@ export class EmployeesService {
     return this.findOne(id);
   }
 
+  /** HR/Admin "forgot password" reset for this employee's self-service
+   *  login -- delegates to UsersService, which generates and returns a
+   *  fresh temporary password (mustChangePassword is set so the employee
+   *  has to choose their own on next sign-in). findOne(id) first so a bad
+   *  employee id 404s clearly rather than surfacing UsersService's own
+   *  "no login account" error for an employee that doesn't exist at all. */
+  async resetPassword(id: string, actorId?: string) {
+    await this.findOne(id);
+    return this.usersService.resetPasswordByEmployeeId(id, actorId);
+  }
+
   async remove(id: string, actorId?: string) {
     const employee = await this.findOne(id);
 
