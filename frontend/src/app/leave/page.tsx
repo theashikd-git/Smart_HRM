@@ -180,6 +180,9 @@ export default function LeavePage() {
                 <Td>{request.totalDays}</Td>
                 <Td>
                   <StatusPill label={request.status} colors={leaveStatusColors[request.status]} />
+                  {request.status === 'PENDING' && request.currentTierLabel && (
+                    <p className="text-xs text-text-muted mt-1 max-w-[160px]">Awaiting: {request.currentTierLabel}</p>
+                  )}
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="text-xs text-text-muted mt-1 max-w-[160px]">{request.rejectionReason}</p>
                   )}

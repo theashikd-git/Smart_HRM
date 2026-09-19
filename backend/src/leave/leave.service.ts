@@ -691,10 +691,15 @@ export class LeaveService {
   }
 
   /** Checks whether `actorId`/`actorRole` may decide (approve or reject) the
-   *  request's CURRENT tier right now. ADMIN/HR can always override, at any
-   *  tier, including one that's unresolvable. Everyone else must be exactly
-   *  the resolved approver for that tier. Returns the resolved approver id
-   *  (or null if unresolvable) alongside the boolean, so callers can build a
+   *  request's CURRENT tier right now. The chain is strict: only the person
+   *  a resolved tier actually names may act on it -- an ADMIN/HR account
+   *  does NOT get to jump ahead of Tier 1 just because of their role, even
+   *  though they administer the workflow itself. ADMIN/HR can only step in
+   *  as a rescue when the current tier is genuinely unresolvable (the
+   *  workflow/tier was since deleted, or a REPORTING_SUPERIOR tier has no
+   *  Department Manager to resolve to) -- there's no one else who could
+   *  possibly act on it otherwise. Returns the resolved approver id (or
+   *  null if unresolvable) alongside the boolean, so callers can build a
    *  clear error message. */
   private async checkTierAuthorization(request: any, actorId: string, actorRole: string) {
     if (request.currentTierOrder == null) {
@@ -704,16 +709,16 @@ export class LeaveService {
 
     const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
     const tier = workflow?.tiers.find((t) => t.order === request.currentTierOrder);
-    const isOverride = actorRole === 'ADMIN' || actorRole === 'HR';
+    const canRescue = actorRole === 'ADMIN' || actorRole === 'HR';
 
     if (!tier) {
       // Workflow was deleted/changed after this request entered it -- only
       // ADMIN/HR can rescue it from here.
-      return { allowed: isOverride, resolvedApproverId: null, tier: null };
+      return { allowed: canRescue, resolvedApproverId: null, tier: null };
     }
 
     const resolvedApproverId = await this.resolveTierApprover(tier, request.employeeId);
-    return { allowed: isOverride || resolvedApproverId === actorId, resolvedApproverId, tier };
+    return { allowed: (canRescue && resolvedApproverId == null) || resolvedApproverId === actorId, resolvedApproverId, tier };
   }
 
   async approve(id: string, actorId: string, actorRole: string) {
