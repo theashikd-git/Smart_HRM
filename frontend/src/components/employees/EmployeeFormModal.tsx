@@ -174,13 +174,18 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
         saved = await createEmployee.mutateAsync(payload);
       }
 
+      // The device push now happens in the background (so saving doesn't
+      // block on a slow/unreachable biometric device), so syncStatus here
+      // is almost always still 'PENDING' right after save -- SYNCED/FAILED
+      // only show up if the push happened to finish first. Either way this
+      // save itself succeeded; the wording just says what to expect next.
       const verb = isEdit ? 'updated' : 'created';
       if (saved.syncStatus === 'SYNCED') {
         toast.success(`Employee ${verb} and synced to the device`);
       } else if (saved.syncStatus === 'FAILED') {
         toast.error(`Employee ${verb}, but device sync failed — it will auto-retry (or use Retry Failed on the Device page)`);
       } else {
-        toast.success(`Employee ${verb}`);
+        toast.success(`Employee ${verb} — syncing to the device in the background`);
       }
       onClose();
     } catch (err) {

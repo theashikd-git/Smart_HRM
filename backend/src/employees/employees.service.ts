@@ -59,13 +59,19 @@ export class EmployeesService {
       details: `Created employee ${employee.fullName} (${employee.employeeCode})`,
     });
 
-    // Push to the biometric device and wait for the outcome so the
-    // response the UI receives already reflects the real syncStatus
-    // (SYNCED or FAILED) -- no separate trip to the Device page needed to
-    // find out whether it worked. pushNewEmployee never throws (it catches
-    // its own device errors and records them as a FAILED sync instead),
-    // so this can't turn a device hiccup into a failed employee creation.
-    await this.deviceSyncService.pushNewEmployee(employee.id).catch(() => undefined);
+    // Push to the biometric device in the background instead of awaiting
+    // it here -- a real device can take anywhere from a few seconds to
+    // ~30+ seconds to answer (or time out) over the network, and the
+    // employee is already saved at this point, so there's no reason to
+    // make HR wait on the device before seeing that. The employee record
+    // already carries syncStatus: 'PENDING' (set above) and the UI treats
+    // PENDING the same as a plain success; pushNewEmployee updates it to
+    // SYNCED/FAILED once the device actually responds, and a FAILED sync
+    // can still be retried from the Device page or by the scheduled
+    // auto-retry. pushNewEmployee never throws (it catches its own device
+    // errors and records them as a FAILED sync instead), so this can't
+    // turn a device hiccup into an unhandled rejection.
+    this.deviceSyncService.pushNewEmployee(employee.id).catch(() => undefined);
 
     // Auto-provision this employee's self-service login -- username and
     // default password are both their Employee ID (see UsersService.create's
@@ -168,9 +174,13 @@ export class EmployeesService {
       entityId: id,
     });
 
-    // Same reasoning as create(): wait for the push so the response
-    // already carries the real sync outcome.
-    await this.deviceSyncService.pushUpdate(id).catch(() => undefined);
+    // Same reasoning as create(): don't make HR wait on the biometric
+    // device -- push in the background. The employee already carries
+    // syncStatus: 'PENDING' (set above), which the UI treats the same as
+    // a plain save success; pushUpdate flips it to SYNCED/FAILED once the
+    // device responds, and a FAILED sync can still be retried from the
+    // Device page or the scheduled auto-retry.
+    this.deviceSyncService.pushUpdate(id).catch(() => undefined);
 
     return this.findOne(id);
   }

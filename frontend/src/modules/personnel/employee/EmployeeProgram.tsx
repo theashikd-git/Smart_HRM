@@ -219,7 +219,7 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
                 </Td>
                 <Td>{emp.department?.name || '—'}</Td>
                 <Td>{formatDate(emp.joiningDate)}</Td>
-                <Td>{EMPLOYMENT_TYPE_LABELS[emp.employmentType] || emp.employmentType || '—'}</Td>
+                <Td>{emp.leaveCategory?.name || '—'}</Td>
                 <Td className="text-center">
                   <button
                     onClick={() => setAttendanceFor(emp)}
