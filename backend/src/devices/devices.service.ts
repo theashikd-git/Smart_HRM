@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { ZktecoClient } from './zkteco/zkteco-client.interface';
 import { ZKTECO_CLIENT } from './zkteco/zkteco-client.token';
 import { CreateDeviceDto, UpdateDeviceDto } from './dto/device.dto';
+import { DeviceSyncService } from './device-sync.service';
 
 @Injectable()
 export class DevicesService {
@@ -13,6 +14,7 @@ export class DevicesService {
     private prisma: PrismaService,
     private auditService: AuditService,
     @Inject(ZKTECO_CLIENT) private zkteco: ZktecoClient,
+    private deviceSyncService: DeviceSyncService,
   ) {}
 
   async create(dto: CreateDeviceDto, actorId?: string) {
@@ -32,6 +34,17 @@ export class DevicesService {
       entityId: device.id,
       details: `Added device ${device.name} (${device.ipAddress}:${device.port})`,
     });
+
+    // Pull whatever is already enrolled on the device the moment it's
+    // added, so employees enrolled directly at the terminal (or before
+    // Smart HRM was installed) get an Employee record and a working
+    // Employee ID login without HR having to remember to press "Import
+    // Users" separately. Runs in the background -- a brand-new device may
+    // not even be reachable yet (wrong IP, still being wired up), and that
+    // shouldn't hold up or fail the Add Device call itself. See Sync
+    // History on this device if nothing shows up afterwards.
+    this.deviceSyncService.importFromDeviceOnAdd(device.id, actorId).catch(() => undefined);
+
     return device;
   }
 

@@ -11,6 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ZktecoClient } from './zkteco/zkteco-client.interface';
 import { ZKTECO_CLIENT } from './zkteco/zkteco-client.token';
 import { SyncOperation, SyncResultStatus } from '@prisma/client';
+import { UsersService } from '../users/users.service';
+import { LeaveService } from '../leave/leave.service';
 
 /**
  * Owns all "employee -> device" synchronization. Smart HRM is always the
@@ -28,6 +30,8 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
     private prisma: PrismaService,
     private config: ConfigService,
     @Inject(ZKTECO_CLIENT) private zkteco: ZktecoClient,
+    private usersService: UsersService,
+    private leaveService: LeaveService,
   ) {}
 
   /**
@@ -240,8 +244,15 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
    * existing employee is left alone -- this only fills in employees Smart
    * HRM doesn't know about yet, it never overwrites HRM data with device
    * data.
+   *
+   * Each newly-created employee also gets the same self-service login and
+   * leave balances a normal Add Employee would give them (see
+   * EmployeesService.create) -- otherwise someone enrolled directly at the
+   * terminal would exist in Smart HRM but have no way to actually log in
+   * with their Employee ID. A login/balance failure for one device user is
+   * logged and counted but never aborts the rest of the import.
    */
-  async importFromDevice(deviceId: string) {
+  async importFromDevice(deviceId: string, actorId?: string) {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new NotFoundException('Device not found');
 
@@ -249,6 +260,8 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
 
     let imported = 0;
     let skipped = 0;
+    let loginsCreated = 0;
+    let loginFailures = 0;
 
     for (const du of deviceUsers) {
       const existing = await this.prisma.employee.findUnique({ where: { deviceUserId: du.deviceUserId } });
@@ -286,16 +299,68 @@ export class DeviceSyncService implements OnModuleInit, OnModuleDestroy {
         message: `Imported from device (was already enrolled on ${device.name})`,
       });
       imported++;
+
+      // Employee ID self-service login -- username and default password
+      // are both the Employee ID (see UsersService.create's EMPLOYEE
+      // branch), same as any employee added by hand.
+      try {
+        await this.usersService.create(
+          { role: 'EMPLOYEE' as any, employeeId: employee.id },
+          actorId,
+        );
+        loginsCreated++;
+      } catch (err: any) {
+        loginFailures++;
+        this.logger.error(
+          `Could not auto-provision login for device-imported employee ${employee.id} (${employee.employeeCode}): ${err?.message ?? err}`,
+        );
+      }
+
+      // No leaveCategory is set on a bare device import, so this only
+      // seeds balances where a leave type's flat daysPerYear applies --
+      // harmless no-op otherwise. Never let this block the import.
+      await this.leaveService.initializeBalances({ employeeId: employee.id }, actorId).catch((err: any) => {
+        this.logger.error(`Failed to initialize leave balances for imported employee ${employee.id}: ${err?.message ?? err}`);
+      });
     }
 
     await this.recordHistory({
       deviceId,
       operation: 'BULK',
       status: 'SUCCESS',
-      message: `Imported ${imported} new employee(s) from device, skipped ${skipped} already linked. ${deviceUsers.length} total on device.`,
+      message: `Imported ${imported} new employee(s) from device (${loginsCreated} login(s) created${loginFailures ? `, ${loginFailures} login failure(s)` : ''}), skipped ${skipped} already linked. ${deviceUsers.length} total on device.`,
     });
 
-    return { total: deviceUsers.length, imported, skipped };
+    return { total: deviceUsers.length, imported, skipped, loginsCreated, loginFailures };
+  }
+
+  /**
+   * Same as importFromDevice, but never throws -- used to auto-pull
+   * whatever is already enrolled on a device the moment it's added, so HR
+   * doesn't have to remember to press "Import Users" afterwards. A device
+   * that isn't actually reachable yet (wrong IP, not powered on) is a very
+   * normal thing to happen right after adding it, so that failure is
+   * recorded to Sync History for later troubleshooting instead of surfacing
+   * as an error on the Add Device call itself.
+   */
+  async importFromDeviceOnAdd(deviceId: string, actorId?: string) {
+    try {
+      const result = await this.importFromDevice(deviceId, actorId);
+      this.logger.log(
+        `Auto-import on device add (${deviceId}): ${result.imported} employee(s) imported, ${result.skipped} skipped.`,
+      );
+      return result;
+    } catch (err: any) {
+      const message = err?.message ?? 'Unknown error';
+      this.logger.error(`Auto-import on device add failed for device ${deviceId}: ${message}`);
+      await this.recordHistory({
+        deviceId,
+        operation: 'BULK',
+        status: 'FAILED',
+        message: `Automatic import after adding this device failed: ${message}. Use "Import Users" on the device page to retry once it's reachable.`,
+      }).catch(() => undefined);
+      return undefined;
+    }
   }
 
   /** Push every unsynced/failed employee at once. */

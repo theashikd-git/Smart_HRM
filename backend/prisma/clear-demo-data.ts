@@ -4,10 +4,10 @@ const prisma = new PrismaClient();
 
 /**
  * Wipes the built-in demo/seed content so a fresh deployment can be
- * populated with real company data. Deliberately does NOT touch:
- *   - User accounts (admin@smarthrm.local / hr@smarthrm.local) -- deleting
- *     these would lock you out of the app. Manage/replace them from
- *     Settings > Users once you're logged in.
+ * populated with real company data. Deliberately keeps ONLY the
+ * admin@smarthrm.local login -- every other seeded account, including
+ * hr@smarthrm.local, is removed along with the rest of the demo data, so
+ * there's exactly one way back in after this runs. Also does NOT touch:
  *   - The Device record -- if you already pointed it at real hardware
  *     (edited the IP from the Device page), it now represents your real
  *     terminal, not demo data. Its DeviceLogs are left alone too.
@@ -20,7 +20,10 @@ const prisma = new PrismaClient();
  *      cascade-delete automatically per schema.prisma)
  *   4. Departments, Designations, Shifts (safe now that no employee
  *      references them)
- *   5. The Company profile row -- CompanyService.get() auto-creates a
+ *   5. Every demo User account except admin@smarthrm.local (their
+ *      Notifications cascade-delete automatically; AuditLog/SyncHistory
+ *      rows referencing them are already gone from steps 1-2)
+ *   6. The Company profile row -- CompanyService.get() auto-creates a
  *      blank placeholder the next time anyone opens Settings, so there's
  *      always a row to edit.
  */
@@ -45,12 +48,15 @@ async function main() {
   const shifts = await prisma.shift.deleteMany({});
   console.log(`Deleted ${shifts.count} shift(s)`);
 
+  const extraUsers = await prisma.user.deleteMany({ where: { email: { not: 'admin@smarthrm.local' } } });
+  console.log(`Deleted ${extraUsers.count} other demo login(s) (kept admin@smarthrm.local only)`);
+
   const company = await prisma.company.deleteMany({});
   console.log(`Deleted ${company.count} company profile row(s) (a blank one will be auto-created)`);
 
   const device = await prisma.device.findFirst();
   console.log('---------------------------------------------');
-  console.log('Kept: user accounts (admin@smarthrm.local, hr@smarthrm.local)');
+  console.log('Kept: admin@smarthrm.local only -- log in with that, then create any other logins you need from Settings > Users');
   console.log(
     device
       ? `Kept: device "${device.name}" (${device.ipAddress}:${device.port}) -- edit or remove it yourself from the Device page if needed`

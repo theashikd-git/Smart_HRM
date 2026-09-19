@@ -8,6 +8,8 @@ import { ZktecoMockClient } from './zkteco/zkteco-mock-client';
 import { ZktecoRealClient } from './zkteco/zkteco-real-client';
 import { ZKTECO_CLIENT } from './zkteco/zkteco-client.token';
 import { AuditModule } from '../audit/audit.module';
+import { UsersModule } from '../users/users.module';
+import { LeaveModule } from '../leave/leave.module';
 
 /**
  * Which ZKTeco driver to use is controlled by the ZKTECO_DRIVER env var:
@@ -33,7 +35,7 @@ const zktecoClientProvider = {
 };
 
 @Module({
-  imports: [AuditModule, ConfigModule],
+  imports: [AuditModule, ConfigModule, UsersModule, LeaveModule],
   providers: [
     DevicesService,
     DeviceSyncService,

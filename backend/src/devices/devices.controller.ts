@@ -98,8 +98,8 @@ export class DevicesController {
 
   @Post(':id/import-users')
   @Roles('ADMIN', 'HR')
-  importUsers(@Param('id') id: string) {
-    return this.deviceSyncService.importFromDevice(id);
+  importUsers(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.deviceSyncService.importFromDevice(id, user.id);
   }
 
   @Post('sync/bulk')
