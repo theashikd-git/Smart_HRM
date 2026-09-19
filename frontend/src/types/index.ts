@@ -447,7 +447,7 @@ export type NotificationCategory = 'LEAVE' | 'SHIFT';
 
 export interface AppNotification {
   id: string;
-  employeeId: string;
+  userId: string;
   category: NotificationCategory;
   title: string;
   message: string;

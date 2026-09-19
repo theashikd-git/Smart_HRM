@@ -8,7 +8,7 @@ import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { UserMenu } from '@/components/shell/UserMenu';
-import { NotificationBell } from './NotificationBell';
+import { NotificationBell } from '@/components/shell/NotificationBell';
 import {
   useMyLeaveRequests,
   useMyLeaveBalances,

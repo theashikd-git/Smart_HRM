@@ -214,6 +214,7 @@ model User {
   employee   Employee? @relation(fields: [employeeId], references: [id])
   tierAssignments LeaveApprovalTier[]     @relation("LeaveTierApprover")
   tierDecisions   LeaveApprovalDecision[] @relation("LeaveTierDecisionApprover")
+  notifications   Notification[]
 
   @@map("users")
 }
@@ -537,7 +538,6 @@ model Employee {
   documents         Document[]
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
-  notifications     Notification[]
   account           User?
 
   @@map("employees")
@@ -861,18 +861,26 @@ enum NotificationCategory {
 // one row here for that employee. Read status is tracked per row rather
 // than a single "last seen" cursor so the bell's unread count and the list
 // itself always agree.
+// Notifications belong to a login (User), not an Employee -- a plain staff
+// account (ADMIN/HR/MANAGER/SUPERVISOR with no linked Employee, e.g. an
+// approver added only via System Settings) gets notified exactly the same
+// way an Employee Portal login does, through the same table, the same
+// /notifications/mine endpoint, and the same bell component (see
+// components/shell/NotificationBell.tsx, used on both the staff top bar
+// and the Employee Portal). Nothing about "who this notification is for"
+// branches on staff vs. employee anywhere in the stack.
 model Notification {
   id         String               @id @default(uuid())
-  employeeId String
+  userId     String
   category   NotificationCategory
   title      String
   message    String
   isRead     Boolean              @default(false)
   createdAt  DateTime             @default(now())
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([employeeId, isRead])
-  @@index([employeeId, createdAt])
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
   @@map("notifications")
 }

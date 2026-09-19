@@ -726,12 +726,11 @@ export class LeaveService {
   /** Notifies whoever is currently the resolved approver for `tier` that a
    *  request is waiting on them -- fired once when a request is first
    *  created (Tier 1) and again every time it advances to a new tier (see
-   *  create() and approve()). Only reaches an approver signed in through
-   *  the Employee Portal (their User account is linked to an Employee
-   *  record) -- there's no notification channel yet for a pure staff
-   *  account with no linked Employee (the staff side has no notification
-   *  bell at all today), so this is a no-op for one of those until that's
-   *  built. */
+   *  create() and approve()). Notifications are keyed by login (User), not
+   *  by Employee, so this reaches a staff-only approver (e.g. an HR
+   *  Officer or Administrator with no linked Employee record) exactly the
+   *  same way it reaches an Employee Portal approver -- see
+   *  NotificationsService and components/shell/NotificationBell.tsx. */
   private async notifyTierApprover(
     tier: { type: string; approverUserId: string | null },
     applicantEmployeeId: string,
@@ -740,10 +739,8 @@ export class LeaveService {
   ) {
     const approverUserId = await this.resolveTierApprover(tier, applicantEmployeeId);
     if (!approverUserId) return;
-    const approverUser = await this.prisma.user.findUnique({ where: { id: approverUserId } });
-    if (!approverUser?.employeeId) return;
     await this.notificationsService.create(
-      approverUser.employeeId,
+      approverUserId,
       'LEAVE',
       'Leave request awaiting your decision',
       `${applicantFullName} applied for ${leaveTypeName} -- it's awaiting your decision.`,
@@ -787,7 +784,7 @@ export class LeaveService {
           entityId: id,
           details: `${tier.label} approved -- now awaiting ${nextTier.label}`,
         });
-        await this.notificationsService.create(
+        await this.notificationsService.createForEmployee(
           updated.employeeId,
           'LEAVE',
           'Leave request update',
@@ -811,7 +808,7 @@ export class LeaveService {
         entityId: id,
         details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s) (final approval at ${tier.label})`,
       });
-      await this.notificationsService.create(
+      await this.notificationsService.createForEmployee(
         updated.employeeId,
         'LEAVE',
         'Leave request approved',
@@ -834,7 +831,7 @@ export class LeaveService {
       entityId: id,
       details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s)`,
     });
-    await this.notificationsService.create(
+    await this.notificationsService.createForEmployee(
       updated.employeeId,
       'LEAVE',
       'Leave request approved',
@@ -887,7 +884,7 @@ export class LeaveService {
       details: tier ? `Rejected at ${tier.label}: ${dto.reason}` : dto.reason,
     });
 
-    await this.notificationsService.create(
+    await this.notificationsService.createForEmployee(
       updated.employeeId,
       'LEAVE',
       'Leave request rejected',

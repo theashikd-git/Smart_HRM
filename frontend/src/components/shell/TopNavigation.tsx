@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { useAuthStore } from '@/lib/auth-store';
 import type { ModuleDefinition } from '@/types/workbench';
-import { NotificationMenu } from './NotificationMenu';
+import { NotificationBell } from './NotificationBell';
 import { UserMenu } from './UserMenu';
 
 const MODULES: ModuleDefinition[] = [
@@ -62,7 +62,7 @@ export function TopNavigation() {
       </div>
 
       <div className="flex items-center gap-1">
-        <NotificationMenu />
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>

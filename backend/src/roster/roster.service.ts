@@ -120,7 +120,7 @@ export class RosterService {
       details: `${dto.type === RosterDayTypeDto.OFF ? 'Set day off' : 'Assigned shift'} for ${employee.fullName} on ${dateStr}`,
     });
 
-    await this.notificationsService.create(
+    await this.notificationsService.createForEmployee(
       employeeId,
       'SHIFT',
       'Duty schedule updated',
@@ -147,7 +147,7 @@ export class RosterService {
       details: `Cleared roster assignment for ${dateStr}`,
     });
 
-    await this.notificationsService.create(
+    await this.notificationsService.createForEmployee(
       employeeId,
       'SHIFT',
       'Duty schedule updated',
