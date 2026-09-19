@@ -95,18 +95,26 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
 
   async function handleResetPassword() {
     if (!employee) return;
+    // Covers both cases in one prompt since we can't tell which applies
+    // without a separate lookup: an existing password is reset, or -- for
+    // an employee added before login auto-provisioning existed -- a login
+    // is created for them on the spot.
     if (
       !confirm(
-        `Reset the portal password for ${employee.fullName}? Their current password will stop working immediately, and they'll need to set a new one on next sign-in.`,
+        `Reset (or create, if they don't have one yet) the portal login for ${employee.fullName}? Any existing password stops working immediately, and they'll be asked to set a new one on next sign-in.`,
       )
     ) {
       return;
     }
     try {
-      const { tempPassword: next } = await resetPassword.mutateAsync(employee.id);
+      const { tempPassword: next, created } = await resetPassword.mutateAsync(employee.id);
       setTempPassword(next);
       setCopied(false);
-      toast.success('Password reset -- share the temporary password below with the employee');
+      toast.success(
+        created
+          ? 'Portal login created -- share the temporary password below with the employee'
+          : 'Password reset -- share the temporary password below with the employee',
+      );
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

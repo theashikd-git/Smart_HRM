@@ -71,7 +71,11 @@ export function useActivateEmployee() {
 export function useResetEmployeePassword() {
   return useMutation({
     mutationFn: async (id: string) =>
-      (await api.post<{ tempPassword: string }>(`/employees/${id}/reset-password`)).data,
+      // created: true when this employee had no self-service login yet
+      // (e.g. added before login auto-provisioning existed) -- the backend
+      // creates one on the spot instead of erroring, so the button doubles
+      // as "create login" for those employees.
+      (await api.post<{ tempPassword: string; created: boolean }>(`/employees/${id}/reset-password`)).data,
   });
 }
 

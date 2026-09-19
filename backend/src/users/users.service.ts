@@ -172,18 +172,55 @@ export class UsersService {
    * account, see create() above), and hands the plaintext password back
    * ONCE so HR/Admin can relay it to the employee -- it's hashed
    * immediately and never stored or logged in plain text.
+   *
+   * Self-healing: employees created before login auto-provisioning existed
+   * (or whose auto-provisioning silently failed -- create() never lets a
+   * login hiccup block employee creation) have no User row at all yet.
+   * Rather than making HR find a separate "create login" step first, a
+   * reset in that case just creates the login here, with the generated
+   * temporary password in place of the old employeeCode-as-password
+   * default.
    */
   async resetPasswordByEmployeeId(employeeId: string, actorId?: string) {
-    const user = await this.prisma.user.findUnique({ where: { employeeId } });
-    if (!user || user.role !== 'EMPLOYEE') {
-      throw new NotFoundException('This employee does not have a self-service login yet');
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const existing = await this.prisma.user.findUnique({ where: { employeeId } });
+    if (existing && existing.role !== 'EMPLOYEE') {
+      throw new BadRequestException('This login is not an employee self-service account');
     }
 
     const tempPassword = this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
+    if (!existing) {
+      const user = await this.prisma.user.create({
+        data: {
+          // Same synthetic placeholder as create()'s EMPLOYEE branch -- the
+          // User table requires a unique email column, but this account
+          // logs in by Employee ID and never sees or uses this value.
+          email: `${employee.employeeCode}@employee.smarthrm.local`,
+          fullName: employee.fullName,
+          role: 'EMPLOYEE',
+          passwordHash,
+          employeeId: employee.id,
+          mustChangePassword: true,
+        },
+      });
+
+      await this.auditService.log({
+        userId: actorId,
+        action: 'USER_CREATED',
+        entity: 'User',
+        entityId: user.id,
+        details: `Created employee login for ${employee.fullName} (${employee.employeeCode}) via password reset`,
+      });
+
+      return { tempPassword, created: true };
+    }
+
     await this.prisma.user.update({
-      where: { id: user.id },
+      where: { id: existing.id },
       data: { passwordHash, mustChangePassword: true },
     });
 
@@ -191,11 +228,11 @@ export class UsersService {
       userId: actorId,
       action: 'USER_PASSWORD_RESET',
       entity: 'User',
-      entityId: user.id,
-      details: `Password reset for employee login ${user.email}`,
+      entityId: existing.id,
+      details: `Password reset for employee login ${existing.email}`,
     });
 
-    return { tempPassword };
+    return { tempPassword, created: false };
   }
 
   // 8 characters, unambiguous alphabet (no 0/O/1/I/l) so HR can read it
