@@ -11,26 +11,24 @@ export class DepartmentSuperiorsService {
   ) {}
 
   async create(dto: CreateDepartmentSuperiorDto, actorId?: string) {
-    if (!dto.departmentId && !dto.subDepartmentId) {
-      throw new BadRequestException('A department or sub-department must be specified');
+    if (!dto.departmentId) {
+      throw new BadRequestException('A department must be specified');
     }
 
     const existing = await this.prisma.departmentSuperior.findFirst({
       where: {
-        departmentId: dto.departmentId ?? null,
-        subDepartmentId: dto.subDepartmentId ?? null,
+        departmentId: dto.departmentId,
         employeeId: dto.employeeId,
         title: dto.title,
       },
     });
-    if (existing) throw new ConflictException('This employee already holds that title on this unit');
+    if (existing) throw new ConflictException('This employee already holds that title on this department');
 
     const superior = await this.prisma.departmentSuperior.create({
       data: dto,
       include: {
         employee: { select: { id: true, fullName: true, employeeCode: true } },
         department: { select: { id: true, name: true } },
-        subDepartment: { select: { id: true, name: true } },
       },
     });
     await this.auditService.log({
@@ -43,17 +41,15 @@ export class DepartmentSuperiorsService {
     return superior;
   }
 
-  findAll(departmentId?: string, subDepartmentId?: string) {
+  findAll(departmentId?: string) {
     return this.prisma.departmentSuperior.findMany({
       where: {
         ...(departmentId ? { departmentId } : {}),
-        ...(subDepartmentId ? { subDepartmentId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { select: { id: true, fullName: true, employeeCode: true } },
         department: { select: { id: true, name: true } },
-        subDepartment: { select: { id: true, name: true } },
       },
     });
   }

@@ -21,8 +21,8 @@ export class DepartmentSuperiorsController {
   }
 
   @Get()
-  findAll(@Query('departmentId') departmentId?: string, @Query('subDepartmentId') subDepartmentId?: string) {
-    return this.service.findAll(departmentId, subDepartmentId);
+  findAll(@Query('departmentId') departmentId?: string) {
+    return this.service.findAll(departmentId);
   }
 
   @Delete(':id')

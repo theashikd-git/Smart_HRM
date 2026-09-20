@@ -16,16 +16,14 @@ import {
   useDeleteDepartmentSuperior,
 } from '@/hooks/useDepartmentSuperiors';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useSubDepartments } from '@/hooks/useSubDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { apiErrorMessage } from '@/lib/api';
 
-const EMPTY_FORM = { title: '', departmentId: '', subDepartmentId: '', employeeId: '' };
+const EMPTY_FORM = { title: '', departmentId: '', employeeId: '' };
 
 export default function DepartmentSuperiorsPage() {
   const { data, isLoading } = useDepartmentSuperiors();
   const { data: departments } = useDepartments();
-  const { data: subDepartments } = useSubDepartments();
   const { data: employeesData } = useEmployees({ pageSize: 500 });
   const createAssignment = useCreateDepartmentSuperior();
   const deleteAssignment = useDeleteDepartmentSuperior();
@@ -44,15 +42,14 @@ export default function DepartmentSuperiorsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.departmentId && !form.subDepartmentId) {
-      toast.error('Select a department or sub-department');
+    if (!form.departmentId) {
+      toast.error('Select a department');
       return;
     }
     try {
       await createAssignment.mutateAsync({
         title: form.title,
         departmentId: form.departmentId || undefined,
-        subDepartmentId: form.subDepartmentId || undefined,
         employeeId: form.employeeId,
       });
       toast.success('Superior assigned');
@@ -73,7 +70,7 @@ export default function DepartmentSuperiorsPage() {
   }
 
   return (
-    <AppShell title="Department Superiors" subtitle="Assign heads / superiors over departments and sub-departments">
+    <AppShell title="Department Superiors" subtitle="Assign heads / superiors over departments">
       <Card>
         <div className="flex items-center justify-between p-5 border-b border-line">
           <p className="text-sm text-text-secondary">{data?.length || 0} assignments</p>
@@ -101,7 +98,7 @@ export default function DepartmentSuperiorsPage() {
                 <Td>
                   <Badge>{a.title}</Badge>
                 </Td>
-                <Td>{a.department?.name ?? a.subDepartment?.name ?? '—'}</Td>
+                <Td>{a.department?.name ?? '—'}</Td>
                 <Td className="text-right">
                   <div className="flex justify-end gap-1">
                     <button
@@ -156,26 +153,18 @@ export default function DepartmentSuperiorsPage() {
               <Input value={form.title} onChange={(e) => set('title', e.target.value)} required />
             </FieldWrap>
           </div>
-          <FieldWrap label="Department" hint="Set this or Sub-Department">
-            <Select value={form.departmentId} onChange={(e) => set('departmentId', e.target.value)}>
-              <option value="">None</option>
-              {departments?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </FieldWrap>
-          <FieldWrap label="Sub-Department" hint="Set this or Department">
-            <Select value={form.subDepartmentId} onChange={(e) => set('subDepartmentId', e.target.value)}>
-              <option value="">None</option>
-              {subDepartments?.map((sd) => (
-                <option key={sd.id} value={sd.id}>
-                  {sd.name}
-                </option>
-              ))}
-            </Select>
-          </FieldWrap>
+          <div className="sm:col-span-2">
+            <FieldWrap label="Department" required>
+              <Select value={form.departmentId} onChange={(e) => set('departmentId', e.target.value)} required>
+                <option value="">Select department</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            </FieldWrap>
+          </div>
         </form>
       </Modal>
     </AppShell>

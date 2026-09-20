@@ -12,10 +12,6 @@ export class CreateDesignationDto {
 
   @IsOptional()
   @IsString()
-  gradeId?: string;
-
-  @IsOptional()
-  @IsString()
   departmentId?: string;
 
   @IsOptional()
@@ -27,10 +23,6 @@ export class UpdateDesignationDto {
   @IsOptional()
   @IsString()
   title?: string;
-
-  @IsOptional()
-  @IsString()
-  gradeId?: string;
 
   @IsOptional()
   @IsString()

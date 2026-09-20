@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DepartmentSuperior } from '@/types';
 
-export function useDepartmentSuperiors(departmentId?: string, subDepartmentId?: string) {
+export function useDepartmentSuperiors(departmentId?: string) {
   return useQuery({
-    queryKey: ['department-superiors', departmentId ?? 'all', subDepartmentId ?? 'all'],
+    queryKey: ['department-superiors', departmentId ?? 'all'],
     queryFn: async () =>
       (
         await api.get<DepartmentSuperior[]>('/department-superiors', {
-          params: { ...(departmentId ? { departmentId } : {}), ...(subDepartmentId ? { subDepartmentId } : {}) },
+          params: { ...(departmentId ? { departmentId } : {}) },
         })
       ).data,
   });
@@ -20,7 +20,6 @@ export function useCreateDepartmentSuperior() {
     mutationFn: async (payload: {
       title: string;
       departmentId?: string;
-      subDepartmentId?: string;
       employeeId: string;
     }) => (await api.post('/department-superiors', payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['department-superiors'] }),

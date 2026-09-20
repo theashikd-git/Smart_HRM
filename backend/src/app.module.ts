@@ -15,11 +15,6 @@ import { LeaveModule } from './leave/leave.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuditModule } from './audit/audit.module';
-import { BranchesModule } from './branches/branches.module';
-import { LocationsModule } from './locations/locations.module';
-import { SubDepartmentsModule } from './sub-departments/sub-departments.module';
-import { SectionsModule } from './sections/sections.module';
-import { GradesModule } from './grades/grades.module';
 import { DepartmentSuperiorsModule } from './department-superiors/department-superiors.module';
 import { RosterModule } from './roster/roster.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -42,11 +37,6 @@ import { NotificationsModule } from './notifications/notifications.module';
     DashboardModule,
     ReportsModule,
     AuditModule,
-    BranchesModule,
-    LocationsModule,
-    SubDepartmentsModule,
-    SectionsModule,
-    GradesModule,
     DepartmentSuperiorsModule,
     RosterModule,
     NotificationsModule,

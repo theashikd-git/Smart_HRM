@@ -15,101 +15,32 @@ export interface User {
 }
 
 export type OrgUnitStatus = 'ACTIVE' | 'INACTIVE';
-export type LocationType = 'FACTORY' | 'OFFICE' | 'SITE' | 'PROJECT' | 'OTHER';
-
-export interface Branch {
-  id: string;
-  name: string;
-  code?: string | null;
-  address?: string | null;
-  managerId?: string | null;
-  status: OrgUnitStatus;
-  manager?: { id: string; fullName: string } | null;
-  _count?: { employees: number; departments: number; locations: number };
-}
-
-export interface Location {
-  id: string;
-  name: string;
-  code?: string | null;
-  type: LocationType;
-  address?: string | null;
-  branchId?: string | null;
-  status: OrgUnitStatus;
-  branch?: { id: string; name: string } | null;
-  _count?: { employees: number; departments: number };
-}
-
 export interface Department {
   id: string;
   name: string;
   code: string;
   headEmployeeId?: string | null;
-  branchId?: string | null;
-  locationId?: string | null;
   status: OrgUnitStatus;
-  branch?: { id: string; name: string } | null;
-  location?: { id: string; name: string } | null;
   manager?: { id: string; fullName: string } | null;
-  subDepartments?: SubDepartment[];
   _count?: { employees: number };
   approvalWorkflow?: LeaveApprovalWorkflow | null;
-}
-
-export interface SubDepartment {
-  id: string;
-  name: string;
-  code?: string | null;
-  departmentId: string;
-  headEmployeeId?: string | null;
-  status: OrgUnitStatus;
-  department?: { id: string; name: string } | null;
-  manager?: { id: string; fullName: string } | null;
-  _count?: { employees: number };
-}
-
-export interface Section {
-  id: string;
-  name: string;
-  code?: string | null;
-  departmentId?: string | null;
-  subDepartmentId?: string | null;
-  status: OrgUnitStatus;
-  department?: { id: string; name: string } | null;
-  subDepartment?: { id: string; name: string } | null;
-  _count?: { employees: number };
-}
-
-export interface Grade {
-  id: string;
-  name: string;
-  level?: number | null;
-  minSalary?: number | null;
-  maxSalary?: number | null;
-  benefits?: string | null;
-  status: OrgUnitStatus;
-  _count?: { designations: number };
 }
 
 export interface DepartmentSuperior {
   id: string;
   title: string;
   departmentId?: string | null;
-  subDepartmentId?: string | null;
   employeeId: string;
   employee?: { id: string; fullName: string; employeeCode: string } | null;
   department?: { id: string; name: string } | null;
-  subDepartment?: { id: string; name: string } | null;
   createdAt?: string;
 }
 
 export interface Designation {
   id: string;
   title: string;
-  gradeId?: string | null;
   departmentId?: string | null;
   status: OrgUnitStatus;
-  grade?: { id: string; name: string } | null;
   department?: { id: string; name: string } | null;
   _count?: { employees: number };
 }

@@ -41,7 +41,6 @@ export class RosterService {
         employeeCode: true,
         fullName: true,
         department: { select: { id: true, name: true } },
-        subDepartment: { select: { id: true, name: true } },
         designation: { select: { title: true } },
       },
       orderBy: { fullName: 'asc' },

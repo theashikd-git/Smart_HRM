@@ -3,12 +3,7 @@ import {
   Users,
   UserX,
   Building2,
-  GitBranch,
-  MapPin,
-  Network,
-  LayoutGrid,
   IdCard,
-  Layers,
   CalendarClock,
   CalendarDays,
   Clock,
@@ -38,25 +33,16 @@ export const PROGRAM_REGISTRY: Record<string, ProgramDefinition> = {
     breadcrumb: ['Personnel', 'Resigned Employees'],
   },
   'org-company': { id: 'org-company', title: 'Company', breadcrumb: ['Personnel', 'Organization', 'Company'] },
-  'org-branch': { id: 'org-branch', title: 'Branch', breadcrumb: ['Personnel', 'Organization', 'Branch'] },
-  'org-location': { id: 'org-location', title: 'Location', breadcrumb: ['Personnel', 'Organization', 'Location'] },
   'org-department': {
     id: 'org-department',
     title: 'Department',
     breadcrumb: ['Personnel', 'Organization', 'Department'],
   },
-  'org-subdepartment': {
-    id: 'org-subdepartment',
-    title: 'Sub-department',
-    breadcrumb: ['Personnel', 'Organization', 'Sub-department'],
-  },
-  'org-section': { id: 'org-section', title: 'Section', breadcrumb: ['Personnel', 'Organization', 'Section'] },
   'org-designation': {
     id: 'org-designation',
     title: 'Designation',
     breadcrumb: ['Personnel', 'Organization', 'Designation'],
   },
-  'org-grade': { id: 'org-grade', title: 'Grade', breadcrumb: ['Personnel', 'Organization', 'Grade'] },
   'superior-management': {
     id: 'superior-management',
     title: 'Superior Management',
@@ -121,13 +107,8 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
     icon: Building2,
     children: [
       { type: 'leaf', id: 'org-company', label: 'Company', programId: 'org-company' },
-      { type: 'leaf', id: 'org-branch', label: 'Branch', programId: 'org-branch' },
-      { type: 'leaf', id: 'org-location', label: 'Location', programId: 'org-location' },
       { type: 'leaf', id: 'org-department', label: 'Department', programId: 'org-department' },
-      { type: 'leaf', id: 'org-subdepartment', label: 'Sub-department', programId: 'org-subdepartment' },
-      { type: 'leaf', id: 'org-section', label: 'Section', programId: 'org-section' },
       { type: 'leaf', id: 'org-designation', label: 'Designation', programId: 'org-designation' },
-      { type: 'leaf', id: 'org-grade', label: 'Grade', programId: 'org-grade' },
     ],
   },
   {
@@ -168,11 +149,6 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
 // Icons used elsewhere (org sub-items, kept here so the registry file is the single source of nav metadata).
 export const ORG_ICONS: Record<string, typeof Building2> = {
   'org-company': Building2,
-  'org-branch': GitBranch,
-  'org-location': MapPin,
   'org-department': Building2,
-  'org-subdepartment': Network,
-  'org-section': LayoutGrid,
   'org-designation': IdCard,
-  'org-grade': Layers,
 };

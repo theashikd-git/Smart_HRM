@@ -220,11 +220,6 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                     <p className="text-[13px] font-medium text-text-primary truncate">{emp.fullName}</p>
                     <p className="text-[11px] text-text-muted truncate">{emp.designation?.title ?? emp.employeeCode}</p>
                   </div>
-                  {emp.subDepartment && (
-                    <span className="ml-auto shrink-0 rounded-md bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
-                      {emp.subDepartment.name}
-                    </span>
-                  )}
                 </div>
 
                 {days.map((day, i) => {

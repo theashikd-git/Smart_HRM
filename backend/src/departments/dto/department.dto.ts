@@ -1,23 +1,8 @@
-import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export enum OrgUnitStatusDto {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
-}
-
-/**
- * One sub-department row from the "Add Department" popup (e.g. "X-Ray",
- * "USG", "MRI" all added under one new "Radiology" department). Kept as a
- * loose interface validated in DepartmentsService rather than nested
- * class-validator decorators -- same reasoning as
- * SaveLeaveWorkflowDto.tiers: the row list is freely added to/removed
- * from on the client, so it doesn't need a class-transformer setup here.
- * No `code` field -- DepartmentsService generates one from the parent's
- * code + this name, since the popup only asks the user for a name.
- */
-export interface CreateSubDepartmentRowInput {
-  name: string;
-  headEmployeeId?: string;
 }
 
 export class CreateDepartmentDto {
@@ -34,22 +19,8 @@ export class CreateDepartmentDto {
   headEmployeeId?: string;
 
   @IsOptional()
-  @IsString()
-  branchId?: string;
-
-  @IsOptional()
-  @IsString()
-  locationId?: string;
-
-  @IsOptional()
   @IsEnum(OrgUnitStatusDto)
   status?: OrgUnitStatusDto;
-
-  // Sub-departments to create together with this department, in the same
-  // transaction, from the "Add Department" popup's Sub-Departments section.
-  @IsOptional()
-  @IsArray()
-  subDepartments?: CreateSubDepartmentRowInput[];
 }
 
 export class UpdateDepartmentDto {
@@ -66,28 +37,6 @@ export class UpdateDepartmentDto {
   headEmployeeId?: string;
 
   @IsOptional()
-  @IsString()
-  branchId?: string;
-
-  @IsOptional()
-  @IsString()
-  locationId?: string;
-
-  @IsOptional()
   @IsEnum(OrgUnitStatusDto)
   status?: OrgUnitStatusDto;
-
-  // New sub-departments to add during this edit (Edit Department popup's
-  // "+ Add Sub-Dept" rows) -- same shape and same generated-code handling
-  // as CreateDepartmentDto.subDepartments, applied in the same transaction
-  // as the rest of this update.
-  @IsOptional()
-  @IsArray()
-  subDepartments?: CreateSubDepartmentRowInput[];
-
-  // Existing sub-department ids to delete during this edit (the trash icon
-  // next to an existing row in the Edit Department popup).
-  @IsOptional()
-  @IsArray()
-  removeSubDepartmentIds?: string[];
 }

@@ -16,16 +16,14 @@ import {
   useUpdateDesignation,
   useDeleteDesignation,
 } from '@/hooks/useDesignations';
-import { useGrades } from '@/hooks/useGrades';
 import { useDepartments } from '@/hooks/useDepartments';
 import { apiErrorMessage } from '@/lib/api';
 import { Designation } from '@/types';
 
-const EMPTY_FORM = { title: '', gradeId: '', departmentId: '', status: 'ACTIVE' };
+const EMPTY_FORM = { title: '', departmentId: '', status: 'ACTIVE' };
 
 export default function DesignationsPage() {
   const { data, isLoading } = useDesignations();
-  const { data: grades } = useGrades();
   const { data: departments } = useDepartments();
   const createDesig = useCreateDesignation();
   const updateDesig = useUpdateDesignation();
@@ -49,7 +47,6 @@ export default function DesignationsPage() {
     setEditing(d);
     setForm({
       title: d.title,
-      gradeId: d.gradeId ?? '',
       departmentId: d.departmentId ?? '',
       status: d.status,
     });
@@ -60,7 +57,6 @@ export default function DesignationsPage() {
     e.preventDefault();
     const payload = {
       title: form.title,
-      gradeId: form.gradeId || undefined,
       departmentId: form.departmentId || undefined,
       status: form.status,
     };
@@ -103,7 +99,6 @@ export default function DesignationsPage() {
           <Thead>
             <tr>
               <Th>Title</Th>
-              <Th>Grade</Th>
               <Th>Department</Th>
               <Th>Status</Th>
               <Th>Employees</Th>
@@ -114,7 +109,6 @@ export default function DesignationsPage() {
             {data?.map((d) => (
               <Tr key={d.id}>
                 <Td className="font-medium">{d.title}</Td>
-                <Td>{d.grade?.name ?? '—'}</Td>
                 <Td>{d.department?.name ?? '—'}</Td>
                 <Td>
                   <Badge className={d.status === 'ACTIVE' ? 'text-success bg-success-soft' : ''}>
@@ -170,16 +164,6 @@ export default function DesignationsPage() {
               <Input value={form.title} onChange={(e) => set('title', e.target.value)} required autoFocus />
             </FieldWrap>
           </div>
-          <FieldWrap label="Grade">
-            <Select value={form.gradeId} onChange={(e) => set('gradeId', e.target.value)}>
-              <option value="">Unassigned</option>
-              {grades?.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </FieldWrap>
           <FieldWrap label="Department">
             <Select value={form.departmentId} onChange={(e) => set('departmentId', e.target.value)}>
               <option value="">Unassigned</option>

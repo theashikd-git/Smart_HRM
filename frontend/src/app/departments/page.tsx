@@ -16,17 +16,13 @@ import {
   useUpdateDepartment,
   useDeleteDepartment,
 } from '@/hooks/useDepartments';
-import { useBranches } from '@/hooks/useBranches';
-import { useLocations } from '@/hooks/useLocations';
 import { apiErrorMessage } from '@/lib/api';
 import { Department } from '@/types';
 
-const EMPTY_FORM = { name: '', code: '', branchId: '', locationId: '', status: 'ACTIVE' };
+const EMPTY_FORM = { name: '', code: '', status: 'ACTIVE' };
 
 export default function DepartmentsPage() {
   const { data, isLoading } = useDepartments();
-  const { data: branches } = useBranches();
-  const { data: locations } = useLocations();
   const createDept = useCreateDepartment();
   const updateDept = useUpdateDepartment();
   const deleteDept = useDeleteDepartment();
@@ -50,8 +46,6 @@ export default function DepartmentsPage() {
     setForm({
       name: d.name,
       code: d.code,
-      branchId: d.branchId ?? '',
-      locationId: d.locationId ?? '',
       status: d.status,
     });
     setModalOpen(true);
@@ -62,8 +56,6 @@ export default function DepartmentsPage() {
     const payload = {
       name: form.name,
       code: form.code,
-      branchId: form.branchId || undefined,
-      locationId: form.locationId || undefined,
       status: form.status,
     };
     try {
@@ -106,8 +98,6 @@ export default function DepartmentsPage() {
             <tr>
               <Th>Department</Th>
               <Th>Code</Th>
-              <Th>Branch</Th>
-              <Th>Location</Th>
               <Th>Status</Th>
               <Th>Employees</Th>
               <Th></Th>
@@ -120,8 +110,6 @@ export default function DepartmentsPage() {
                 <Td>
                   <Badge className="font-mono">{d.code}</Badge>
                 </Td>
-                <Td>{d.branch?.name ?? '—'}</Td>
-                <Td>{d.location?.name ?? '—'}</Td>
                 <Td>
                   <Badge className={d.status === 'ACTIVE' ? 'text-success bg-success-soft' : ''}>
                     {d.status}
@@ -176,26 +164,6 @@ export default function DepartmentsPage() {
           </FieldWrap>
           <FieldWrap label="Code" required hint="Short unique code, e.g. HR, IT, SLS">
             <Input value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} required />
-          </FieldWrap>
-          <FieldWrap label="Branch">
-            <Select value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
-              <option value="">Unassigned</option>
-              {branches?.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
-          </FieldWrap>
-          <FieldWrap label="Location">
-            <Select value={form.locationId} onChange={(e) => set('locationId', e.target.value)}>
-              <option value="">Unassigned</option>
-              {locations?.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
           </FieldWrap>
           <FieldWrap label="Status">
             <Select value={form.status} onChange={(e) => set('status', e.target.value)}>

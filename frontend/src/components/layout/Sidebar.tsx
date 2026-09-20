@@ -15,11 +15,6 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
-  GitBranch,
-  MapPin,
-  Network,
-  LayoutGrid,
-  Layers,
   UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,13 +23,8 @@ import { useAuthStore } from '@/lib/auth-store';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'HR', 'MANAGER'] },
   { href: '/employees', label: 'Employees', icon: Users, roles: ['ADMIN', 'HR', 'MANAGER'] },
-  { href: '/branches', label: 'Branches', icon: GitBranch, roles: ['ADMIN', 'HR'] },
-  { href: '/locations', label: 'Locations', icon: MapPin, roles: ['ADMIN', 'HR'] },
   { href: '/departments', label: 'Departments', icon: Building2, roles: ['ADMIN', 'HR', 'MANAGER'] },
-  { href: '/sub-departments', label: 'Sub-Departments', icon: Network, roles: ['ADMIN', 'HR', 'MANAGER'] },
-  { href: '/sections', label: 'Sections', icon: LayoutGrid, roles: ['ADMIN', 'HR', 'MANAGER'] },
   { href: '/designations', label: 'Designations', icon: IdCard, roles: ['ADMIN', 'HR', 'MANAGER'] },
-  { href: '/grades', label: 'Grades', icon: Layers, roles: ['ADMIN', 'HR'] },
   { href: '/department-superiors', label: 'Dept. Superiors', icon: UserCog, roles: ['ADMIN', 'HR'] },
   { href: '/shifts', label: 'Shifts', icon: Clock, roles: ['ADMIN', 'HR', 'MANAGER'] },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck, roles: ['ADMIN', 'HR', 'MANAGER'] },

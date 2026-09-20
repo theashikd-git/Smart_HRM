@@ -203,52 +203,6 @@ export const mockEmployees = [
 // Generic placeholder-program mock tables (Organization units, Shift, Holiday, etc.)
 // ---------------------------------------------------------------------------
 
-export const mockBranches = [
-  { name: 'Head Office', code: 'HO', manager: 'Rina Sultana', status: 'Active' },
-  { name: 'Chattogram Branch', code: 'CTG', manager: 'Abdul Karim', status: 'Active' },
-  { name: 'Sylhet Branch', code: 'SYL', manager: '—', status: 'Active' },
-];
-
-export const mockLocations = [
-  { name: 'Gazipur Factory', type: 'Factory', branch: 'Head Office', status: 'Active' },
-  { name: 'Dhaka Corporate Office', type: 'Office', branch: 'Head Office', status: 'Active' },
-  { name: 'Site Project A', type: 'Project', branch: 'Chattogram Branch', status: 'Active' },
-];
-
-export const mockDepartmentsTable = [
-  { name: 'Production', code: 'PRD', branch: 'Head Office', employees: 420 },
-  { name: 'Quality Control', code: 'QC', branch: 'Head Office', employees: 96 },
-  { name: 'Human Resources', code: 'HR', branch: 'Head Office', employees: 32 },
-  { name: 'Finance', code: 'FIN', branch: 'Head Office', employees: 44 },
-  { name: 'IT', code: 'IT', branch: 'Head Office', employees: 38 },
-];
-
-export const mockSubDepartments = [
-  { name: 'Sewing Line 1', department: 'Production', employees: 120 },
-  { name: 'Sewing Line 2', department: 'Production', employees: 118 },
-  { name: 'Cutting', department: 'Production', employees: 64 },
-];
-
-export const mockSections = [
-  { name: 'Fabric QC', department: 'Quality Control', employees: 22 },
-  { name: 'Final QC', department: 'Quality Control', employees: 30 },
-];
-
-export const mockDesignations = [
-  { title: 'Line Operator', grade: 'Grade 5', department: 'Production', employees: 340 },
-  { title: 'Supervisor', grade: 'Grade 3', department: 'Production', employees: 28 },
-  { title: 'Accountant', grade: 'Grade 3', department: 'Finance', employees: 6 },
-  { title: 'System Administrator', grade: 'Grade 2', department: 'IT', employees: 3 },
-];
-
-export const mockGrades = [
-  { name: 'Grade 1', level: 1, minSalary: 120000, maxSalary: 200000 },
-  { name: 'Grade 2', level: 2, minSalary: 70000, maxSalary: 120000 },
-  { name: 'Grade 3', level: 3, minSalary: 40000, maxSalary: 70000 },
-  { name: 'Grade 4', level: 4, minSalary: 25000, maxSalary: 40000 },
-  { name: 'Grade 5', level: 5, minSalary: 14000, maxSalary: 25000 },
-];
-
 export const mockSuperiors = [
   { unit: 'Production', title: 'Head of Department', employee: 'Abdul Karim' },
   { unit: 'Quality Control', title: 'In-Charge', employee: 'Jamal Uddin' },

@@ -3,6 +3,7 @@ import { EmployeeProgram } from './employee/EmployeeProgram';
 import { ReportsProgram } from './reports/ReportsProgram';
 import { AttendanceProgram } from './attendance/AttendanceProgram';
 import { DepartmentProgram } from './department/DepartmentProgram';
+import { DesignationProgram } from './designation/DesignationProgram';
 import { RosterProgram } from './roster/RosterProgram';
 import { LeaveWorkflowsProgram } from './leave-management/LeaveWorkflowsProgram';
 import { LeaveTypeProgram } from './leave-management/LeaveTypeProgram';
@@ -25,6 +26,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <AttendanceProgram tab={tab} />;
     case 'org-department':
       return <DepartmentProgram tab={tab} />;
+    case 'org-designation':
+      return <DesignationProgram tab={tab} />;
     case 'roster':
       return <RosterProgram tab={tab} />;
     case 'leave-workflows':

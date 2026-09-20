@@ -12,7 +12,7 @@ export function useDesignations() {
 export function useCreateDesignation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { title: string; gradeId?: string; departmentId?: string; status?: string }) =>
+    mutationFn: async (payload: { title: string; departmentId?: string; status?: string }) =>
       (await api.post('/designations', payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['designations'] }),
   });
@@ -27,7 +27,6 @@ export function useUpdateDesignation() {
     }: {
       id: string;
       title?: string;
-      gradeId?: string;
       departmentId?: string;
       status?: string;
     }) => (await api.patch(`/designations/${id}`, payload)).data,
