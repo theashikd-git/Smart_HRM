@@ -59,7 +59,7 @@ export class DevicesService {
   }
 
   async update(id: string, dto: UpdateDeviceDto, actorId?: string) {
-    await this.findOne(id);
+    const before = await this.findOne(id);
     const device = await this.prisma.device.update({ where: { id }, data: dto });
     await this.auditService.log({
       userId: actorId,
@@ -67,6 +67,20 @@ export class DevicesService {
       entity: 'Device',
       entityId: id,
     });
+
+    // Changing the IP/port is effectively "this device is finally reachable
+    // for real" -- most commonly because it was added with a placeholder
+    // address and just got corrected to the actual terminal, exactly like
+    // the very first connection. Auto-pull whatever's enrolled on it now,
+    // same as on Add Device, instead of leaving HR to remember to press
+    // "Import Users" by hand.
+    if (
+      (dto.ipAddress !== undefined && dto.ipAddress !== before.ipAddress) ||
+      (dto.port !== undefined && dto.port !== before.port)
+    ) {
+      this.deviceSyncService.importFromDeviceOnAdd(device.id, actorId).catch(() => undefined);
+    }
+
     return device;
   }
 

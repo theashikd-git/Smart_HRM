@@ -92,7 +92,9 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
     try {
       const res = await importDeviceUsers.mutateAsync(primaryDevice.id);
       toast.success(
-        `Imported ${res.imported} new employee(s) from the device (${res.skipped} already linked, ${res.total} total on device)`,
+        `Imported ${res.imported} new employee(s) from the device, ${res.loginsCreated} with an Employee ID login ready` +
+          (res.loginFailures ? ` (${res.loginFailures} login(s) failed -- see Sync History)` : '') +
+          ` (${res.skipped} already linked, ${res.total} total on device)`,
       );
     } catch (err) {
       toast.error(apiErrorMessage(err));

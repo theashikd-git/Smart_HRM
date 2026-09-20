@@ -30,7 +30,18 @@ export function useCreateDevice() {
   return useMutation({
     mutationFn: async (payload: { name: string; ipAddress: string; port?: number }) =>
       (await api.post('/devices', payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['devices'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['devices'] });
+      // Adding a device kicks off a background pull of everyone already
+      // enrolled on it (see DeviceSyncService.importFromDeviceOnAdd) --
+      // it isn't awaited by the create call itself, so give it a few
+      // seconds to finish talking to the device and then refresh the
+      // lists it affects. Harmless no-op if nothing changed yet.
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['employees'] });
+        qc.invalidateQueries({ queryKey: ['sync-history'] });
+      }, 6000);
+    },
   });
 }
 
@@ -84,7 +95,7 @@ export function useImportDeviceUsers() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) =>
-      (await api.post<{ total: number; imported: number; skipped: number }>(`/devices/${id}/import-users`)).data,
+      (await api.post<{ total: number; imported: number; skipped: number; loginsCreated: number; loginFailures: number }>(`/devices/${id}/import-users`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['employees'] });
       qc.invalidateQueries({ queryKey: ['sync-history'] });

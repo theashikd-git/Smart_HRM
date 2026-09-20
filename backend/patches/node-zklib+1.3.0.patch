@@ -1,0 +1,54 @@
+diff --git a/node_modules/node-zklib/README.md b/node_modules/node-zklib/README.md
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/constants.js b/node_modules/node-zklib/constants.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/helpers/errorLog.js b/node_modules/node-zklib/helpers/errorLog.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/test.js b/node_modules/node-zklib/test.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/utils.js b/node_modules/node-zklib/utils.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/zkerror.js b/node_modules/node-zklib/zkerror.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/zklib.js b/node_modules/node-zklib/zklib.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/node-zklib/zklibtcp.js b/node_modules/node-zklib/zklibtcp.js
+old mode 100644
+new mode 100755
+index 4231819..0931fba
+--- a/node_modules/node-zklib/zklibtcp.js
++++ b/node_modules/node-zklib/zklibtcp.js
+@@ -228,7 +228,22 @@ class ZKLibTCP {
+         reply = await this.requestData(buf)
+ 
+       } catch (err) {
+-        reject(err)
++        // BUGFIX (Smart HRM): the original code fell through to
++        // decodeTCPHeader(reply.subarray(...)) below even after rejecting
++        // here, with `reply` still null -- that threw a TypeError from
++        // inside this Promise executor's async function, which Node
++        // treats as an unhandled rejection on a *different*, orphaned
++        // promise (the executor's own return value, which `new Promise`
++        // never attaches a handler to). Unhandled rejections crash the
++        // whole Node process by default on modern Node -- so one flaky
++        // device response was taking down the entire backend. Returning
++        // here stops that fall-through; the caller already gets its
++        // rejection from reject(err) above.
++        return reject(err)
++      }
++
++      if (!reply) {
++        return reject(new Error('No reply received from device'))
+       }
+ 
+       const header = decodeTCPHeader(reply.subarray(0, 16))
+diff --git a/node_modules/node-zklib/zklibudp.js b/node_modules/node-zklib/zklibudp.js
+old mode 100644
+new mode 100755

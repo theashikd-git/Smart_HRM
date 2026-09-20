@@ -94,7 +94,11 @@ function DeviceCard({ device, onEdit }: { device: Device; onEdit: (device: Devic
   async function handleImport() {
     try {
       const res = await importUsers.mutateAsync(device.id);
-      toast.success(`Imported ${res.imported} new employee(s), skipped ${res.skipped} already linked (${res.total} total on device)`);
+      toast.success(
+        `Imported ${res.imported} new employee(s) (${res.loginsCreated} login(s) created` +
+          (res.loginFailures ? `, ${res.loginFailures} login failure(s)` : '') +
+          `), skipped ${res.skipped} already linked (${res.total} total on device)`,
+      );
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

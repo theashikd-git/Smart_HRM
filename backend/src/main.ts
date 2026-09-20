@@ -1,9 +1,28 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+
+// Safety net for the whole process, not just request handlers: a bug deep
+// inside a third-party device SDK (e.g. node-zklib) can throw from a raw
+// socket event callback or an orphaned promise that never runs through
+// AllExceptionsFilter at all -- on modern Node that crashes the entire
+// backend by default, taking every other module (payroll, leave, attendance)
+// down with it over one flaky biometric device response. This HR system
+// must stay up even when one device misbehaves, so these are logged loudly
+// instead of being allowed to kill the process. Anything caught here is a
+// bug that should still get fixed at its source (see zkteco-real-client.ts
+// and patches/node-zklib+*.patch for the one already found this way) --
+// this is a backstop, not a substitute for that.
+const bootstrapLogger = new Logger('Process');
+process.on('unhandledRejection', (reason: any) => {
+  bootstrapLogger.error(`Unhandled promise rejection (process kept alive): ${reason?.stack ?? reason}`);
+});
+process.on('uncaughtException', (err: Error) => {
+  bootstrapLogger.error(`Uncaught exception (process kept alive): ${err?.stack ?? err}`);
+});
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
