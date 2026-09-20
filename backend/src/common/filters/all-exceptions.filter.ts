@@ -28,10 +28,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
+    // A raw (non-HttpException) error used to always show as the opaque
+    // "Internal server error" -- true details only ever reached the server
+    // console via logger.error() below, which meant every unexpected 500
+    // (a device timeout, a third-party library quirk, etc.) required
+    // someone to go copy text out of a terminal window before it could be
+    // diagnosed. This is an internal, single-tenant HR tool with no public
+    // signup, so surfacing the real Error.message to the (already
+    // authenticated) person who triggered it is safe and saves that whole
+    // round trip -- the full stack trace still only goes to the server log.
     const message =
       exception instanceof HttpException
         ? exception.getResponse()
-        : 'Internal server error';
+        : exception instanceof Error
+          ? exception.message
+          : 'Internal server error';
 
     if (status >= 500) {
       this.logger.error(exception instanceof Error ? exception.stack : exception);
