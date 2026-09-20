@@ -66,9 +66,9 @@ export class CreateEmployeeDto {
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() emergencyContact?: string;
 
-  @IsOptional() @IsDateString() joiningDate?: string;
-  @IsOptional() @IsString() departmentId?: string;
-  @IsOptional() @IsString() designationId?: string;
+  @IsNotEmpty() @IsDateString() joiningDate: string;
+  @IsNotEmpty() @IsString() departmentId: string;
+  @IsNotEmpty() @IsString() designationId: string;
   @IsOptional() @IsString() shiftId?: string;
   @IsOptional() @IsEnum(EmploymentTypeDto) employmentType?: EmploymentTypeDto;
   @IsOptional() @IsNumber() salary?: number;
@@ -98,9 +98,9 @@ export class CreateEmployeeDto {
   // Decides the kind of login provisioned for this hire (see EmployeeRole
   // in the schema) -- defaults to EMPLOYEE (Employee ID self-service login)
   // when omitted, same as before this field existed.
-  @IsOptional()
+  @IsNotEmpty()
   @IsEnum(EmployeeRoleDto)
-  employeeRole?: EmployeeRoleDto;
+  employeeRole: EmployeeRoleDto;
 
   // Required (by EmployeesService, not here -- validation depends on
   // employeeRole above) only when employeeRole is ADMINISTRATOR; ignored
@@ -118,24 +118,24 @@ export class CreateEmployeeDto {
 }
 
 export class UpdateEmployeeDto {
-  @IsOptional() @IsString() employeeCode?: string;
-  @IsOptional() @IsString() fullName?: string;
+  @IsNotEmpty() @IsString() employeeCode: string;
+  @IsNotEmpty() @IsString() fullName: string;
   @IsOptional() @IsString() photo?: string;
   @IsOptional() @IsDateString() dateOfBirth?: string;
-  @IsOptional() @IsString() gender?: string;
+  @IsNotEmpty() @IsString() gender: string;
   @IsOptional() @IsString() nationalId?: string;
   @IsOptional() @IsString() passport?: string;
   @IsOptional() @IsString() bloodGroup?: string;
   @IsOptional() @IsString() maritalStatus?: string;
 
-  @IsOptional() @IsString() phone?: string;
+  @IsNotEmpty() @IsString() phone: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() emergencyContact?: string;
 
-  @IsOptional() @IsDateString() joiningDate?: string;
-  @IsOptional() @IsString() departmentId?: string;
-  @IsOptional() @IsString() designationId?: string;
+  @IsNotEmpty() @IsDateString() joiningDate: string;
+  @IsNotEmpty() @IsString() departmentId: string;
+  @IsNotEmpty() @IsString() designationId: string;
   @IsOptional() @IsString() shiftId?: string;
   @IsOptional() @IsEnum(EmploymentTypeDto) employmentType?: EmploymentTypeDto;
   @IsOptional() @IsNumber() salary?: number;
@@ -154,9 +154,9 @@ export class UpdateEmployeeDto {
   @Min(1)
   trialMonths?: number;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsEnum(EmployeeRoleDto)
-  employeeRole?: EmployeeRoleDto;
+  employeeRole: EmployeeRoleDto;
 
   // Only used (and only required) when employeeRole is being set/changed to
   // ADMINISTRATOR and this employee doesn't already have a staff login with

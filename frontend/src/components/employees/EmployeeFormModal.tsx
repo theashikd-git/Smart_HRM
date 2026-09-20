@@ -198,8 +198,15 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.employeeCode.trim() || !form.fullName.trim() || !form.departmentId) {
-      toast.error('Fill in Employee ID, Full Name, and Department');
+    if (
+      !form.employeeCode.trim() ||
+      !form.fullName.trim() ||
+      !form.departmentId ||
+      !form.designationId ||
+      !form.joiningDate ||
+      !form.employeeRole
+    ) {
+      toast.error('Fill in Employee ID, Full Name, Department, Designation, Hired Date, and Employee Role');
       return;
     }
     if (!form.gender || !form.phone.trim()) {
@@ -308,9 +315,9 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
                 ))}
               </Select>
             </FieldWrap>
-            <FieldWrap label="Designation">
+            <FieldWrap label="Designation" required>
               <Select value={form.designationId} onChange={(e) => set('designationId', e.target.value)}>
-                <option value="">Unassigned</option>
+                <option value="">Select</option>
                 {designations?.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.title}
@@ -318,10 +325,10 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
                 ))}
               </Select>
             </FieldWrap>
-            <FieldWrap label="Hired Date">
+            <FieldWrap label="Hired Date" required>
               <Input type="date" value={form.joiningDate} onChange={(e) => set('joiningDate', e.target.value)} />
             </FieldWrap>
-            <FieldWrap label="Employee Role">
+            <FieldWrap label="Employee Role" required>
               <Select value={form.employeeRole} onChange={(e) => set('employeeRole', e.target.value)}>
                 <option value="EMPLOYEE">Employee</option>
                 <option value="MANAGER">Manager</option>
