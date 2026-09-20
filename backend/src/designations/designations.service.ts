@@ -14,7 +14,10 @@ export class DesignationsService {
     const existing = await this.prisma.designation.findUnique({ where: { title: dto.title } });
     if (existing) throw new ConflictException('Designation already exists');
 
-    const designation = await this.prisma.designation.create({ data: dto });
+    const designation = await this.prisma.designation.create({
+      data: dto,
+      include: { department: { select: { id: true, name: true } }, _count: { select: { employees: true } } },
+    });
     await this.auditService.log({
       userId: actorId,
       action: 'DESIGNATION_CREATED',
@@ -27,19 +30,32 @@ export class DesignationsService {
   findAll() {
     return this.prisma.designation.findMany({
       orderBy: { title: 'asc' },
-      include: { _count: { select: { employees: true } } },
+      include: {
+        department: { select: { id: true, name: true } },
+        _count: { select: { employees: true } },
+      },
     });
   }
 
   async findOne(id: string) {
-    const designation = await this.prisma.designation.findUnique({ where: { id } });
+    const designation = await this.prisma.designation.findUnique({
+      where: { id },
+      include: {
+        department: { select: { id: true, name: true } },
+        _count: { select: { employees: true } },
+      },
+    });
     if (!designation) throw new NotFoundException('Designation not found');
     return designation;
   }
 
   async update(id: string, dto: UpdateDesignationDto, actorId?: string) {
     await this.findOne(id);
-    const designation = await this.prisma.designation.update({ where: { id }, data: dto });
+    const designation = await this.prisma.designation.update({
+      where: { id },
+      data: dto,
+      include: { department: { select: { id: true, name: true } }, _count: { select: { employees: true } } },
+    });
     await this.auditService.log({
       userId: actorId,
       action: 'DESIGNATION_UPDATED',

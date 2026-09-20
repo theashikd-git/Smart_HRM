@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, IdCard, Pencil, Trash2 } from 'lucide-react';
+import { Plus, IdCard, Pencil, Trash2, Building2, ChevronDown, ChevronRight } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
-import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
+import { EmptyState } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Card';
 import {
   useDesignations,
@@ -21,6 +21,13 @@ import { apiErrorMessage } from '@/lib/api';
 import { Designation } from '@/types';
 
 const EMPTY_FORM = { title: '', departmentId: '', status: 'ACTIVE' };
+const UNASSIGNED_KEY = '__unassigned';
+
+interface DeptGroup {
+  key: string;
+  name: string;
+  items: Designation[];
+}
 
 export default function DesignationsPage() {
   const { data, isLoading } = useDesignations();
@@ -32,6 +39,30 @@ export default function DesignationsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Designation | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const groups = useMemo<DeptGroup[]>(() => {
+    if (!data) return [];
+    const byDept = new Map<string, DeptGroup>();
+    for (const d of data) {
+      const key = d.department?.id ?? UNASSIGNED_KEY;
+      const name = d.department?.name ?? 'Unassigned';
+      if (!byDept.has(key)) byDept.set(key, { key, name, items: [] });
+      byDept.get(key)!.items.push(d);
+    }
+    const arr = Array.from(byDept.values());
+    arr.sort((a, b) => {
+      if (a.key === UNASSIGNED_KEY) return 1;
+      if (b.key === UNASSIGNED_KEY) return -1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const g of arr) g.items.sort((a, b) => a.title.localeCompare(b.title));
+    return arr;
+  }, [data]);
+
+  function toggle(key: string) {
+    setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  }
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -86,7 +117,7 @@ export default function DesignationsPage() {
 
   return (
     <AppShell title="Designations" subtitle="Job titles used across the organization">
-      <Card>
+      <Card className="overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-line">
           <p className="text-sm text-text-secondary">{data?.length || 0} designations</p>
           <Button onClick={openCreate}>
@@ -95,51 +126,67 @@ export default function DesignationsPage() {
           </Button>
         </div>
 
-        <Table>
-          <Thead>
-            <tr>
-              <Th>Title</Th>
-              <Th>Department</Th>
-              <Th>Status</Th>
-              <Th>Employees</Th>
-              <Th></Th>
-            </tr>
-          </Thead>
-          <Tbody>
-            {data?.map((d) => (
-              <Tr key={d.id}>
-                <Td className="font-medium">{d.title}</Td>
-                <Td>{d.department?.name ?? '—'}</Td>
-                <Td>
-                  <Badge className={d.status === 'ACTIVE' ? 'text-success bg-success-soft' : ''}>
-                    {d.status}
-                  </Badge>
-                </Td>
-                <Td>{d._count?.employees ?? 0}</Td>
-                <Td className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <button
-                      onClick={() => openEdit(d)}
-                      className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(d)}
-                      className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-
-        {!isLoading && (data?.length ?? 0) === 0 && (
+        {!isLoading && groups.length === 0 && (
           <EmptyState icon={<IdCard className="h-8 w-8" />} title="No designations yet" />
         )}
+
+        {groups.map((g) => {
+          const isCollapsed = !!collapsed[g.key];
+          return (
+            <div key={g.key} className="border-b border-line last:border-b-0">
+              <button
+                type="button"
+                onClick={() => toggle(g.key)}
+                className="flex w-full items-center justify-between gap-2 bg-surface-sunken/60 px-5 py-2 text-left hover:bg-surface-sunken"
+              >
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  {isCollapsed ? (
+                    <ChevronRight className="h-3.5 w-3.5 text-text-muted" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-text-muted" />
+                  )}
+                  <Building2 className="h-3.5 w-3.5 text-text-muted" />
+                  {g.name}
+                </span>
+                <Badge>{g.items.length}</Badge>
+              </button>
+
+              {!isCollapsed && (
+                <div className="divide-y divide-line/60">
+                  {g.items.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-3 py-1.5 pl-10 pr-5 text-xs hover:bg-surface-sunken/40"
+                    >
+                      <IdCard className="h-3 w-3 shrink-0 text-text-muted" />
+                      <span className="flex-1 truncate font-medium text-text-primary">{d.title}</span>
+                      <Badge className={d.status === 'ACTIVE' ? 'text-success bg-success-soft' : ''}>
+                        {d.status}
+                      </Badge>
+                      <span className="w-16 shrink-0 text-right text-text-muted">
+                        {d._count?.employees ?? 0} emp
+                      </span>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={() => openEdit(d)}
+                          className="rounded p-1 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(d)}
+                          className="rounded p-1 text-text-muted hover:bg-danger-soft hover:text-danger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </Card>
 
       <Modal
