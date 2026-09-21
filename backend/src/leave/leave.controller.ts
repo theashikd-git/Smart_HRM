@@ -25,7 +25,7 @@ export class LeaveController {
   // -- Requests -----------------------------------------------------------
 
   @Post('requests')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   createRequest(@Body() dto: CreateLeaveRequestDto, @CurrentUser() user: any) {
     // Only ADMIN/HR may bypass the remaining-balance check; a MANAGER's
     // overrideBalance flag (if sent) is silently ignored rather than
