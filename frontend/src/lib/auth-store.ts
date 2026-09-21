@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { api } from './api';
+import { clearPersistedWorkbench } from '@/hooks/useWorkbenchStore';
 import { User } from '@/types';
 
 interface AuthState {
@@ -75,6 +76,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     localStorage.removeItem('smart_hrm_token');
     localStorage.removeItem('smart_hrm_user');
+    // So the next person to sign in on this browser starts with a clean
+    // Workbench instead of inheriting whatever tabs this user had open.
+    clearPersistedWorkbench();
     set({ token: null, user: null });
     if (typeof window !== 'undefined') window.location.href = '/login';
   },

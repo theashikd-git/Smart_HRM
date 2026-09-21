@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { TopNavigation } from './TopNavigation';
 import { WorkbenchBar } from './WorkbenchBar';
@@ -14,12 +15,20 @@ import { SystemSettingsModuleView } from '@/modules/system-settings/SystemSettin
 
 export function AppShellRoot() {
   const { ready } = useRequireAuth();
+  const hydrated = useWorkbenchStore((s) => s.hydrated);
+  const hydrate = useWorkbenchStore((s) => s.hydrate);
   const activeModule = useWorkbenchStore((s) => s.activeModule);
   const activeTabKey = useWorkbenchStore((s) => s.activeTabKey);
   const openTabs = useWorkbenchStore((s) => s.openTabs);
   const activeTab = openTabs.find((t) => t.key === activeTabKey);
 
-  if (!ready) {
+  // Restores whichever tabs were open before the last reload -- runs once;
+  // `hydrate()` itself no-ops on later calls once it's already hydrated.
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  if (!ready || !hydrated) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-surface">
         <Loader2 className="h-5 w-5 animate-spin text-accent" />
