@@ -11,6 +11,13 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+// An empty "" from a form (as opposed to the field being left out entirely)
+// otherwise defeats @IsOptional() -- class-validator only skips validation
+// for null/undefined, not "", so a blank Email field would still fail
+// @IsEmail() with "email must be an email" even though Email isn't required.
+const blankToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 
 export enum EmploymentTypeDto {
   FULL_TIME = 'FULL_TIME',
@@ -62,7 +69,7 @@ export class CreateEmployeeDto {
   @IsString()
   phone: string;
 
-  @IsOptional() @IsEmail() email?: string;
+  @Transform(blankToUndefined) @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() emergencyContact?: string;
 
@@ -129,7 +136,7 @@ export class UpdateEmployeeDto {
   @IsOptional() @IsString() maritalStatus?: string;
 
   @IsNotEmpty() @IsString() phone: string;
-  @IsOptional() @IsEmail() email?: string;
+  @Transform(blankToUndefined) @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() emergencyContact?: string;
 

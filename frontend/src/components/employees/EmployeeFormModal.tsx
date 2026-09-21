@@ -236,6 +236,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
     const payload: any = {
       ...form,
       photo: form.photo || undefined,
+      email: form.email.trim() || undefined,
       salary: form.salary ? Number(form.salary) : undefined,
       joiningDate: form.joiningDate || undefined,
       departmentId: form.departmentId || undefined,
