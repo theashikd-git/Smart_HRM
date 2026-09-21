@@ -120,20 +120,26 @@ export class LeaveController {
     return this.service.findAllForEmployee(user.employeeId);
   }
 
+  // No @Roles('EMPLOYEE') on any route in this block, same reasoning as
+  // findMyRequests above -- My Calendar and Apply Leave are now also used
+  // from the Manager Portal (see ManagerDashboard), not just the Employee
+  // Portal, so self-service leave stays open to any signed-in login. Every
+  // route is still scoped strictly to the caller's own Employee record via
+  // assertLinkedEmployee + user.employeeId, so this never lets one login
+  // see or act on another's leave.
+
   // Requests currently awaiting a decision from THIS login specifically --
   // not scoped to the caller's own Employee record like the routes above,
   // since being a workflow approver is about the User account, not which
-  // employee they are. Lets an employee who was named as a SPECIFIC_USER
-  // approver (or resolves as a REPORTING_SUPERIOR/department Manager) act
-  // on it from the Employee Portal, without a staff account.
+  // employee they are. Lets a login named as a SPECIFIC_USER approver (or
+  // resolving as a REPORTING_SUPERIOR/department Manager) act on it here,
+  // without needing the separate Leave module/staff approvals screen.
   @Get('my/approvals')
-  @Roles('EMPLOYEE')
   findMyApprovals(@CurrentUser() user: any) {
     return this.service.findMyApprovals(user.id);
   }
 
   @Get('my/balances')
-  @Roles('EMPLOYEE')
   findMyBalances(@CurrentUser() user: any, @Query('year') year?: string) {
     this.assertLinkedEmployee(user);
     return this.service.getBalances(user.employeeId, year ? parseInt(year, 10) : undefined);
@@ -144,21 +150,18 @@ export class LeaveController {
   // special-rule types everyone can apply for) -- so the Apply for Leave
   // dropdown doesn't show entitlements from other categories.
   @Get('my/leave-types')
-  @Roles('EMPLOYEE')
   findMyEligibleLeaveTypes(@CurrentUser() user: any) {
     this.assertLinkedEmployee(user);
     return this.service.getMyEligibleLeaveTypes(user.employeeId);
   }
 
   @Post('my/requests')
-  @Roles('EMPLOYEE')
   createMyRequest(@Body() dto: SelfCreateLeaveRequestDto, @CurrentUser() user: any) {
     this.assertLinkedEmployee(user);
     return this.service.createForSelf(user.employeeId, user.id, dto);
   }
 
   @Patch('my/requests/:id/cancel')
-  @Roles('EMPLOYEE')
   cancelMyRequest(@Param('id') id: string, @CurrentUser() user: any) {
     this.assertLinkedEmployee(user);
     return this.service.cancelOwn(user.employeeId, id, user.id);

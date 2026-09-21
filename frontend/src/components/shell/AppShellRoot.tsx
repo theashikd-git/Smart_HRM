@@ -7,14 +7,17 @@ import { WorkbenchBar } from './WorkbenchBar';
 import { Sidebar } from './Sidebar';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { useAuthStore } from '@/lib/auth-store';
 import { PersonnelDashboard } from '@/modules/personnel/dashboard/PersonnelDashboard';
 import { ProgramRouter } from '@/modules/personnel/ProgramRouter';
 import { LeaveModuleView } from '@/modules/leave/LeaveModuleView';
 import { DeviceModuleView } from '@/modules/device/DeviceModuleView';
 import { SystemSettingsModuleView } from '@/modules/system-settings/SystemSettingsModuleView';
+import { ManagerPortalView } from '@/modules/manager-portal/ManagerPortalView';
 
 export function AppShellRoot() {
   const { ready } = useRequireAuth();
+  const user = useAuthStore((s) => s.user);
   const hydrated = useWorkbenchStore((s) => s.hydrated);
   const hydrate = useWorkbenchStore((s) => s.hydrate);
   const activeModule = useWorkbenchStore((s) => s.activeModule);
@@ -34,6 +37,16 @@ export function AppShellRoot() {
         <Loader2 className="h-5 w-5 animate-spin text-accent" />
       </div>
     );
+  }
+
+  // A MANAGER login gets its own minimal shell entirely -- no TopNavigation
+  // module switcher, no Sidebar, no WorkbenchBar of open tabs, same idea as
+  // the Employee Portal. Checked before every activeModule branch below
+  // (including ones a stale localStorage-persisted activeModule could still
+  // point at from a previous login on this browser) so a Manager can never
+  // land on the full Admin/HR Workbench shell. See ManagerPortalView.
+  if (user?.role === 'MANAGER') {
+    return <ManagerPortalView />;
   }
 
   // The Leave module is a single self-contained screen with no sidebar or

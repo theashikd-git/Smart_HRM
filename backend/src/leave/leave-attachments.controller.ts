@@ -51,8 +51,14 @@ export class LeaveAttachmentsController {
     if (!file) throw new BadRequestException('No file was uploaded');
     // Employee self-service accounts may only attach to their own record --
     // whatever employeeId they sent (if any) is ignored in favor of their
-    // linked employee. Staff (ADMIN/HR/MANAGER) must say which employee.
-    const targetEmployeeId = user.role === 'EMPLOYEE' ? user.employeeId : employeeId;
+    // linked employee. Other roles fall back to their own linked employee
+    // too when no employeeId is given -- that covers a Manager attaching a
+    // document while applying for their OWN leave from My Calendar (see
+    // MyLeaveRequestModal, now also used from the Manager Portal), the same
+    // self-service case as an EMPLOYEE login, just via a different Role. An
+    // explicit employeeId still lets staff attach on behalf of someone else
+    // (e.g. HR uploading for an employee who can't do it themselves).
+    const targetEmployeeId = user.role === 'EMPLOYEE' ? user.employeeId : employeeId || user.employeeId;
     if (!targetEmployeeId) {
       throw new BadRequestException(
         user.role === 'EMPLOYEE' ? 'This login is not linked to an Employee record' : 'employeeId is required',
