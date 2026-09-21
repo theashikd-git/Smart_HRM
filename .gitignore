@@ -6,3 +6,6 @@ dist/
 .env.local
 .DS_Store
 backend/uploads/
+
+# Ad-hoc Claude-generated files not part of the app
+Claude outputs/
