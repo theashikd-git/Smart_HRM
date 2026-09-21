@@ -149,6 +149,16 @@ export class RejectLeaveRequestDto {
   reason: string;
 }
 
+// Body for requesting cancellation of an already-APPROVED leave (see
+// LeaveController.cancelMyRequest / LeaveService.requestCancellation) --
+// reason is optional, unlike rejecting a request, since the employee is
+// cancelling their own leave rather than turning someone else's down.
+export class RequestCancellationDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 export class LeaveQueryDto {
   @IsOptional() @IsString() employeeId?: string;
   @IsOptional() @IsString() departmentId?: string;

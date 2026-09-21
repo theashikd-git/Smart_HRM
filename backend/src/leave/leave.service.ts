@@ -357,6 +357,73 @@ export class LeaveService {
   }
 
   // -------------------------------------------------------------------
+  // Leave cancellation approval (cancelling an already-APPROVED leave)
+  // -------------------------------------------------------------------
+
+  /** The tier chain a cancellation walks: the same tiers the department's
+   *  leave approval workflow uses (so whoever approved the leave also signs
+   *  off on cancelling it), plus one implicit final tier -- "HR Admin" --
+   *  appended after them. That last tier isn't a real LeaveApprovalTier row;
+   *  it's resolved by ROLE (any ADMIN or HR login), not by a fixed user, so
+   *  it never goes stale if staffing changes. A department with no
+   *  configured workflow at all gets a chain of just that one HR Admin
+   *  tier. */
+  private getCancellationChain(
+    workflow: { tiers: { order: number; label: string; type: string; approverUserId: string | null }[] } | null,
+  ) {
+    const tiers = workflow?.tiers ?? [];
+    const hrAdminOrder = (tiers.length > 0 ? Math.max(...tiers.map((t) => t.order)) : 0) + 1;
+    return [
+      ...tiers.map((t) => ({ order: t.order, label: t.label, type: t.type, approverUserId: t.approverUserId })),
+      { order: hrAdminOrder, label: 'HR Admin', type: 'HR_ADMIN', approverUserId: null as string | null },
+    ];
+  }
+
+  /** Same shape/purpose as checkTierAuthorization, for the cancellation
+   *  chain instead of the approval chain -- the HR_ADMIN tier resolves by
+   *  role (ADMIN or HR) rather than to one fixed user, so it's checked
+   *  directly here rather than through resolveTierApprover. */
+  private async checkCancellationTierAuthorization(request: any, actorId: string, actorRole: string) {
+    if (request.cancellationCurrentTierOrder == null) {
+      return { allowed: false, resolvedApproverId: null, tier: null as { order: number; label: string; type: string } | null };
+    }
+
+    const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
+    const chain = this.getCancellationChain(workflow);
+    const tier = chain.find((t) => t.order === request.cancellationCurrentTierOrder) ?? null;
+    const canRescue = actorRole === 'ADMIN' || actorRole === 'HR';
+
+    if (!tier) {
+      return { allowed: canRescue, resolvedApproverId: null, tier: null };
+    }
+    if (tier.type === 'HR_ADMIN') {
+      return { allowed: canRescue, resolvedApproverId: null, tier };
+    }
+
+    const resolvedApproverId = await this.resolveTierApprover(tier as any, request.employeeId);
+    return { allowed: (canRescue && resolvedApproverId == null) || resolvedApproverId === actorId, resolvedApproverId, tier };
+  }
+
+  /** Human label for cancellationCurrentTierOrder, the same way
+   *  withTierLabel does for currentTierOrder -- except it also has to
+   *  account for the synthesized final HR Admin tier, which isn't in
+   *  employee.department.approvalWorkflow.tiers. */
+  private withCancellationTierLabel<
+    T extends { cancellationCurrentTierOrder: number | null; cancellationStatus: string | null; employee?: any },
+  >(request: T) {
+    if (request.cancellationCurrentTierOrder == null || request.cancellationStatus !== 'PENDING') {
+      return { ...request, cancellationCurrentTierLabel: null as string | null };
+    }
+    const tiers = request.employee?.department?.approvalWorkflow?.tiers as { order: number; label: string }[] | undefined;
+    const maxOrder = tiers && tiers.length > 0 ? Math.max(...tiers.map((t) => t.order)) : 0;
+    const cancellationCurrentTierLabel =
+      request.cancellationCurrentTierOrder > maxOrder
+        ? 'HR Admin'
+        : tiers?.find((t) => t.order === request.cancellationCurrentTierOrder)?.label ?? null;
+    return { ...request, cancellationCurrentTierLabel };
+  }
+
+  // -------------------------------------------------------------------
   // Requests
   // -------------------------------------------------------------------
 
@@ -539,6 +606,11 @@ export class LeaveService {
       decidedBy: { select: { id: true, fullName: true } },
       decisions: { orderBy: { decidedAt: 'asc' as const }, include: { approver: { select: { id: true, fullName: true } } } },
       attachment: { select: { id: true, fileName: true, fileUrl: true } },
+      cancellationRequestedBy: { select: { id: true, fullName: true } },
+      cancellationDecisions: {
+        orderBy: { decidedAt: 'asc' as const },
+        include: { approver: { select: { id: true, fullName: true } } },
+      },
     };
   }
 
@@ -584,19 +656,29 @@ export class LeaveService {
   }
 
   /** Everything the "Leave Request" screen (Employee Portal / Manager
-   *  Portal) needs for a login that's part of the leave approval workflow:
-   *  every PENDING request currently awaiting a decision from this specific
-   *  User (tagged canDecide: true), UNIONED with every request -- whatever
-   *  its current status -- this User has ever decided on at any tier
-   *  (tagged canDecide: false, since a past decision doesn't grant a say
-   *  over wherever the request has moved on to since). "Mine to decide" is
-   *  resolved the same way checkTierAuthorization does -- there's no single
-   *  Prisma filter for it since SPECIFIC_USER and REPORTING_SUPERIOR tiers
-   *  resolve differently, and it's fine at hospital scale (at most a few
-   *  dozen requests are ever open at once). Callers should treat an empty
-   *  result as "this login isn't part of any leave workflow" and hide the
-   *  screen entirely. */
-  async findMyApprovals(userId: string) {
+   *  Portal / staff Leave module) needs for a login that's part of a leave
+   *  workflow -- BOTH the original approval chain and the cancellation
+   *  chain a request walks after it's approved:
+   *   - canDecide: true      -- a PENDING request currently awaiting a
+   *                              decision from this specific User, on the
+   *                              original approval chain.
+   *   - canDecideCancellation: true -- an APPROVED request with a PENDING
+   *                              cancellationStatus, currently awaiting a
+   *                              decision from this User (or, for the
+   *                              implicit final HR Admin tier, from any
+   *                              ADMIN/HR role -- see
+   *                              checkCancellationTierAuthorization).
+   *  Every request either of those was ever true for stays in the result
+   *  afterwards (flag flips to false) as a permanent record of what this
+   *  login has decided, on either chain. "Mine to decide" is resolved the
+   *  same way checkTierAuthorization/checkCancellationTierAuthorization do
+   *  -- there's no single Prisma filter for it since SPECIFIC_USER and
+   *  REPORTING_SUPERIOR tiers resolve differently, and it's fine at
+   *  hospital scale (at most a few dozen requests are ever open at once).
+   *  Callers should treat an empty result as "this login isn't part of any
+   *  leave workflow" and hide the screen entirely. */
+  async findMyApprovals(userId: string, userRole: string) {
+    // -- Original leave approval ---------------------------------------
     const pending = await this.prisma.leaveRequest.findMany({
       where: { status: 'PENDING', currentTierOrder: { not: null } },
       include: this.includeRelations(),
@@ -618,20 +700,63 @@ export class LeaveService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Pending-mine wins over decided-by-me when a request shows up in both
-    // (this user decided an earlier tier and the current one has also
-    // resolved back to them) -- they can still act on it right now.
+    // -- Leave cancellation approval --------------------------------------
+    const pendingCancellations = await this.prisma.leaveRequest.findMany({
+      where: { status: 'APPROVED', cancellationStatus: 'PENDING', cancellationCurrentTierOrder: { not: null } },
+      include: this.includeRelations(),
+      orderBy: { cancellationRequestedAt: 'asc' },
+    });
+
+    const mineCancellationIds = new Set<string>();
+    for (const request of pendingCancellations) {
+      const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
+      const chain = this.getCancellationChain(workflow);
+      const tier = chain.find((t) => t.order === request.cancellationCurrentTierOrder);
+      if (!tier) continue;
+      if (tier.type === 'HR_ADMIN') {
+        if (userRole === 'ADMIN' || userRole === 'HR') mineCancellationIds.add(request.id);
+        continue;
+      }
+      const resolvedApproverId = await this.resolveTierApprover(tier as any, request.employeeId);
+      if (resolvedApproverId === userId) mineCancellationIds.add(request.id);
+    }
+
+    const decidedCancellationsByMe = await this.prisma.leaveRequest.findMany({
+      where: { cancellationDecisions: { some: { approverId: userId } } },
+      include: this.includeRelations(),
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // -- Merge -------------------------------------------------------------
+    // Pending-mine wins over decided-by-me on its own axis when a request
+    // shows up in both (this user decided an earlier tier and the current
+    // one has also resolved back to them) -- they can still act on it right
+    // now. The two flags are independent: a request can carry a decided-by
+    // -me history on one axis while still being pending-mine on the other.
     const byId = new Map<string, any>();
-    for (const request of decidedByMe) byId.set(request.id, { ...request, canDecide: false });
+    const upsert = (request: any, patch: { canDecide?: boolean; canDecideCancellation?: boolean }) => {
+      const existing = byId.get(request.id);
+      byId.set(request.id, {
+        ...request,
+        canDecide: patch.canDecide ?? existing?.canDecide ?? false,
+        canDecideCancellation: patch.canDecideCancellation ?? existing?.canDecideCancellation ?? false,
+      });
+    };
+
+    for (const request of decidedByMe) upsert(request, { canDecide: false });
+    for (const request of decidedCancellationsByMe) upsert(request, { canDecideCancellation: false });
     for (const request of pending) {
-      if (mineIds.has(request.id)) byId.set(request.id, { ...request, canDecide: true });
+      if (mineIds.has(request.id)) upsert(request, { canDecide: true });
+    }
+    for (const request of pendingCancellations) {
+      if (mineCancellationIds.has(request.id)) upsert(request, { canDecideCancellation: true });
     }
 
     const combined = [...byId.values()].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-    return combined.map((r) => this.withTierLabel(r));
+    return combined.map((r) => this.withCancellationTierLabel(this.withTierLabel(r)));
   }
 
   async findOne(id: string) {
@@ -941,13 +1066,217 @@ export class LeaveService {
     return this.withTierLabel(updated);
   }
 
-  /** Self-service cancel for the Employee portal -- verifies the request
-   *  actually belongs to the caller before delegating to cancel(). */
-  async cancelOwn(employeeId: string, requestId: string, actorUserId: string) {
+  /** Starts the tier-wise cancellation-approval chain for an already
+   *  APPROVED leave: the same tiers that approved it, walked again, ending
+   *  with an implicit HR Admin tier (see getCancellationChain). The leave
+   *  itself stays APPROVED (still on the calendar, still deducted from the
+   *  balance, still marked in attendance) until that chain is fully
+   *  approved -- see approveCancellation. */
+  async requestCancellation(employeeId: string, requestId: string, actorUserId: string, reason?: string) {
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id: requestId },
+      include: this.includeRelations(),
+    });
+    if (!request) throw new NotFoundException('Leave request not found');
+    if (request.employeeId !== employeeId) {
+      throw new ForbiddenException('You can only request cancellation of your own leave requests');
+    }
+    if (request.status !== 'APPROVED') {
+      throw new BadRequestException(`Only an APPROVED leave can have its cancellation requested (current status: ${request.status})`);
+    }
+    if (request.cancellationStatus === 'PENDING') {
+      throw new BadRequestException('A cancellation request is already pending a decision for this leave');
+    }
+    if (startOfDay(new Date()).getTime() >= request.startDate.getTime()) {
+      throw new BadRequestException('This leave has already started -- cancellation can no longer be requested. Contact HR directly.');
+    }
+
+    const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
+    const chain = this.getCancellationChain(workflow);
+    const firstTier = chain[0];
+
+    const updated = await this.prisma.leaveRequest.update({
+      where: { id: requestId },
+      data: {
+        cancellationStatus: 'PENDING',
+        cancellationReason: reason,
+        cancellationCurrentTierOrder: firstTier.order,
+        cancellationRequestedAt: new Date(),
+        cancellationRequestedById: actorUserId,
+      },
+      include: this.includeRelations(),
+    });
+
+    await this.auditService.log({
+      userId: actorUserId,
+      action: 'LEAVE_CANCELLATION_REQUESTED',
+      entity: 'LeaveRequest',
+      entityId: requestId,
+      details: `${updated.employee.fullName}: cancellation requested for ${updated.leaveType.name}, ${formatDateRange(updated.startDate, updated.endDate)}`,
+    });
+
+    // The implicit HR Admin tier has no single resolved user to notify --
+    // every ADMIN/HR login sees it via the staff Leave screen regardless.
+    if (firstTier.type !== 'HR_ADMIN') {
+      await this.notifyTierApprover(firstTier as any, updated.employeeId, updated.employee.fullName, updated.leaveType.name);
+    }
+
+    return this.withCancellationTierLabel(this.withTierLabel(updated));
+  }
+
+  /** Approves the current tier of a pending cancellation. Advances to the
+   *  next tier same as approve() does for the original chain; approving
+   *  the final tier (always HR Admin) actually cancels the leave and
+   *  reverses its balance/attendance side effects. */
+  async approveCancellation(id: string, actorId: string, actorRole: string) {
+    const request = await this.findOne(id);
+    if (request.cancellationStatus !== 'PENDING') {
+      throw new BadRequestException(
+        `No cancellation is pending a decision for this request (cancellationStatus: ${request.cancellationStatus ?? 'none'})`,
+      );
+    }
+
+    const { allowed, resolvedApproverId, tier } = await this.checkCancellationTierAuthorization(request, actorId, actorRole);
+    if (!allowed) {
+      const waitingOn = tier
+        ? resolvedApproverId
+          ? tier.label
+          : `${tier.label} (no approver currently resolved -- ask an Admin or HR to step in)`
+        : 'the assigned approver';
+      throw new ForbiddenException(`This cancellation is awaiting a decision from ${waitingOn}, not you.`);
+    }
+
+    const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
+    const chain = this.getCancellationChain(workflow);
+    const nextTier = tier ? chain.find((t) => t.order > tier.order) : undefined;
+
+    if (tier) {
+      await this.prisma.leaveCancellationDecision.create({
+        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'APPROVED' },
+      });
+    }
+
+    if (nextTier) {
+      const updated = await this.prisma.leaveRequest.update({
+        where: { id },
+        data: { cancellationCurrentTierOrder: nextTier.order },
+        include: this.includeRelations(),
+      });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'LEAVE_CANCELLATION_TIER_APPROVED',
+        entity: 'LeaveRequest',
+        entityId: id,
+        details: `${tier?.label ?? 'A tier'} approved the cancellation -- now awaiting ${nextTier.label}`,
+      });
+      await this.notificationsService.createForEmployee(
+        updated.employeeId,
+        'LEAVE',
+        'Leave cancellation update',
+        `${tier?.label ?? 'A reviewer'} approved your cancellation request for ${updated.leaveType.name} -- now awaiting ${nextTier.label}.`,
+      );
+      if (nextTier.type !== 'HR_ADMIN') {
+        await this.notifyTierApprover(nextTier as any, updated.employeeId, updated.employee.fullName, updated.leaveType.name);
+      }
+      return this.withCancellationTierLabel(this.withTierLabel(updated));
+    }
+
+    // Final tier (always HR Admin) -- the cancellation itself is now fully
+    // approved: actually cancel the leave and reverse its side effects.
+    await this.reverseApprovalSideEffects(request);
+    const updated = await this.prisma.leaveRequest.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        currentTierOrder: null,
+        cancellationStatus: 'APPROVED',
+        cancellationCurrentTierOrder: null,
+      },
+      include: this.includeRelations(),
+    });
+    await this.auditService.log({
+      userId: actorId,
+      action: 'LEAVE_CANCELLATION_APPROVED',
+      entity: 'LeaveRequest',
+      entityId: id,
+      details: `${updated.employee.fullName}: cancellation of ${updated.leaveType.name} fully approved${tier ? ` (final approval at ${tier.label})` : ''}`,
+    });
+    await this.notificationsService.createForEmployee(
+      updated.employeeId,
+      'LEAVE',
+      'Leave cancellation approved',
+      `Your cancellation request for ${updated.leaveType.name} (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.`,
+    );
+    return this.withCancellationTierLabel(this.withTierLabel(updated));
+  }
+
+  /** Rejects the current tier of a pending cancellation. A reject at ANY
+   *  tier stops the whole cancellation chain -- the original leave stays
+   *  untouched (still APPROVED) and the employee may request cancellation
+   *  again later, same as any fresh request (still subject to the
+   *  before-the-leave-starts rule). */
+  async rejectCancellation(id: string, dto: RejectLeaveRequestDto, actorId: string, actorRole: string) {
+    const request = await this.findOne(id);
+    if (request.cancellationStatus !== 'PENDING') {
+      throw new BadRequestException(
+        `No cancellation is pending a decision for this request (cancellationStatus: ${request.cancellationStatus ?? 'none'})`,
+      );
+    }
+
+    const { allowed, resolvedApproverId, tier } = await this.checkCancellationTierAuthorization(request, actorId, actorRole);
+    if (!allowed) {
+      const waitingOn = tier
+        ? resolvedApproverId
+          ? tier.label
+          : `${tier.label} (no approver currently resolved -- ask an Admin or HR to step in)`
+        : 'the assigned approver';
+      throw new ForbiddenException(`This cancellation is awaiting a decision from ${waitingOn}, not you.`);
+    }
+
+    if (tier) {
+      await this.prisma.leaveCancellationDecision.create({
+        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'REJECTED', reason: dto.reason },
+      });
+    }
+
+    const updated = await this.prisma.leaveRequest.update({
+      where: { id },
+      data: { cancellationStatus: 'REJECTED', cancellationCurrentTierOrder: null },
+      include: this.includeRelations(),
+    });
+
+    await this.auditService.log({
+      userId: actorId,
+      action: 'LEAVE_CANCELLATION_REJECTED',
+      entity: 'LeaveRequest',
+      entityId: id,
+      details: tier ? `Cancellation rejected at ${tier.label}: ${dto.reason}` : dto.reason,
+    });
+
+    await this.notificationsService.createForEmployee(
+      updated.employeeId,
+      'LEAVE',
+      'Leave cancellation rejected',
+      `Your cancellation request for ${updated.leaveType.name} was rejected.${dto.reason ? ` Reason: ${dto.reason}` : ''} Your leave remains approved.`,
+    );
+
+    return this.withCancellationTierLabel(this.withTierLabel(updated));
+  }
+
+  /** Self-service cancel for the Employee/Manager portal -- verifies the
+   *  request actually belongs to the caller, then either withdraws it
+   *  outright (still PENDING -- it never took effect, so there's nothing to
+   *  approve) or starts the tier-wise cancellation-approval chain (already
+   *  APPROVED -- see requestCancellation). */
+  async cancelOwn(employeeId: string, requestId: string, actorUserId: string, reason?: string) {
     const request = await this.prisma.leaveRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new NotFoundException('Leave request not found');
     if (request.employeeId !== employeeId) {
       throw new ForbiddenException('You can only cancel your own leave requests');
+    }
+    if (request.status === 'APPROVED') {
+      return this.requestCancellation(employeeId, requestId, actorUserId, reason);
     }
     return this.cancel(requestId, actorUserId);
   }

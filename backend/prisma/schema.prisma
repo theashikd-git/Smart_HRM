@@ -176,6 +176,18 @@ enum LeaveRequestStatus {
   CANCELLED
 }
 
+// Tracks a cancellation request against an already-APPROVED LeaveRequest --
+// deliberately separate from LeaveRequestStatus (which stays 'APPROVED' the
+// whole time a cancellation is being decided) so the leave keeps showing as
+// active everywhere (calendar, attendance, balances) until the cancellation
+// itself is fully approved. Only then does LeaveRequest.status flip to
+// CANCELLED and the balance/attendance side effects reverse.
+enum LeaveCancellationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LeaveSession {
   FULL_DAY
   FIRST_HALF
@@ -211,16 +223,18 @@ model User {
   mustChangePassword Boolean @default(false)
 
   auditLogs AuditLog[]
-  leaveRequestsApplied LeaveRequest[] @relation("LeaveAppliedBy")
-  leaveRequestsDecided LeaveRequest[] @relation("LeaveDecidedBy")
+  leaveRequestsApplied       LeaveRequest[] @relation("LeaveAppliedBy")
+  leaveRequestsDecided       LeaveRequest[] @relation("LeaveDecidedBy")
+  leaveCancellationRequested LeaveRequest[] @relation("LeaveCancellationRequester")
 
   // One login account per Employee at most -- set when this User IS that
   // Employee (an EMPLOYEE self-service account, or a staff member who is
   // also an Employee in the org chart).
   employeeId String?  @unique
   employee   Employee? @relation(fields: [employeeId], references: [id])
-  tierAssignments LeaveApprovalTier[]     @relation("LeaveTierApprover")
-  tierDecisions   LeaveApprovalDecision[] @relation("LeaveTierDecisionApprover")
+  tierAssignments       LeaveApprovalTier[]         @relation("LeaveTierApprover")
+  tierDecisions         LeaveApprovalDecision[]     @relation("LeaveTierDecisionApprover")
+  cancellationDecisions LeaveCancellationDecision[] @relation("LeaveCancellationDecisionApprover")
   notifications   Notification[]
 
   @@map("users")
@@ -663,6 +677,22 @@ model LeaveRequest {
   // order of the LeaveApprovalTier currently holding this request.
   currentTierOrder Int?
 
+  // Cancelling an already-APPROVED leave is its own mini approval chain --
+  // the same department tiers that approved the leave, walked again, with
+  // an implicit final "HR Admin" tier appended (see
+  // LeaveService.getCancellationChain). cancellationStatus is null until
+  // the employee actually requests a cancellation; PENDING while it's being
+  // decided; APPROVED once fully approved (at which point status flips to
+  // CANCELLED); REJECTED if any tier turns it down (the leave stays
+  // APPROVED and the employee may request again).
+  cancellationStatus           LeaveCancellationStatus?
+  cancellationReason           String?
+  cancellationCurrentTierOrder Int?
+  cancellationRequestedAt      DateTime?
+  cancellationRequestedById    String?
+  cancellationRequestedBy      User?                       @relation("LeaveCancellationRequester", fields: [cancellationRequestedById], references: [id])
+  cancellationDecisions        LeaveCancellationDecision[]
+
   @@index([employeeId, status])
   @@index([startDate, endDate])
   @@map("leave_requests")
@@ -715,6 +745,26 @@ model LeaveApprovalDecision {
   approver User?        @relation("LeaveTierDecisionApprover", fields: [approverId], references: [id])
 
   @@map("leave_approval_decisions")
+}
+
+// One row per tier decided on a leave CANCELLATION request -- structurally
+// identical to LeaveApprovalDecision, kept as its own table (rather than
+// reusing that one with a "phase" flag) so a request's original approval
+// trail and its cancellation trail never intermix in either table.
+model LeaveCancellationDecision {
+  id         String             @id @default(uuid())
+  requestId  String
+  tierOrder  Int
+  tierLabel  String
+  approverId String?
+  decision   LeaveDecisionType
+  reason     String?
+  decidedAt  DateTime           @default(now())
+
+  request  LeaveRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver User?        @relation("LeaveCancellationDecisionApprover", fields: [approverId], references: [id])
+
+  @@map("leave_cancellation_decisions")
 }
 
 // ---------------------------------------------------------------------------

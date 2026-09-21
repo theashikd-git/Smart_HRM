@@ -11,6 +11,7 @@ import {
   InitializeBalancesDto,
   LeaveQueryDto,
   RejectLeaveRequestDto,
+  RequestCancellationDto,
 } from './dto/leave.dto';
 import { SelfCreateLeaveRequestDto } from './dto/self-leave-request.dto';
 
@@ -66,6 +67,22 @@ export class LeaveController {
   @Roles('ADMIN', 'HR', 'MANAGER')
   cancel(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.cancel(id, user.id);
+  }
+
+  // -- Leave cancellation approval (cancelling an already-APPROVED leave) --
+  // Same "no @Roles" reasoning as approve/reject above: who may decide the
+  // CURRENT tier of a pending cancellation is resolved inside
+  // LeaveService.checkCancellationTierAuthorization, not by login role --
+  // except the chain's implicit final tier, which is exactly role-gated to
+  // ADMIN/HR (there's no fixed person to name for "HR Admin").
+  @Patch('requests/:id/approve-cancellation')
+  approveCancellation(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.approveCancellation(id, user.id, user.role);
+  }
+
+  @Patch('requests/:id/reject-cancellation')
+  rejectCancellation(@Param('id') id: string, @Body() dto: RejectLeaveRequestDto, @CurrentUser() user: any) {
+    return this.service.rejectCancellation(id, dto, user.id, user.role);
   }
 
   // -- Balances -------------------------------------------------------------
@@ -136,7 +153,7 @@ export class LeaveController {
   // without needing the separate Leave module/staff approvals screen.
   @Get('my/approvals')
   findMyApprovals(@CurrentUser() user: any) {
-    return this.service.findMyApprovals(user.id);
+    return this.service.findMyApprovals(user.id, user.role);
   }
 
   @Get('my/balances')
@@ -161,10 +178,13 @@ export class LeaveController {
     return this.service.createForSelf(user.employeeId, user.id, dto);
   }
 
+  // Body is optional -- only meaningful when the leave being cancelled is
+  // already APPROVED (see LeaveService.cancelOwn/requestCancellation);
+  // withdrawing a still-PENDING request ignores it entirely.
   @Patch('my/requests/:id/cancel')
-  cancelMyRequest(@Param('id') id: string, @CurrentUser() user: any) {
+  cancelMyRequest(@Param('id') id: string, @Body() dto: RequestCancellationDto | undefined, @CurrentUser() user: any) {
     this.assertLinkedEmployee(user);
-    return this.service.cancelOwn(user.employeeId, id, user.id);
+    return this.service.cancelOwn(user.employeeId, id, user.id, dto?.reason);
   }
 
   private assertLinkedEmployee(user: any) {
