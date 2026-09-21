@@ -84,9 +84,7 @@ export function PersonnelDashboard() {
               <div className="min-w-0 flex-1">
                 <MyCalendarCard />
               </div>
-              <div className="w-full shrink-0 md:w-96">
-                <RealTimeMonitor />
-              </div>
+              <RealTimeMonitor />
             </div>
           )}
 
