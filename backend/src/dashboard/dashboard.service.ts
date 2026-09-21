@@ -149,6 +149,12 @@ export class DashboardService {
         fullName: true,
         employeeCode: true,
         photo: true,
+        // Not used by the attendance list itself -- carried along so the
+        // Manager Portal's "Leave on Behalf" employee picker (reusing this
+        // same team list) has what NewLeaveRequestModal's Maternity Leave
+        // eligibility hint needs, without a second round-trip.
+        gender: true,
+        joiningDate: true,
         attendanceRecords: {
           where: { date: { gte: today, lt: tomorrow } },
           select: { checkIn: true, checkOut: true, status: true },
@@ -165,6 +171,8 @@ export class DashboardService {
         fullName: e.fullName,
         employeeCode: e.employeeCode,
         photo: e.photo,
+        gender: e.gender,
+        joiningDate: e.joiningDate,
         checkIn: record?.checkIn ?? null,
         checkOut: record?.checkOut ?? null,
         status: record?.status ?? 'ABSENT',

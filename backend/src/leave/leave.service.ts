@@ -655,6 +655,23 @@ export class LeaveService {
     return items.map((r) => this.withTierLabel(r));
   }
 
+  /** Every leave request this login applied FOR SOMEONE ELSE (never for
+   *  themselves) -- powers the Manager Portal's "Leave on Behalf" tab,
+   *  tracking what a department head has filed on behalf of a team member
+   *  who couldn't file it themselves. Most recent first, unpaginated (a
+   *  department head files for at most a handful of people). */
+  async findAppliedOnBehalf(userId: string, ownEmployeeId?: string | null) {
+    const items = await this.prisma.leaveRequest.findMany({
+      where: {
+        appliedById: userId,
+        ...(ownEmployeeId ? { employeeId: { not: ownEmployeeId } } : {}),
+      },
+      include: this.includeRelations(),
+      orderBy: { createdAt: 'desc' },
+    });
+    return items.map((r) => this.withCancellationTierLabel(this.withTierLabel(r)));
+  }
+
   /** Everything the "Leave Request" screen (Employee Portal / Manager
    *  Portal / staff Leave module) needs for a login that's part of a leave
    *  workflow -- BOTH the original approval chain and the cancellation

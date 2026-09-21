@@ -137,6 +137,16 @@ export class LeaveController {
     return this.service.findAllForEmployee(user.employeeId);
   }
 
+  // Not scoped to a linked Employee record (unlike the rest of this block)
+  // -- filing leave on behalf of a team member is about the User account,
+  // same reasoning as findMyApprovals above. Works for a staff-only
+  // ADMIN/HR/MANAGER login with no Employee record just as well as a
+  // Manager Portal login that also happens to be an Employee.
+  @Get('my-team/on-behalf')
+  findAppliedOnBehalf(@CurrentUser() user: any) {
+    return this.service.findAppliedOnBehalf(user.id, user.employeeId);
+  }
+
   // No @Roles('EMPLOYEE') on any route in this block, same reasoning as
   // findMyRequests above -- My Calendar and Apply Leave are now also used
   // from the Manager Portal (see ManagerDashboard), not just the Employee
