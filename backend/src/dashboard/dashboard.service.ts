@@ -106,13 +106,47 @@ export class DashboardService {
   }
 
   /**
-   * "My Team" panel for a department head's dashboard -- only returns data
-   * when the signed-in user's linked Employee is set as headEmployeeId on
-   * one or more departments (see Department.manager in schema.prisma).
-   * Deliberately keyed off that, not off the User's Role, since being a
-   * department's Manager is a data fact (who's set as its head), not a
-   * permission level -- an ADMIN or MANAGING_DIRECTOR set as a department
-   * head sees this too, and a MANAGER not set as anyone's head does not.
+   * Department ids (+ names) this login "leads", for every My Team-style
+   * dashboard panel: departments where their linked Employee is the
+   * configured Department Manager (Department.headEmployeeId), UNION
+   * departments whose active leave approval workflow names this login (by
+   * User id) as a fixed SPECIFIC_USER tier approver -- e.g. a Supervisor
+   * tier (see LeaveController's leave workflow setup). REPORTING_SUPERIOR
+   * tiers resolve to the department's Manager at decision time (see
+   * LeaveService.resolveTierApprover), so they're already covered by the
+   * headEmployeeId half of this union and aren't queried again here.
+   */
+  private async resolveLedDepartments(userId: string, employeeId: string | null) {
+    const [headed, tiered] = await Promise.all([
+      employeeId
+        ? this.prisma.department.findMany({
+            where: { headEmployeeId: employeeId },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([] as { id: string; name: string }[]),
+      this.prisma.leaveApprovalTier.findMany({
+        where: { type: 'SPECIFIC_USER', approverUserId: userId, workflow: { isActive: true } },
+        select: { workflow: { select: { department: { select: { id: true, name: true } } } } },
+      }),
+    ]);
+
+    const byId = new Map<string, { id: string; name: string }>();
+    headed.forEach((d) => byId.set(d.id, d));
+    tiered.forEach((t) => {
+      const dept = t.workflow.department;
+      if (!byId.has(dept.id)) byId.set(dept.id, dept);
+    });
+
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * "My Team" panel for a department-leading login's dashboard -- only
+   * returns data when the signed-in login leads one or more departments
+   * (see resolveLedDepartments: department head OR a named leave-approval
+   * tier). Deliberately keyed off those data facts, not the User's Role --
+   * an ADMIN or MANAGING_DIRECTOR set as a department head or tier approver
+   * sees this too, and a MANAGER/SUPERVISOR named nowhere does not.
    */
   async myTeamAttendance(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -124,11 +158,7 @@ export class DashboardService {
       return { isManager: false, departments: [], members: [] };
     }
 
-    const departments = await this.prisma.department.findMany({
-      where: { headEmployeeId: user.employeeId },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    });
+    const departments = await this.resolveLedDepartments(userId, user.employeeId);
 
     if (departments.length === 0) {
       return { isManager: false, departments: [], members: [] };
@@ -191,7 +221,7 @@ export class DashboardService {
    * Every APPROVED leave for this department head's team that's current or
    * still upcoming (endDate hasn't passed yet) -- so a request shows up
    * here the moment it's approved, not just on the day it actually starts.
-   * Same department-head gating (Department.headEmployeeId) as
+   * Same department-lead gating (see resolveLedDepartments) as
    * myTeamAttendance above. Deliberately its own query rather than reusing
    * myTeamAttendance's per-day ON_LEAVE attendance status, which only ever
    * reflects TODAY -- a manager approving someone's leave for next month
@@ -207,10 +237,7 @@ export class DashboardService {
       return { isManager: false, leaves: [] };
     }
 
-    const departments = await this.prisma.department.findMany({
-      where: { headEmployeeId: user.employeeId },
-      select: { id: true },
-    });
+    const departments = await this.resolveLedDepartments(userId, user.employeeId);
 
     if (departments.length === 0) {
       return { isManager: false, leaves: [] };
@@ -260,8 +287,8 @@ export class DashboardService {
   /**
    * Live feed for the "Real-Time Monitor" panel -- raw punch events (one row
    * per check-in/check-out), not the daily-aggregated AttendanceRecord used
-   * by myTeamAttendance/summary. Same department-head gating as
-   * myTeamAttendance above.
+   * by myTeamAttendance/summary. Same department-lead gating (see
+   * resolveLedDepartments) as myTeamAttendance above.
    */
   async myTeamRecentPunches(userId: string, limit = 30) {
     const user = await this.prisma.user.findUnique({
@@ -273,10 +300,7 @@ export class DashboardService {
       return { isManager: false, punches: [] };
     }
 
-    const departments = await this.prisma.department.findMany({
-      where: { headEmployeeId: user.employeeId },
-      select: { id: true },
-    });
+    const departments = await this.resolveLedDepartments(userId, user.employeeId);
 
     if (departments.length === 0) {
       return { isManager: false, punches: [] };
