@@ -180,6 +180,76 @@ export class DashboardService {
   }
 
   /**
+   * Every APPROVED leave for this department head's team that's current or
+   * still upcoming (endDate hasn't passed yet) -- so a request shows up
+   * here the moment it's approved, not just on the day it actually starts.
+   * Same department-head gating (Department.headEmployeeId) as
+   * myTeamAttendance above. Deliberately its own query rather than reusing
+   * myTeamAttendance's per-day ON_LEAVE attendance status, which only ever
+   * reflects TODAY -- a manager approving someone's leave for next month
+   * should see it land here right away.
+   */
+  async myTeamOnLeave(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { employeeId: true },
+    });
+
+    if (!user?.employeeId) {
+      return { isManager: false, leaves: [] };
+    }
+
+    const departments = await this.prisma.department.findMany({
+      where: { headEmployeeId: user.employeeId },
+      select: { id: true },
+    });
+
+    if (departments.length === 0) {
+      return { isManager: false, leaves: [] };
+    }
+
+    const today = startOfDay(new Date());
+
+    const leaves = await this.prisma.leaveRequest.findMany({
+      where: {
+        status: 'APPROVED',
+        endDate: { gte: today },
+        employee: {
+          departmentId: { in: departments.map((d) => d.id) },
+          id: { not: user.employeeId }, // the department head isn't part of their own "team" list
+        },
+      },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        session: true,
+        totalDays: true,
+        employee: { select: { id: true, fullName: true, employeeCode: true, photo: true } },
+        leaveType: { select: { id: true, name: true, color: true } },
+      },
+      orderBy: { startDate: 'asc' },
+    });
+
+    return {
+      isManager: true,
+      leaves: leaves.map((l) => ({
+        id: l.id,
+        employeeId: l.employee.id,
+        fullName: l.employee.fullName,
+        employeeCode: l.employee.employeeCode,
+        photo: l.employee.photo,
+        leaveTypeName: l.leaveType.name,
+        leaveTypeColor: l.leaveType.color,
+        startDate: l.startDate,
+        endDate: l.endDate,
+        session: l.session,
+        totalDays: l.totalDays,
+      })),
+    };
+  }
+
+  /**
    * Live feed for the "Real-Time Monitor" panel -- raw punch events (one row
    * per check-in/check-out), not the daily-aggregated AttendanceRecord used
    * by myTeamAttendance/summary. Same department-head gating as

@@ -30,6 +30,11 @@ export class DashboardController {
     return this.dashboardService.myTeamRecentPunches(user.id);
   }
 
+  @Get('my-team-on-leave')
+  myTeamOnLeave(@CurrentUser() user: any) {
+    return this.dashboardService.myTeamOnLeave(user.id);
+  }
+
   @Get('weekly-attendance')
   weeklyAttendance() {
     return this.dashboardService.weeklyAttendance();
