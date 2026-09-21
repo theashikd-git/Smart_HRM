@@ -53,9 +53,10 @@ const EMPTY_FORM = {
   deviceUserId: '',
   leaveCategoryId: '',
   trialMonths: '',
-  // Cosmetic label (Employee/Manager/Supervisor -> still an Employee ID
-  // login) unless Administrator, which provisions/uses a real staff login
-  // instead -- see the EmployeeRole type in @/types for the full story.
+  // The real system Role this login gets (Employee/Manager/Supervisor/
+  // Managing Director -> Employee ID login with that Role; Administrator
+  // -> a separate staff login instead) -- see the EmployeeRole type in
+  // @/types for the full story.
   employeeRole: 'EMPLOYEE',
   staffUsername: '',
   staffPassword: '',

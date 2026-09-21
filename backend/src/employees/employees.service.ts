@@ -86,11 +86,16 @@ export class EmployeesService {
     this.deviceSyncService.pushNewEmployee(employee.id).catch(() => undefined);
 
     // Provision this employee's login based on Employee Role:
-    // EMPLOYEE/MANAGER/SUPERVISOR (or omitted, same default as before this
-    // field existed) get the ordinary self-service login -- username and
-    // default password are both their Employee ID (see UsersService.create's
-    // EMPLOYEE branch), with mustChangePassword set so they're forced to
-    // change it on first login. ADMINISTRATOR instead gets a staff login
+    // EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR (or omitted, defaults to
+    // EMPLOYEE) all get an Employee ID login -- username and default
+    // password are both their Employee ID (see UsersService.create's
+    // EMPLOYEE_ID_LOGIN_ROLES branch), with mustChangePassword set so
+    // they're forced to change it on first login. Crucially, the login's
+    // real Role is set to this exact value, not hardcoded to EMPLOYEE -- a
+    // brand-new employee whose Employee Role is Manager immediately gets
+    // real Manager access via their Employee ID, same as if that access had
+    // instead been granted from System Settings > Add Staff User with a
+    // separate username/password. ADMINISTRATOR instead gets a staff login
     // (role ADMIN) with the username/password HR entered on this form --
     // already validated above, so staffUsername/staffPassword are safe to
     // use here. Never let a login-provisioning hiccup turn into a failed
@@ -100,7 +105,7 @@ export class EmployeesService {
     const loginPayload =
       dto.employeeRole === 'ADMINISTRATOR'
         ? { role: 'ADMIN' as any, username: staffUsername, fullName: employee.fullName, password: staffPassword, employeeId: employee.id }
-        : { role: 'EMPLOYEE' as any, employeeId: employee.id };
+        : { role: (dto.employeeRole ?? 'EMPLOYEE') as any, employeeId: employee.id };
     await this.usersService.create(loginPayload, actorId).catch((err) => {
       this.logger.error(`Failed to auto-provision login for employee ${employee.id}: ${err?.message ?? err}`);
     });
@@ -201,8 +206,9 @@ export class EmployeesService {
     if (dto.employeeRole === 'ADMINISTRATOR') {
       const existingLogin = await this.prisma.user.findUnique({ where: { employeeId: id } });
       // 'Already a staff login' means specifically ADMIN here, matching
-      // UsersService.syncLoginForEmployeeRole -- a Manager/Supervisor/HR/
-      // Managing Director role set via System Settings is still an
+      // UsersService.syncLoginForEmployeeRole -- a Manager/Supervisor/
+      // Managing Director role (granted right here via Employee Role, or
+      // separately via System Settings > Add Staff User) is still an
       // Employee ID login and still needs fresh Admin credentials to
       // convert, same as a plain Employee ID login would.
       const alreadyStaffLogin = existingLogin && existingLogin.role === 'ADMIN';
@@ -253,9 +259,10 @@ export class EmployeesService {
     }
 
     // Keep this employee's login in sync with Employee Role, if it was
-    // included on this save -- converts between the Employee ID login and
-    // an Administrator staff login as needed (see
-    // UsersService.syncLoginForEmployeeRole). Deliberately not
+    // included on this save -- sets the login's real Role to match
+    // (Manager/Supervisor/Managing Director/Employee), converting between
+    // the Employee ID login and an Administrator staff login as needed
+    // (see UsersService.syncLoginForEmployeeRole). Deliberately not
     // caught-and-logged like the device/leave-balance calls above: a
     // missing-credentials failure here needs to reach HR immediately, not
     // be silently swallowed, since it means the login change didn't happen.

@@ -113,10 +113,26 @@ const ROLE_LABELS: Record<string, string> = {
   EMPLOYEE: 'Employee (self-service)',
 };
 
-// Roles that sign in with their Employee ID (no separate username/password
-// to collect -- see backend UsersService.EMPLOYEE_ID_LOGIN_ROLES). Only
-// Administrator keeps the traditional username/password form below.
-const EMPLOYEE_ID_LOGIN_ROLES = new Set(['EMPLOYEE', 'MANAGER', 'SUPERVISOR', 'HR', 'MANAGING_DIRECTOR']);
+// Add Staff User always collects a real username/password, for every
+// role -- Employee ID logins (including Manager/Supervisor/Managing
+// Director access) are granted from the Add/Edit Employee form's Employee
+// Role field instead (see backend UsersService.EMPLOYEE_ID_LOGIN_ROLES).
+// Role alone can't tell the two apart here (a Manager might be either
+// kind), so this table tells them apart by the synthetic placeholder email
+// an Employee ID login gets (see backend UsersService.create) -- a real
+// username never matches that pattern.
+const EMPLOYEE_LOGIN_EMAIL_SUFFIX = '@employee.smarthrm.local';
+function isEmployeeIdLogin(u: { username: string }): boolean {
+  return u.username.endsWith(EMPLOYEE_LOGIN_EMAIL_SUFFIX);
+}
+
+const STAFF_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'ADMIN', label: 'Administrator' },
+  { value: 'MANAGING_DIRECTOR', label: 'Managing Director' },
+  { value: 'HR', label: 'HR Officer' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'SUPERVISOR', label: 'Supervisor' },
+];
 
 const EMPTY_FORM = { role: 'HR' as string, username: '', fullName: '', password: '', employeeId: '' };
 const EMPTY_EDIT_FORM = { fullName: '', role: 'HR' as string, isActive: true, password: '', employeeId: '' };
@@ -134,43 +150,46 @@ function UserManagement() {
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
 
-  const isEmployeeAccount = EMPLOYEE_ID_LOGIN_ROLES.has(form.role);
-  const selectedEmployee = employees?.items.find((e) => e.id === form.employeeId);
-  const canSubmit = isEmployeeAccount
-    ? !!form.employeeId
-    : !!form.username && !!form.fullName && form.password.length >= 6;
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
 
-  // Searchable by name or Employee ID -- used both for the "Add User" form's
-  // Employee picker and the "Link to Employee" field so a staff account can
-  // be tied to its Employee record (which is what makes that person findable
-  // by Employee ID elsewhere, e.g. picking a leave approval tier's approver).
+  const canSubmit = !!form.username && !!form.fullName && form.password.length >= 6;
+
+  // Searchable by name or Employee ID -- for the "Link to Employee" field,
+  // optionally tying a staff account to its Employee record so that person
+  // is findable by Employee ID elsewhere (e.g. picking a leave approval
+  // tier's approver).
   const employeeOptions = (employees?.items ?? []).map((emp) => ({
     id: emp.id,
     label: emp.fullName,
     sublabel: emp.employeeCode,
   }));
 
+  const filteredUsers = (users ?? []).filter((u) => {
+    if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      u.fullName.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      (u.employee?.employeeCode ?? '').toLowerCase().includes(q) ||
+      (u.employee?.fullName ?? '').toLowerCase().includes(q)
+    );
+  });
+
   async function handleCreate() {
     try {
-      await createUser.mutateAsync(
-        isEmployeeAccount
-          ? { role: form.role as any, employeeId: form.employeeId }
-          : {
-              role: form.role as any,
-              username: form.username,
-              fullName: form.fullName,
-              password: form.password,
-              employeeId: form.employeeId || undefined,
-            },
-      );
-      if (isEmployeeAccount && selectedEmployee) {
-        toast.success(
-          `Login created for ${selectedEmployee.fullName}. Employee ID and password are both "${selectedEmployee.employeeCode}".`,
-          { duration: 8000 },
-        );
-      } else {
-        toast.success('User created');
-      }
+      // Add Staff User always creates a traditional username/password
+      // login, whatever the role -- Manager/Supervisor/Managing Director
+      // access via Employee ID is granted from Add/Edit Employee instead.
+      await createUser.mutateAsync({
+        role: form.role as any,
+        username: form.username,
+        fullName: form.fullName,
+        password: form.password,
+        employeeId: form.employeeId || undefined,
+      });
+      toast.success('Staff user created');
       setModalOpen(false);
       setForm(EMPTY_FORM);
     } catch (err) {
@@ -198,12 +217,14 @@ function UserManagement() {
         role: editForm.role,
         isActive: editForm.isActive,
         ...(editForm.password ? { password: editForm.password } : {}),
-        // Role and the Employee link are both editable regardless of the
-        // account's current role -- this is how an existing self-service
-        // (EMPLOYEE) login gets promoted to a staff role (e.g. Manager) so
-        // that same person becomes pickable as a leave approver, without
-        // having to create a second account for them (an Employee can only
-        // ever be linked to one login).
+        // Role is editable regardless of login type -- this updates the
+        // Role on whatever login this account already has (staff username
+        // or Employee ID), it never converts one into the other. Changing
+        // Role for an Employee ID login is normally done from Add/Edit
+        // Employee's Employee Role field instead, which keeps that field
+        // and this account's Role in step; editing it here directly is
+        // still possible for edge cases (see the "Link to Employee" hint
+        // below), it just won't update that Employee Role label to match.
         employeeId: editForm.employeeId,
       });
       toast.success('User updated');
@@ -227,7 +248,7 @@ function UserManagement() {
     <Card className="mt-4">
       <CardHeader
         title="System Users"
-        subtitle="Administrator accounts use a separate username & password -- every other role signs in with the person's Employee ID"
+        subtitle="Every login account -- staff accounts made here, and Employee ID logins made from Add/Edit Employee"
         action={
           <Button
             size="sm"
@@ -236,10 +257,35 @@ function UserManagement() {
               setModalOpen(true);
             }}
           >
-            <Plus className="h-3.5 w-3.5" /> Add User
+            <Plus className="h-3.5 w-3.5" /> Add Staff User
           </Button>
         }
       />
+      <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, username, or Employee ID…"
+          className="h-8 max-w-xs text-xs"
+        />
+        <Select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="h-8 w-auto max-w-[170px] text-xs"
+        >
+          <option value="ALL">All Roles</option>
+          {Object.entries(ROLE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        {(search || roleFilter !== 'ALL') && (
+          <span className="text-xs text-text-muted">
+            {filteredUsers.length} of {users?.length ?? 0}
+          </span>
+        )}
+      </div>
       <Table>
         <Thead>
           <tr>
@@ -252,11 +298,11 @@ function UserManagement() {
           </tr>
         </Thead>
         <Tbody>
-          {users?.map((u) => (
+          {filteredUsers.map((u) => (
             <Tr key={u.id}>
               <Td className="font-medium">{u.fullName}</Td>
               <Td className="text-xs font-mono">
-                {EMPLOYEE_ID_LOGIN_ROLES.has(u.role) ? u.employee?.employeeCode ?? '—' : u.username}
+                {isEmployeeIdLogin(u) ? u.employee?.employeeCode ?? '—' : u.username}
               </Td>
               <Td>
                 <Badge>{ROLE_LABELS[u.role] ?? u.role}</Badge>
@@ -289,13 +335,16 @@ function UserManagement() {
       </Table>
 
       {!isLoading && (users?.length ?? 0) === 0 && (
-        <EmptyState title="No system users yet" subtitle="Add the first account to get started." />
+        <EmptyState title="No system users yet" subtitle="Add the first staff account to get started." />
+      )}
+      {!isLoading && (users?.length ?? 0) > 0 && filteredUsers.length === 0 && (
+        <EmptyState title="No matching users" subtitle="Try a different search term or role filter." />
       )}
 
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Add System User"
+        title="Add Staff User"
         size="sm"
         footer={
           <>
@@ -303,72 +352,47 @@ function UserManagement() {
               Cancel
             </Button>
             <Button loading={createUser.isPending} onClick={handleCreate} disabled={!canSubmit}>
-              Create User
+              Create Staff User
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <FieldWrap label="Role" required>
-            <Select
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...EMPTY_FORM, role: e.target.value }))}
-            >
-              <option value="ADMIN">Administrator</option>
-              <option value="MANAGING_DIRECTOR">Managing Director</option>
-              <option value="HR">HR Officer</option>
-              <option value="MANAGER">Manager</option>
-              <option value="SUPERVISOR">Supervisor</option>
-              <option value="EMPLOYEE">Employee (self-service)</option>
+            <Select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+              {STAFF_ROLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </Select>
           </FieldWrap>
 
-          {isEmployeeAccount ? (
-            <FieldWrap
-              label="Employee"
-              required
-              hint="Login and default password will both be this employee's Employee ID."
-            >
-              <SearchSelect
-                value={form.employeeId}
-                onChange={(id) => setForm((f) => ({ ...f, employeeId: id }))}
-                options={employeeOptions}
-                placeholder="Search employee ID or name"
-                searchPlaceholder="Type an employee ID or name…"
-              />
-            </FieldWrap>
-          ) : (
-            <>
-              <FieldWrap label="Full Name" required>
-                <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />
-              </FieldWrap>
-              <FieldWrap label="Username" required>
-                <Input
-                  value={form.username}
-                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                />
-              </FieldWrap>
-              <FieldWrap label="Password" required hint="Minimum 6 characters">
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                />
-              </FieldWrap>
-              <FieldWrap
-                label="Link to Employee"
-                hint="Optional -- ties this login to their Employee record, so they're findable by Employee ID (e.g. when picking a leave approval tier's approver)."
-              >
-                <SearchSelect
-                  value={form.employeeId}
-                  onChange={(id) => setForm((f) => ({ ...f, employeeId: id }))}
-                  options={employeeOptions}
-                  placeholder="Search employee ID or name (optional)"
-                  searchPlaceholder="Type an employee ID or name…"
-                />
-              </FieldWrap>
-            </>
-          )}
+          <FieldWrap label="Full Name" required>
+            <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />
+          </FieldWrap>
+          <FieldWrap label="Username" required>
+            <Input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
+          </FieldWrap>
+          <FieldWrap label="Password" required hint="Minimum 6 characters">
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            />
+          </FieldWrap>
+          <FieldWrap
+            label="Link to Employee"
+            hint="Optional -- ties this login to their Employee record, so they're findable by Employee ID (e.g. when picking a leave approval tier's approver). They'll still sign in with this username, not their Employee ID."
+          >
+            <SearchSelect
+              value={form.employeeId}
+              onChange={(id) => setForm((f) => ({ ...f, employeeId: id }))}
+              options={employeeOptions}
+              placeholder="Search employee ID or name (optional)"
+              searchPlaceholder="Type an employee ID or name…"
+            />
+          </FieldWrap>
         </div>
       </Modal>
 
@@ -426,8 +450,8 @@ function UserManagement() {
             <FieldWrap
               label="Link to Employee"
               hint={
-                EMPLOYEE_ID_LOGIN_ROLES.has(editForm.role)
-                  ? 'Required -- this is how they sign in with their Employee ID. Leave it as-is.'
+                isEmployeeIdLogin(editingUser)
+                  ? 'This is how they sign in with their Employee ID -- leave it as-is. To change their role, use Employee Role on the Add/Edit Employee form instead.'
                   : "Optional -- ties this login to their Employee record, so they're findable by Employee ID (e.g. when picking a leave approval tier's approver)."
               }
             >

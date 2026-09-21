@@ -92,12 +92,12 @@ export interface RosterWeekData {
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
 export type SyncStatus = 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
-// Picked on the Add/Edit Employee form -- EMPLOYEE/MANAGER/SUPERVISOR are
-// just a label (all three log in with just their Employee ID, no extra
-// permission); ADMINISTRATOR gets a real staff login instead. Not the same
-// thing as a login's actual access level (Role, below) -- that's the
-// separate "Account & Access" control on the employee profile page, which
-// grants real Supervisor/Manager approval permissions via a staff login.
+// Picked on the Add/Edit Employee form. EMPLOYEE/MANAGER/SUPERVISOR/
+// MANAGING_DIRECTOR each grant that same real access level (Role, below)
+// via an Employee ID login -- Manager here is exactly as real as a Manager
+// created from System Settings > Add Staff User with a separate username/
+// password, just signed in with the Employee ID instead. ADMINISTRATOR is
+// the one value that provisions a traditional staff login instead.
 export type EmployeeRole = 'EMPLOYEE' | 'MANAGER' | 'SUPERVISOR' | 'MANAGING_DIRECTOR' | 'ADMINISTRATOR';
 
 export interface Employee {

@@ -5,16 +5,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 
-// Roles that sign in with their Employee ID (credentials derived from the
-// linked Employee record, see create() below) rather than a separate staff
-// username/password. Every real role except Administrator works this way --
-// Manager/Supervisor/HR/Managing Director accounts belong to hospital staff
-// who already have an Employee record and already use their Employee ID
-// everywhere else, so there's no reason to hand them a second set of
-// credentials on top of it. Administrator stays on the traditional
-// username/password path since an Administrator account isn't always tied
-// to an Employee record (e.g. an IT/vendor account).
-const EMPLOYEE_ID_LOGIN_ROLES = new Set(['EMPLOYEE', 'MANAGER', 'SUPERVISOR', 'HR', 'MANAGING_DIRECTOR']);
+// Roles reachable from the Add/Edit Employee form's Employee Role field
+// (see schema.prisma's EmployeeRole enum) -- every value it has except
+// ADMINISTRATOR, which maps to system Role ADMIN instead. An account with
+// one of these roles signs in with its Employee ID (credentials derived
+// from the linked Employee record, see create() below) rather than a
+// separate staff username/password. HR is deliberately NOT in this set --
+// it isn't an Employee Role option, so an HR account can only be created
+// the traditional way, from System Settings > Add Staff User with its own
+// username/password. Two doors, same room: a Manager made through Add/Edit
+// Employee (Employee ID login) and a Manager made through Add Staff User
+// (username/password login) get the identical Manager dashboard -- the
+// system Role decides what they see, not which door they came through.
+const EMPLOYEE_ID_LOGIN_ROLES = new Set(['EMPLOYEE', 'MANAGER', 'SUPERVISOR', 'MANAGING_DIRECTOR']);
 
 const SAFE_SELECT = {
   id: true,
@@ -249,20 +252,18 @@ export class UsersService {
 
   /**
    * Keeps an employee's login in sync with their Employee Role, set on the
-   * Add/Edit Employee form. This ONLY manages the Employee-ID-login <->
-   * traditional-Admin-login toggle -- EMPLOYEE/MANAGER/SUPERVISOR (Employee
-   * Role's cosmetic label) never touch the underlying login here, so a real
-   * staff role (Manager/Supervisor/HR/Managing Director) set separately via
-   * System Settings > Add/Edit User is left alone, even though it's also an
-   * Employee ID login (see EMPLOYEE_ID_LOGIN_ROLES). Only ADMINISTRATOR
-   * forces a conversion, to a traditional staff login (role ADMIN) with the
-   * given username/password, logging in like any other Admin user rather
-   * than through Employee ID.
+   * Add/Edit Employee form. Employee Role IS this login's real system Role
+   * whenever it isn't ADMINISTRATOR -- Manager grants real Manager access,
+   * Supervisor grants real Supervisor access, and so on, same dashboard
+   * either way as an account created from System Settings > Add Staff User
+   * with that Role (see EMPLOYEE_ID_LOGIN_ROLES). ADMINISTRATOR is the one
+   * value that converts this into a traditional staff login (role ADMIN)
+   * with a chosen username/password, logging in like any other Admin user
+   * rather than through Employee ID.
    *
    * An employee can only ever be linked to one User row (unique employeeId
-   * constraint), so switching between the two buckets converts the
-   * existing login in place instead of trying to create a second one.
-   * Already the right kind of login, with no new credentials supplied?
+   * constraint), so every case below updates the existing login in place
+   * rather than trying to create a second one. Nothing to actually change?
    * This is a no-op -- it never rewrites a password nobody asked to change.
    */
   async syncLoginForEmployeeRole(
@@ -277,10 +278,6 @@ export class UsersService {
 
     const wantsAdmin = employeeRole === 'ADMINISTRATOR';
     const existing = await this.prisma.user.findUnique({ where: { employeeId } });
-    // 'Staff login' here means specifically the traditional ADMIN bucket --
-    // NOT any non-EMPLOYEE role. A Manager/Supervisor/HR/Managing Director
-    // role set via System Settings is still an Employee ID login and must
-    // not be mistaken for (or silently downgraded to/from) an Admin login.
 
     if (!existing) {
       if (wantsAdmin) {
@@ -298,34 +295,44 @@ export class UsersService {
           actorId,
         );
       } else {
-        await this.create({ role: 'EMPLOYEE' as any, employeeId }, actorId);
+        // EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -- Employee ID
+        // login, with employeeRole itself as the real Role granted.
+        await this.create({ role: employeeRole as any, employeeId }, actorId);
       }
       return;
     }
 
+    // 'Staff login' here means specifically the traditional ADMIN bucket --
+    // NOT any non-EMPLOYEE role. A Manager/Supervisor/Managing Director
+    // role is still an Employee ID login either way it was granted.
     const existingIsStaffLogin = existing.role === 'ADMIN';
-    if (wantsAdmin === existingIsStaffLogin) {
-      // Already the right kind of login. Only touch it if HR explicitly
-      // supplied fresh Administrator credentials to change.
-      if (wantsAdmin && (staffUsername || staffPassword)) {
-        await this.applyStaffCredentials(existing.id, employee.fullName, staffUsername, staffPassword, actorId);
-      }
-      return;
-    }
 
-    // Converting between an Employee ID login and a staff login for the
-    // same employee -- update the existing row in place rather than create
-    // a second, conflicting one (employeeId is unique per User).
     if (wantsAdmin) {
+      if (existingIsStaffLogin) {
+        // Already an Administrator staff login -- only touch it if HR
+        // explicitly supplied fresh credentials to change.
+        if (staffUsername || staffPassword) {
+          await this.applyStaffCredentials(existing.id, employee.fullName, staffUsername, staffPassword, actorId);
+        }
+        return;
+      }
+      // Converting an Employee ID login into a staff Administrator login.
       if (!staffUsername || !staffPassword) {
         throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
       }
       await this.applyStaffCredentials(existing.id, employee.fullName, staffUsername, staffPassword, actorId, 'ADMIN');
-    } else {
+      return;
+    }
+
+    // employeeRole is EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -- all
+    // Employee ID logins.
+    if (existingIsStaffLogin) {
+      // Was a staff Administrator login -- convert it back to an Employee
+      // ID login, with employeeRole as its new real Role.
       await this.prisma.user.update({
         where: { id: existing.id },
         data: {
-          role: 'EMPLOYEE',
+          role: employeeRole as any,
           email: `${employee.employeeCode}@employee.smarthrm.local`,
           fullName: employee.fullName,
           passwordHash: await bcrypt.hash(employee.employeeCode, 10),
@@ -337,7 +344,22 @@ export class UsersService {
         action: 'USER_UPDATED',
         entity: 'User',
         entityId: existing.id,
-        details: `Converted login for ${employee.fullName} (${employee.employeeCode}) to an Employee ID login (Employee Role changed)`,
+        details: `Converted login for ${employee.fullName} (${employee.employeeCode}) to an Employee ID login with role ${employeeRole} (Employee Role changed)`,
+      });
+      return;
+    }
+
+    // Already an Employee ID login -- just keep its Role in step with the
+    // label (e.g. Manager -> Supervisor). Credentials are untouched; this
+    // is a role-only change, not a login conversion.
+    if (existing.role !== employeeRole) {
+      await this.prisma.user.update({ where: { id: existing.id }, data: { role: employeeRole as any } });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'USER_UPDATED',
+        entity: 'User',
+        entityId: existing.id,
+        details: `Updated ${employee.fullName}'s (${employee.employeeCode}) login role to ${employeeRole} (Employee Role changed)`,
       });
     }
   }

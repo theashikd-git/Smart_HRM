@@ -49,22 +49,26 @@ enum EmploymentType {
 
 // Picked on the Add/Edit Employee form (under Hired Date) -- decides which
 // kind of login this person gets, see EmployeesService/UsersService:
-//   EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -> the ordinary Employee ID
-//     self-service login (role EMPLOYEE on the User table). These are just a
-//     label here -- they do NOT grant the real Manager/Supervisor staff
-//     permissions (leave approval, reports access); a person who actually
-//     needs those still needs a staff account with that Role, same as
-//     today, via this field set to ADMINISTRATOR or via System Settings.
+//   EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -> an Employee ID login
+//     (see UsersService.EMPLOYEE_ID_LOGIN_ROLES). The value picked here IS
+//     that login's real system Role -- Manager grants real Manager access,
+//     Supervisor grants real Supervisor access, and so on, all while still
+//     signing in with the Employee ID rather than a separate username/
+//     password. Same dashboard/permissions either way: a Manager made here
+//     and a Manager made from System Settings > Add Staff User (a
+//     traditional username/password login) are identical once signed in --
+//     only the login method differs. See UsersService.syncLoginForEmployeeRole.
 //   ADMINISTRATOR -> a staff login (role ADMIN) with a chosen username and
 //     password instead of an Employee ID, provisioned right from this form.
 enum EmployeeRole {
   EMPLOYEE
   MANAGER
   SUPERVISOR
-  // Cosmetic label only, same as MANAGER/SUPERVISOR above -- added so
-  // Managing Director shows up as its own Employee Role instead of being
-  // lumped in under Manager. A dedicated Managing Director dashboard is
-  // planned as separate follow-up work, not tied to this enum value.
+  // Grants real Managing Director access via Employee ID login, same as
+  // MANAGER/SUPERVISOR above -- added so Managing Director shows up as its
+  // own Employee Role instead of being lumped in under Manager. A dedicated
+  // Managing Director dashboard is planned as separate follow-up work, not
+  // tied to this enum value.
   MANAGING_DIRECTOR
   ADMINISTRATOR
 }

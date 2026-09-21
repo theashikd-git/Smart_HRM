@@ -26,9 +26,9 @@ export enum EmploymentTypeDto {
   INTERN = 'INTERN',
 }
 
-// EMPLOYEE/MANAGER/SUPERVISOR -> ordinary Employee ID self-service login
-// (Manager/Supervisor are a label only here -- see the schema's
-// EmployeeRole enum for why they don't grant real staff permissions).
+// EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -> an Employee ID login
+// with that exact value as its real system Role (see the schema's
+// EmployeeRole enum and UsersService.EMPLOYEE_ID_LOGIN_ROLES).
 // ADMINISTRATOR -> a staff login (role ADMIN), using staffUsername/
 // staffPassword below instead of an Employee ID.
 export enum EmployeeRoleDto {
