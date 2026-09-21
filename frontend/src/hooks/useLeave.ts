@@ -253,10 +253,12 @@ export function useRejectLeaveRequest() {
   });
 }
 
-// Requests currently awaiting a decision from the signed-in login itself
-// (see LeaveController.findMyApprovals) -- for the Employee Portal's
-// "Approvals" tab, distinct from useMyLeaveRequests (that employee's own
-// history) and from the staff-only /leave list.
+// Every request the signed-in login can act on right now, plus the record
+// of what it has approved/rejected before (see LeaveController /
+// LeaveService.findMyApprovals for the canDecide flag) -- powers the "Leave
+// Request" tab on both the Employee Portal and the Manager Portal.
+// Distinct from useMyLeaveRequests (that login's own leave, as an
+// applicant) and from the staff-only /leave list.
 export function useMyApprovals() {
   return useQuery({
     queryKey: ['my-approvals'],

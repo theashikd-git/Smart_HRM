@@ -583,17 +583,19 @@ export class LeaveService {
     return items.map((r) => this.withTierLabel(r));
   }
 
-  /** Every PENDING request currently awaiting a decision from this specific
-   *  User -- for the Employee portal's "Approvals" tab, so an employee who
-   *  was named a workflow approver (a SPECIFIC_USER tier pointing at their
-   *  own account, or a REPORTING_SUPERIOR tier resolving to them as their
-   *  department's Manager) can act on it via their Employee ID login,
-   *  without needing a staff account or access to the staff-only Leave
-   *  screen. Walks every open request and re-resolves its current tier the
-   *  same way checkTierAuthorization does -- there's no single Prisma
-   *  filter for this since SPECIFIC_USER and REPORTING_SUPERIOR tiers
+  /** Everything the "Leave Request" screen (Employee Portal / Manager
+   *  Portal) needs for a login that's part of the leave approval workflow:
+   *  every PENDING request currently awaiting a decision from this specific
+   *  User (tagged canDecide: true), UNIONED with every request -- whatever
+   *  its current status -- this User has ever decided on at any tier
+   *  (tagged canDecide: false, since a past decision doesn't grant a say
+   *  over wherever the request has moved on to since). "Mine to decide" is
+   *  resolved the same way checkTierAuthorization does -- there's no single
+   *  Prisma filter for it since SPECIFIC_USER and REPORTING_SUPERIOR tiers
    *  resolve differently, and it's fine at hospital scale (at most a few
-   *  dozen requests are ever open at once). */
+   *  dozen requests are ever open at once). Callers should treat an empty
+   *  result as "this login isn't part of any leave workflow" and hide the
+   *  screen entirely. */
   async findMyApprovals(userId: string) {
     const pending = await this.prisma.leaveRequest.findMany({
       where: { status: 'PENDING', currentTierOrder: { not: null } },
@@ -601,16 +603,35 @@ export class LeaveService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const mine: (typeof pending)[number][] = [];
+    const mineIds = new Set<string>();
     for (const request of pending) {
       const workflow = await this.getActiveWorkflow(request.employee.department?.id ?? null);
       const tier = workflow?.tiers.find((t) => t.order === request.currentTierOrder);
       if (!tier) continue;
       const resolvedApproverId = await this.resolveTierApprover(tier, request.employeeId);
-      if (resolvedApproverId === userId) mine.push(request);
+      if (resolvedApproverId === userId) mineIds.add(request.id);
     }
 
-    return mine.map((r) => this.withTierLabel(r));
+    const decidedByMe = await this.prisma.leaveRequest.findMany({
+      where: { decisions: { some: { approverId: userId } } },
+      include: this.includeRelations(),
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Pending-mine wins over decided-by-me when a request shows up in both
+    // (this user decided an earlier tier and the current one has also
+    // resolved back to them) -- they can still act on it right now.
+    const byId = new Map<string, any>();
+    for (const request of decidedByMe) byId.set(request.id, { ...request, canDecide: false });
+    for (const request of pending) {
+      if (mineIds.has(request.id)) byId.set(request.id, { ...request, canDecide: true });
+    }
+
+    const combined = [...byId.values()].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    return combined.map((r) => this.withTierLabel(r));
   }
 
   async findOne(id: string) {

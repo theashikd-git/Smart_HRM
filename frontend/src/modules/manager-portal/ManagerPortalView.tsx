@@ -9,35 +9,38 @@ import { RosterProgram } from '@/modules/personnel/roster/RosterProgram';
 import { PlaceholderProgram } from '@/modules/personnel/common/PlaceholderProgram';
 import { PLACEHOLDER_CONFIG } from '@/modules/personnel/common/placeholderConfig';
 import { ManagerDashboard } from '@/modules/personnel/dashboard/ManagerDashboard';
+import { MyLeaveTab } from '@/modules/employee-portal/MyLeaveTab';
+import { LeaveRequestTab } from '@/modules/employee-portal/LeaveRequestTab';
+import { useMyApprovals } from '@/hooks/useLeave';
 import type { WorkbenchTab } from '@/types/workbench';
 
-type PortalTab = 'dashboard' | 'roster' | 'shift';
+type PortalTab = 'dashboard' | 'my-leave' | 'leave-request' | 'roster' | 'shift';
 
-const TABS: { id: PortalTab; label: string }[] = [
+const BASE_TABS: { id: PortalTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'my-leave', label: 'My Leave' },
   { id: 'roster', label: 'Roster' },
   { id: 'shift', label: 'Shift' },
 ];
 
-// Static tabs for the two Personnel programs reused here -- RosterProgram/
-// PlaceholderProgram only read title/breadcrumb off this (see ProgramRouter's
-// usual construction in useWorkbenchStore.openProgram), so there's no need
-// to route these through the full Workbench tab-store machinery this portal
-// deliberately doesn't have.
 const ROSTER_TAB: WorkbenchTab = { key: 'roster', programId: 'roster', title: 'Roster', breadcrumb: ['Roster'] };
 const SHIFT_TAB: WorkbenchTab = { key: 'shift', programId: 'shift', title: 'Shift', breadcrumb: ['Shift'] };
 
-/**
- * Home for a MANAGER-role login. Deliberately its own small shell, same
- * idea as EmployeePortalView -- no TopNavigation module switcher, no left
- * Sidebar, no WorkbenchBar of open tabs. Just a single header with a
- * three-tab bar: Dashboard (see ManagerDashboard -- My Calendar +
- * Real-Time Monitor), Roster, and Shift, the only two Personnel programs a
- * Manager needs day to day. See AppShellRoot, which renders this instead
- * of the full Workbench shell for user.role === 'MANAGER'.
- */
 export function ManagerPortalView() {
   const [activeTab, setActiveTab] = useState<PortalTab>('dashboard');
+
+  // Same gating as EmployeePortalView: "Leave Request" only shows up once
+  // this login is actually named somewhere in a leave workflow (a
+  // SPECIFIC_USER tier, or one resolving to them as a department's
+  // Manager) -- see LeaveController.findMyApprovals. MyLeaveTab and
+  // LeaveRequestTab are the exact same components the Employee Portal
+  // uses, so a Manager gets identical self-service leave whichever login
+  // path (staff username/password vs. Employee ID) they came in through.
+  const { data: approvals } = useMyApprovals();
+  const TABS =
+    approvals && approvals.length > 0
+      ? [...BASE_TABS.slice(0, 2), { id: 'leave-request' as const, label: 'Leave Request' }, ...BASE_TABS.slice(2)]
+      : BASE_TABS;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-text-primary">
@@ -83,6 +86,16 @@ export function ManagerPortalView() {
 
       <main className="flex-1 overflow-hidden">
         {activeTab === 'dashboard' && <ManagerDashboard />}
+        {activeTab === 'my-leave' && (
+          <div className="h-full overflow-auto p-4">
+            <MyLeaveTab />
+          </div>
+        )}
+        {activeTab === 'leave-request' && (
+          <div className="h-full overflow-auto p-4">
+            <LeaveRequestTab />
+          </div>
+        )}
         {activeTab === 'roster' && <RosterProgram tab={ROSTER_TAB} />}
         {activeTab === 'shift' && <PlaceholderProgram tab={SHIFT_TAB} config={PLACEHOLDER_CONFIG.shift} />}
       </main>

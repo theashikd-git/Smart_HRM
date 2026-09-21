@@ -329,6 +329,11 @@ export interface LeaveRequest {
   currentTierOrder?: number | null;
   currentTierLabel?: string | null;
   decisions?: LeaveApprovalDecision[];
+  /** Only set on items returned by /leave/my/approvals (see useMyApprovals):
+   *  true when this signed-in login can act on the request right now, false
+   *  when it's showing up purely as a past-decision record of theirs.
+   *  Absent on every other endpoint's LeaveRequest rows. */
+  canDecide?: boolean;
   employee?: {
     id: string;
     fullName: string;

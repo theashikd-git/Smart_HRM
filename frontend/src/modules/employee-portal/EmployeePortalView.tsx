@@ -1,36 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, ShieldCheck, CalendarDays, PlusCircle, Ban, CheckCircle2, XCircle, Clock3, ClipboardCheck } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Loader2, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { NotificationBell } from '@/components/shell/NotificationBell';
-import {
-  useMyLeaveRequests,
-  useMyLeaveBalances,
-  useCancelMyLeaveRequest,
-  useMyApprovals,
-  useApproveLeaveRequest,
-} from '@/hooks/useLeave';
+import { useMyApprovals } from '@/hooks/useLeave';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { apiErrorMessage } from '@/lib/api';
-import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { MyLeaveRequestModal } from './MyLeaveRequestModal';
 import { MyCalendarCard } from './MyCalendarCard';
+import { MyLeaveTab } from './MyLeaveTab';
+import { LeaveRequestTab } from './LeaveRequestTab';
 import { ChangePasswordGate } from './ChangePasswordGate';
 import { useAuthStore } from '@/lib/auth-store';
-import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
-import { LeaveRequest } from '@/types';
 
-type PortalTab = 'dashboard' | 'leave' | 'approvals';
+type PortalTab = 'dashboard' | 'my-leave' | 'leave-request';
 
 const BASE_TABS: { id: PortalTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'leave', label: 'Leave' },
+  { id: 'my-leave', label: 'My Leave' },
 ];
 
 /**
@@ -40,10 +28,16 @@ const BASE_TABS: { id: PortalTab; label: string }[] = [
  * a way to apply/cancel; useRequireAuth('employee') keeps staff logins out
  * of this route and bounces an EMPLOYEE login away from /workbench.
  *
- * Two sections behind a top-nav, same tab-bar visual language as the
+ * Three sections behind a top-nav, same tab-bar visual language as the
  * Workbench's TopNavigation: "Dashboard" is just My Calendar (the day-to-day
- * landing view), "Leave" holds everything leave-related -- balances, the
- * request history table, and the Apply for Leave action.
+ * landing view), "My Leave" is this employee's own leave -- balances, the
+ * request history table, and the Apply for Leave action (see MyLeaveTab).
+ * "Leave Request" only shows up once this login is actually named
+ * somewhere in a leave workflow -- it's every request they can currently
+ * decide on, plus the record of what they've approved/rejected before (see
+ * LeaveRequestTab). The exact same two tabs are reused as-is on the Manager
+ * Portal (see ManagerPortalView), so a Manager gets identical self-service
+ * leave regardless of which login path they came in through.
  */
 export function EmployeePortalView() {
   const { ready } = useRequireAuth('employee');
@@ -51,17 +45,12 @@ export function EmployeePortalView() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PortalTab>('dashboard');
 
-  const { data: requests, isLoading: requestsLoading } = useMyLeaveRequests();
-  const { data: balances } = useMyLeaveBalances();
-  const cancelRequest = useCancelMyLeaveRequest();
-
-  // Only shown once there's something to act on -- most employees are never
+  // Only shown once there's something to show -- most employees are never
   // named a workflow approver, so a permanently-visible empty tab would
   // just be clutter for them. See LeaveController.findMyApprovals.
-  const { data: approvals, isLoading: approvalsLoading } = useMyApprovals();
-  const approveRequest = useApproveLeaveRequest();
-  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
-  const TABS = approvals && approvals.length > 0 ? [...BASE_TABS, { id: 'approvals' as const, label: 'Approvals' }] : BASE_TABS;
+  const { data: approvals } = useMyApprovals();
+  const TABS =
+    approvals && approvals.length > 0 ? [...BASE_TABS, { id: 'leave-request' as const, label: 'Leave Request' }] : BASE_TABS;
 
   if (!ready) {
     return (
@@ -75,25 +64,6 @@ export function EmployeePortalView() {
   // must change it before seeing anything else -- see ChangePasswordGate.
   if (user?.mustChangePassword) {
     return <ChangePasswordGate />;
-  }
-
-  async function handleCancel(id: string) {
-    if (!confirm('Cancel this leave request?')) return;
-    try {
-      await cancelRequest.mutateAsync(id);
-      toast.success('Leave request cancelled');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
-
-  async function handleApprove(id: string) {
-    try {
-      await approveRequest.mutateAsync(id);
-      toast.success('Leave request approved');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
   }
 
   return (
@@ -140,182 +110,11 @@ export function EmployeePortalView() {
 
       <main className="flex-1 overflow-auto p-4">
         {activeTab === 'dashboard' && <MyCalendarCard onApplyLeave={() => setRequestOpen(true)} />}
-
-        {activeTab === 'approvals' && (
-          <>
-            <div className="mb-4">
-              <h1 className="text-[15px] font-semibold text-text-primary">Approvals</h1>
-              <p className="text-xs text-text-secondary">Requests currently waiting on your decision</p>
-            </div>
-
-            <Card>
-              <Table>
-                <Thead>
-                  <tr>
-                    <Th>Employee</Th>
-                    <Th>Leave Type</Th>
-                    <Th>Dates</Th>
-                    <Th>Days</Th>
-                    <Th>Stage</Th>
-                    <Th></Th>
-                  </tr>
-                </Thead>
-                <Tbody>
-                  {approvals?.map((request) => (
-                    <Tr key={request.id}>
-                      <Td>{request.employee?.fullName}</Td>
-                      <Td>
-                        <Badge>{request.leaveType?.name}</Badge>
-                      </Td>
-                      <Td className="text-xs">
-                        {formatDate(request.startDate)}
-                        {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
-                      </Td>
-                      <Td>{request.totalDays}</Td>
-                      <Td className="text-xs text-text-muted">{request.currentTierLabel ?? '—'}</Td>
-                      <Td className="text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => setRejectTarget(request)}>
-                            Reject
-                          </Button>
-                          <Button size="sm" onClick={() => handleApprove(request.id)} loading={approveRequest.isPending}>
-                            Approve
-                          </Button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-
-              {!approvalsLoading && (approvals?.length ?? 0) === 0 && (
-                <EmptyState
-                  icon={<ClipboardCheck className="h-8 w-8" />}
-                  title="Nothing waiting on you"
-                  subtitle="Requests assigned to you for approval will show up here."
-                />
-              )}
-            </Card>
-          </>
-        )}
-
-        {activeTab === 'leave' && (
-          <>
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h1 className="text-[15px] font-semibold text-text-primary">My Leave</h1>
-                <p className="text-xs text-text-secondary">Your balances, requests, and approval status</p>
-              </div>
-              <Button onClick={() => setRequestOpen(true)}>
-                <PlusCircle className="h-4 w-4" />
-                Apply for Leave
-              </Button>
-            </div>
-
-            <Card className="mb-4">
-              <CardHeader title="Leave Balances" subtitle="Remaining days for the current year" />
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-5 pb-5">
-                {balances?.map((b) => (
-                  <div key={b.leaveTypeId} className="rounded-lg border border-line p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: b.color ?? '#94a3b8' }} />
-                      <p className="text-xs font-medium text-text-secondary truncate">{b.leaveTypeName}</p>
-                    </div>
-                    <p className="text-lg font-semibold text-text-primary">{b.remaining}</p>
-                    <p className="text-[11px] text-text-muted">of {b.allocated + b.carriedForward} day(s)</p>
-                  </div>
-                ))}
-                {(!balances || balances.length === 0) && (
-                  <p className="col-span-full text-xs text-text-muted">No balances set up yet -- check with HR.</p>
-                )}
-              </div>
-            </Card>
-
-            <Card>
-              <CardHeader title="My Requests" subtitle="History and current status of every request you've made" />
-              <Table>
-                <Thead>
-                  <tr>
-                    <Th>Leave Type</Th>
-                    <Th>Dates</Th>
-                    <Th>Days</Th>
-                    <Th>Status</Th>
-                    <Th></Th>
-                  </tr>
-                </Thead>
-                <Tbody>
-                  {requests?.map((request) => (
-                    <Tr key={request.id}>
-                      <Td>
-                        <Badge>{request.leaveType?.name}</Badge>
-                        {!request.leaveType?.paid && <span className="ml-1.5 text-xs text-text-muted">Unpaid</span>}
-                      </Td>
-                      <Td className="text-xs">
-                        {formatDate(request.startDate)}
-                        {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
-                        {request.session !== 'FULL_DAY' && (
-                          <span className="block text-text-muted">
-                            {request.session === 'FIRST_HALF' ? 'First half' : 'Second half'}
-                          </span>
-                        )}
-                      </Td>
-                      <Td>{request.totalDays}</Td>
-                      <Td className="max-w-[260px]">
-                        <StatusPill label={request.status} colors={leaveStatusColors[request.status]} />
-                        {request.status === 'PENDING' && request.currentTierLabel && (
-                          <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
-                            <Clock3 className="h-3 w-3" /> Awaiting: {request.currentTierLabel}
-                          </p>
-                        )}
-                        {request.status === 'REJECTED' && request.rejectionReason && (
-                          <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
-                        )}
-                        {request.decisions && request.decisions.length > 0 && (
-                          <div className="mt-1.5 space-y-0.5 border-l-2 border-line pl-2">
-                            {request.decisions.map((d) => (
-                              <p key={d.id} className="text-[11px] text-text-muted">
-                                {d.decision === 'APPROVED' ? (
-                                  <CheckCircle2 className="inline h-3 w-3 text-success mr-1" />
-                                ) : (
-                                  <XCircle className="inline h-3 w-3 text-danger mr-1" />
-                                )}
-                                {d.tierLabel} &middot; {d.approver?.fullName ?? '—'} &middot; {formatDateTime(d.decidedAt)}
-                                {d.reason && ` — ${d.reason}`}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </Td>
-                      <Td className="text-right">
-                        {(request.status === 'PENDING' || request.status === 'APPROVED') && (
-                          <button
-                            onClick={() => handleCancel(request.id)}
-                            title="Cancel"
-                            className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-                          >
-                            <Ban className="h-4 w-4" />
-                          </button>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-
-              {!requestsLoading && (requests?.length ?? 0) === 0 && (
-                <EmptyState
-                  icon={<CalendarDays className="h-8 w-8" />}
-                  title="No leave requests yet"
-                  subtitle="Apply for leave to see it show up here."
-                />
-              )}
-            </Card>
-          </>
-        )}
+        {activeTab === 'my-leave' && <MyLeaveTab />}
+        {activeTab === 'leave-request' && <LeaveRequestTab />}
       </main>
 
       <MyLeaveRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
-      <RejectLeaveModal request={rejectTarget} onClose={() => setRejectTarget(null)} />
     </div>
   );
 }
