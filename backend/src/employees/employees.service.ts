@@ -200,7 +200,12 @@ export class EmployeesService {
     // employee nor fresh credentials to create one with.
     if (dto.employeeRole === 'ADMINISTRATOR') {
       const existingLogin = await this.prisma.user.findUnique({ where: { employeeId: id } });
-      const alreadyStaffLogin = existingLogin && existingLogin.role !== 'EMPLOYEE';
+      // 'Already a staff login' means specifically ADMIN here, matching
+      // UsersService.syncLoginForEmployeeRole -- a Manager/Supervisor/HR/
+      // Managing Director role set via System Settings is still an
+      // Employee ID login and still needs fresh Admin credentials to
+      // convert, same as a plain Employee ID login would.
+      const alreadyStaffLogin = existingLogin && existingLogin.role === 'ADMIN';
       if (!alreadyStaffLogin && (!staffUsername || !staffPassword)) {
         throw new BadRequestException('Staff username and password are required when Employee Role is Administrator');
       }

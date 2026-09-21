@@ -109,8 +109,12 @@ export class LeaveController {
   // the request body/query, so one employee's login can never see or act on
   // another's leave.
 
+  // No @Roles('EMPLOYEE') here on purpose, unlike the rest of this
+  // self-service block -- My Calendar (originally Employee Portal-only) is
+  // now also reused on the staff dashboard for a department head, so this
+  // read stays open to any signed-in login and relies on assertLinkedEmployee
+  // + the employeeId scoping below to keep it self-only, same as /roster/mine.
   @Get('my/requests')
-  @Roles('EMPLOYEE')
   findMyRequests(@CurrentUser() user: any) {
     this.assertLinkedEmployee(user);
     return this.service.findAllForEmployee(user.employeeId);

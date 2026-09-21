@@ -5,6 +5,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 
+// Roles that sign in with their Employee ID (credentials derived from the
+// linked Employee record, see create() below) rather than a separate staff
+// username/password. Every real role except Administrator works this way --
+// Manager/Supervisor/HR/Managing Director accounts belong to hospital staff
+// who already have an Employee record and already use their Employee ID
+// everywhere else, so there's no reason to hand them a second set of
+// credentials on top of it. Administrator stays on the traditional
+// username/password path since an Administrator account isn't always tied
+// to an Employee record (e.g. an IT/vendor account).
+const EMPLOYEE_ID_LOGIN_ROLES = new Set(['EMPLOYEE', 'MANAGER', 'SUPERVISOR', 'HR', 'MANAGING_DIRECTOR']);
+
 const SAFE_SELECT = {
   id: true,
   email: true,
@@ -36,13 +47,14 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto, actorId?: string) {
-    // Employee self-service accounts: no username/password to collect --
+    // Employee ID logins (EMPLOYEE and every staff role except Admin --
+    // see EMPLOYEE_ID_LOGIN_ROLES): no username/password to collect --
     // derive both from the linked Employee record instead. Login for these
     // accounts is by Employee ID (see AuthService.employeeLogin), with the
-    // Employee ID itself as the default password.
-    if (dto.role === 'EMPLOYEE') {
+    // Employee ID itself as the default password, whatever their role.
+    if (EMPLOYEE_ID_LOGIN_ROLES.has(dto.role)) {
       if (!dto.employeeId) {
-        throw new BadRequestException('employeeId is required to create an employee login');
+        throw new BadRequestException('employeeId is required to create an Employee ID login');
       }
       const employee = await this.prisma.employee.findUnique({ where: { id: dto.employeeId } });
       if (!employee) throw new NotFoundException('Employee not found');
@@ -54,16 +66,16 @@ export class UsersService {
       const user = await this.prisma.user.create({
         data: {
           // Synthetic, unique placeholder -- the User table requires a
-          // unique email column, but employee accounts log in by Employee ID
-          // and never see or use this value.
+          // unique email column, but Employee ID accounts log in by
+          // Employee ID and never see or use this value.
           email: `${employee.employeeCode}@employee.smarthrm.local`,
           fullName: employee.fullName,
-          role: 'EMPLOYEE',
+          role: dto.role,
           passwordHash,
           employeeId: employee.id,
-          // Forces the "set a new password" gate on the employee portal
-          // until they change it themselves -- the default password (their
-          // own Employee ID) can't be relied on indefinitely.
+          // Forces the "set a new password" gate until they change it
+          // themselves -- the default password (their own Employee ID)
+          // can't be relied on indefinitely.
           mustChangePassword: true,
         },
         select: SAFE_SELECT,
@@ -74,7 +86,7 @@ export class UsersService {
         action: 'USER_CREATED',
         entity: 'User',
         entityId: user.id,
-        details: `Created employee login for ${employee.fullName} (${employee.employeeCode})`,
+        details: `Created Employee ID login for ${employee.fullName} (${employee.employeeCode}) with role ${dto.role}`,
       });
 
       return toSafeUser(user);
@@ -186,8 +198,8 @@ export class UsersService {
     if (!employee) throw new NotFoundException('Employee not found');
 
     const existing = await this.prisma.user.findUnique({ where: { employeeId } });
-    if (existing && existing.role !== 'EMPLOYEE') {
-      throw new BadRequestException('This login is not an employee self-service account');
+    if (existing && !EMPLOYEE_ID_LOGIN_ROLES.has(existing.role)) {
+      throw new BadRequestException('This login is not an Employee ID account');
     }
 
     const tempPassword = this.generateTempPassword();
@@ -237,12 +249,15 @@ export class UsersService {
 
   /**
    * Keeps an employee's login in sync with their Employee Role, set on the
-   * Add/Edit Employee form. EMPLOYEE/MANAGER/SUPERVISOR all use the
-   * ordinary Employee ID self-service login (role EMPLOYEE) -- Employee
-   * Role is just a label for these three, exactly like before this field
-   * existed. ADMINISTRATOR instead gets a staff login (role ADMIN) with
-   * the given username/password, logging in like an HR/Admin user rather
-   * than through the employee portal.
+   * Add/Edit Employee form. This ONLY manages the Employee-ID-login <->
+   * traditional-Admin-login toggle -- EMPLOYEE/MANAGER/SUPERVISOR (Employee
+   * Role's cosmetic label) never touch the underlying login here, so a real
+   * staff role (Manager/Supervisor/HR/Managing Director) set separately via
+   * System Settings > Add/Edit User is left alone, even though it's also an
+   * Employee ID login (see EMPLOYEE_ID_LOGIN_ROLES). Only ADMINISTRATOR
+   * forces a conversion, to a traditional staff login (role ADMIN) with the
+   * given username/password, logging in like any other Admin user rather
+   * than through Employee ID.
    *
    * An employee can only ever be linked to one User row (unique employeeId
    * constraint), so switching between the two buckets converts the
@@ -262,6 +277,10 @@ export class UsersService {
 
     const wantsAdmin = employeeRole === 'ADMINISTRATOR';
     const existing = await this.prisma.user.findUnique({ where: { employeeId } });
+    // 'Staff login' here means specifically the traditional ADMIN bucket --
+    // NOT any non-EMPLOYEE role. A Manager/Supervisor/HR/Managing Director
+    // role set via System Settings is still an Employee ID login and must
+    // not be mistaken for (or silently downgraded to/from) an Admin login.
 
     if (!existing) {
       if (wantsAdmin) {
@@ -284,7 +303,7 @@ export class UsersService {
       return;
     }
 
-    const existingIsStaffLogin = existing.role !== 'EMPLOYEE';
+    const existingIsStaffLogin = existing.role === 'ADMIN';
     if (wantsAdmin === existingIsStaffLogin) {
       // Already the right kind of login. Only touch it if HR explicitly
       // supplied fresh Administrator credentials to change.

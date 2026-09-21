@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { SystemUser } from '@/types';
 
-/** Login accounts: ADMIN/HR/MANAGER staff, and EMPLOYEE self-service accounts
+/** Login accounts: a traditional username/password ADMIN account, or an
+ *  Employee ID login (EMPLOYEE, MANAGER, SUPERVISOR, HR, MANAGING_DIRECTOR)
  *  linked to an Employee record. ADMIN-only on the backend. */
 export function useUsers() {
   return useQuery({
@@ -12,13 +13,14 @@ export function useUsers() {
 }
 
 export interface CreateUserPayload {
-  role: 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
-  // Required for ADMIN/HR/MANAGER; omitted for EMPLOYEE (derived server-side
-  // from the linked Employee record).
+  role: 'ADMIN' | 'MANAGING_DIRECTOR' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
+  // Required for ADMIN only; omitted for every other role, which signs in
+  // with their Employee ID instead (credentials derived server-side from
+  // the linked Employee record -- see EMPLOYEE_ID_LOGIN_ROLES).
   username?: string;
   fullName?: string;
   password?: string;
-  // Required for EMPLOYEE; optional link for other roles.
+  // Required for every role except ADMIN.
   employeeId?: string;
 }
 

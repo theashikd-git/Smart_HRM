@@ -113,6 +113,11 @@ const ROLE_LABELS: Record<string, string> = {
   EMPLOYEE: 'Employee (self-service)',
 };
 
+// Roles that sign in with their Employee ID (no separate username/password
+// to collect -- see backend UsersService.EMPLOYEE_ID_LOGIN_ROLES). Only
+// Administrator keeps the traditional username/password form below.
+const EMPLOYEE_ID_LOGIN_ROLES = new Set(['EMPLOYEE', 'MANAGER', 'SUPERVISOR', 'HR', 'MANAGING_DIRECTOR']);
+
 const EMPTY_FORM = { role: 'HR' as string, username: '', fullName: '', password: '', employeeId: '' };
 const EMPTY_EDIT_FORM = { fullName: '', role: 'HR' as string, isActive: true, password: '', employeeId: '' };
 
@@ -129,7 +134,7 @@ function UserManagement() {
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
 
-  const isEmployeeAccount = form.role === 'EMPLOYEE';
+  const isEmployeeAccount = EMPLOYEE_ID_LOGIN_ROLES.has(form.role);
   const selectedEmployee = employees?.items.find((e) => e.id === form.employeeId);
   const canSubmit = isEmployeeAccount
     ? !!form.employeeId
@@ -149,7 +154,7 @@ function UserManagement() {
     try {
       await createUser.mutateAsync(
         isEmployeeAccount
-          ? { role: 'EMPLOYEE', employeeId: form.employeeId }
+          ? { role: form.role as any, employeeId: form.employeeId }
           : {
               role: form.role as any,
               username: form.username,
@@ -222,7 +227,7 @@ function UserManagement() {
     <Card className="mt-4">
       <CardHeader
         title="System Users"
-        subtitle="Staff accounts (Administrator, HR, Manager) and employee self-service logins"
+        subtitle="Administrator accounts use a separate username & password -- every other role signs in with the person's Employee ID"
         action={
           <Button
             size="sm"
@@ -251,7 +256,7 @@ function UserManagement() {
             <Tr key={u.id}>
               <Td className="font-medium">{u.fullName}</Td>
               <Td className="text-xs font-mono">
-                {u.role === 'EMPLOYEE' ? u.employee?.employeeCode ?? '—' : u.username}
+                {EMPLOYEE_ID_LOGIN_ROLES.has(u.role) ? u.employee?.employeeCode ?? '—' : u.username}
               </Td>
               <Td>
                 <Badge>{ROLE_LABELS[u.role] ?? u.role}</Badge>
@@ -421,8 +426,8 @@ function UserManagement() {
             <FieldWrap
               label="Link to Employee"
               hint={
-                editForm.role === 'EMPLOYEE'
-                  ? 'Required for a self-service login -- this is how they sign in with their Employee ID. Leave it as-is.'
+                EMPLOYEE_ID_LOGIN_ROLES.has(editForm.role)
+                  ? 'Required -- this is how they sign in with their Employee ID. Leave it as-is.'
                   : "Optional -- ties this login to their Employee record, so they're findable by Employee ID (e.g. when picking a leave approval tier's approver)."
               }
             >

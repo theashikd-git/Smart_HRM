@@ -384,6 +384,25 @@ export interface MyTeamAttendance {
   members: MyTeamMember[];
 }
 
+// One raw punch event for the "Real-Time Monitor" panel -- see
+// DashboardService.myTeamRecentPunches. direction mirrors AttendanceLog
+// .inOutMode ("IN" | "OUT" | "BREAK_OUT" | "BREAK_IN"), null for an
+// unrecognized punch.
+export interface MyTeamPunch {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  employeeCode: string;
+  deviceName: string | null;
+  timestamp: string;
+  direction: string | null;
+}
+
+export interface MyTeamRecentPunches {
+  isManager: boolean;
+  punches: MyTeamPunch[];
+}
+
 export interface AuditLogEntry {
   id: string;
   action: string;

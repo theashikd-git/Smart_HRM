@@ -179,6 +179,60 @@ export class DashboardService {
     };
   }
 
+  /**
+   * Live feed for the "Real-Time Monitor" panel -- raw punch events (one row
+   * per check-in/check-out), not the daily-aggregated AttendanceRecord used
+   * by myTeamAttendance/summary. Same department-head gating as
+   * myTeamAttendance above.
+   */
+  async myTeamRecentPunches(userId: string, limit = 30) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { employeeId: true },
+    });
+
+    if (!user?.employeeId) {
+      return { isManager: false, punches: [] };
+    }
+
+    const departments = await this.prisma.department.findMany({
+      where: { headEmployeeId: user.employeeId },
+      select: { id: true },
+    });
+
+    if (departments.length === 0) {
+      return { isManager: false, punches: [] };
+    }
+
+    const logs = await this.prisma.attendanceLog.findMany({
+      where: {
+        employee: {
+          departmentId: { in: departments.map((d) => d.id) },
+          id: { not: user.employeeId },
+        },
+      },
+      include: {
+        employee: { select: { id: true, fullName: true, employeeCode: true } },
+        device: { select: { name: true } },
+      },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
+
+    return {
+      isManager: true,
+      punches: logs.map((l) => ({
+        id: l.id,
+        employeeId: l.employee.id,
+        fullName: l.employee.fullName,
+        employeeCode: l.employee.employeeCode,
+        deviceName: l.device?.name ?? null,
+        timestamp: l.timestamp,
+        direction: l.inOutMode ?? null,
+      })),
+    };
+  }
+
   async employeeGrowth() {
     const months: { month: string; count: number }[] = [];
     const now = new Date();

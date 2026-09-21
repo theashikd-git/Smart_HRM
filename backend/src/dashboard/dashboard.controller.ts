@@ -25,6 +25,11 @@ export class DashboardController {
     return this.dashboardService.myTeamAttendance(user.id);
   }
 
+  @Get('my-team-recent-punches')
+  myTeamRecentPunches(@CurrentUser() user: any) {
+    return this.dashboardService.myTeamRecentPunches(user.id);
+  }
+
   @Get('weekly-attendance')
   weeklyAttendance() {
     return this.dashboardService.weeklyAttendance();

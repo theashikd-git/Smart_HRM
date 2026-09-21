@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { DashboardSummary, MyTeamAttendance } from '@/types';
+import { DashboardSummary, MyTeamAttendance, MyTeamRecentPunches } from '@/types';
 
 export function useDashboardSummary() {
   return useQuery({
@@ -19,6 +19,17 @@ export function useMyTeamAttendance() {
     queryKey: ['dashboard', 'my-team-attendance'],
     queryFn: async () => (await api.get<MyTeamAttendance>('/dashboard/my-team-attendance')).data,
     refetchInterval: 30_000,
+  });
+}
+
+// Powers the "Real-Time Monitor" panel -- a shorter interval than the other
+// dashboard queries since the whole point of that panel is feeling live.
+export function useMyTeamRecentPunches() {
+  return useQuery({
+    queryKey: ['dashboard', 'my-team-recent-punches'],
+    queryFn: async () =>
+      (await api.get<MyTeamRecentPunches>('/dashboard/my-team-recent-punches')).data,
+    refetchInterval: 15_000,
   });
 }
 

@@ -32,10 +32,19 @@ export class AuthService {
     return this.issueSession(user, ipAddress);
   }
 
-  /** Employee self-service login -- Employee ID as username, default password
-   *  is that same Employee ID (see UsersService.create). Kept as a separate
-   *  entry point from staff login rather than overloading LoginDto's username
-   *  field, since the lookup path (Employee -> linked User) is different. */
+  /** Employee ID login -- Employee ID as username, default password is that
+   *  same Employee ID (see UsersService.create). Kept as a separate entry
+   *  point from staff login rather than overloading LoginDto's username
+   *  field, since the lookup path (Employee -> linked User) is different.
+   *
+   *  Not just for plain EMPLOYEE accounts: Manager/Supervisor/HR/Managing
+   *  Director logins are also Employee ID logins (see UsersService.create
+   *  and EMPLOYEE_ID_LOGIN_ROLES) -- everyone at the hospital signs in the
+   *  same way, through this one entry point, whatever their role. Only a
+   *  traditional Administrator account (created with its own username/
+   *  password) doesn't have a matching Employee ID login and has to use
+   *  /auth/login instead. Role-based access (what they can see once signed
+   *  in) is decided downstream from user.role, not here.*/
   async employeeLogin(dto: EmployeeLoginDto, ipAddress?: string) {
     const employee = await this.prisma.employee.findUnique({ where: { employeeCode: dto.employeeCode } });
     if (!employee) {
@@ -43,7 +52,7 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { employeeId: employee.id } });
-    if (!user || !user.isActive || user.role !== 'EMPLOYEE') {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid employee ID or password');
     }
 

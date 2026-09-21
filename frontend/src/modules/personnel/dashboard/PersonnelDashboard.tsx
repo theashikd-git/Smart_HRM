@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeamAttendance } from '@/hooks/useDashboard';
+import { MyCalendarCard } from '@/modules/employee-portal/MyCalendarCard';
 import { SummaryCards } from './SummaryCards';
 import { AttendanceOverview } from './AttendanceOverview';
 import { AttendanceTrend } from './AttendanceTrend';
 import { DepartmentAttendanceTable } from './DepartmentAttendanceTable';
 import { MyTeamAttendance } from './MyTeamAttendance';
 import { PendingApprovals } from './PendingApprovals';
+import { RealTimeMonitor } from './RealTimeMonitor';
 import { TodaysAttendance } from './TodaysAttendance';
 import { RecentActivity } from './RecentActivity';
 import { QuickActions } from './QuickActions';
@@ -63,6 +65,21 @@ export function PersonnelDashboard() {
           </div>
 
           <DepartmentAttendanceTable />
+
+          {/* Calendar + live punch feed -- only for a department head, same
+              flag as the "My Team Today" aside on the left. Fixed height so
+              My Calendar (built to fill whatever height it's given) and
+              Real-Time Monitor line up evenly side by side. */}
+          {myTeam?.isManager && (
+            <div className="flex h-[560px] flex-col gap-4 md:flex-row">
+              <div className="min-w-0 flex-1">
+                <MyCalendarCard />
+              </div>
+              <div className="w-full shrink-0 md:w-96">
+                <RealTimeMonitor />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <TodaysAttendance />
