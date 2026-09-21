@@ -334,6 +334,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
                 <option value="EMPLOYEE">Employee</option>
                 <option value="MANAGER">Manager</option>
                 <option value="SUPERVISOR">Supervisor</option>
+                <option value="MANAGING_DIRECTOR">Managing Director</option>
                 {(viewerRole === 'ADMIN' || wasAdministrator) && <option value="ADMINISTRATOR">Administrator</option>}
               </Select>
             </FieldWrap>

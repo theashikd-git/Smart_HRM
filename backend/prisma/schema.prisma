@@ -43,9 +43,9 @@ enum EmploymentType {
 
 // Picked on the Add/Edit Employee form (under Hired Date) -- decides which
 // kind of login this person gets, see EmployeesService/UsersService:
-//   EMPLOYEE/MANAGER/SUPERVISOR -> the ordinary Employee ID self-service
-//     login (role EMPLOYEE on the User table). Manager/Supervisor are just
-//     a label here -- they do NOT grant the real Manager/Supervisor staff
+//   EMPLOYEE/MANAGER/SUPERVISOR/MANAGING_DIRECTOR -> the ordinary Employee ID
+//     self-service login (role EMPLOYEE on the User table). These are just a
+//     label here -- they do NOT grant the real Manager/Supervisor staff
 //     permissions (leave approval, reports access); a person who actually
 //     needs those still needs a staff account with that Role, same as
 //     today, via this field set to ADMINISTRATOR or via System Settings.
@@ -55,6 +55,11 @@ enum EmployeeRole {
   EMPLOYEE
   MANAGER
   SUPERVISOR
+  // Cosmetic label only, same as MANAGER/SUPERVISOR above -- added so
+  // Managing Director shows up as its own Employee Role instead of being
+  // lumped in under Manager. A dedicated Managing Director dashboard is
+  // planned as separate follow-up work, not tied to this enum value.
+  MANAGING_DIRECTOR
   ADMINISTRATOR
 }
 

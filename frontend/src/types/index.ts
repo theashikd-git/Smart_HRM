@@ -98,7 +98,7 @@ export type SyncStatus = 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
 // thing as a login's actual access level (Role, below) -- that's the
 // separate "Account & Access" control on the employee profile page, which
 // grants real Supervisor/Manager approval permissions via a staff login.
-export type EmployeeRole = 'EMPLOYEE' | 'MANAGER' | 'SUPERVISOR' | 'ADMINISTRATOR';
+export type EmployeeRole = 'EMPLOYEE' | 'MANAGER' | 'SUPERVISOR' | 'MANAGING_DIRECTOR' | 'ADMINISTRATOR';
 
 export interface Employee {
   id: string;
