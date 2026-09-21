@@ -1,9 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Activity, Maximize2, Minimize2, Smartphone, User } from 'lucide-react';
+import { Activity, Maximize2, Minimize2, User } from 'lucide-react';
 import { useMyTeamRecentPunches } from '@/hooks/useDashboard';
 import { cn } from '@/lib/utils';
+
+function formatPunchDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 function formatPunchTime(value: string): string {
   const d = new Date(value);
@@ -18,11 +24,14 @@ const DIRECTION_LABEL: Record<string, string> = {
   BREAK_OUT: 'Break Out',
 };
 
-const DIRECTION_COLOR: Record<string, string> = {
-  IN: 'text-info',
-  OUT: 'text-danger',
-  BREAK_IN: 'text-info',
-  BREAK_OUT: 'text-danger',
+// Soft-pill colors (same pattern as StatusPill/Badge elsewhere) instead of
+// plain colored text -- a Check In/Check Out badge reads at a glance
+// without having to parse the word itself first.
+const DIRECTION_BADGE: Record<string, string> = {
+  IN: 'bg-info-soft text-info',
+  OUT: 'bg-danger-soft text-danger',
+  BREAK_IN: 'bg-info-soft text-info',
+  BREAK_OUT: 'bg-danger-soft text-danger',
 };
 
 /**
@@ -90,16 +99,16 @@ export function RealTimeMonitor() {
               <p className="truncate text-xs font-medium text-text-primary">
                 {p.employeeCode} &middot; {p.fullName}
               </p>
-              <p className="flex items-center gap-1 text-[11px] text-text-muted">
-                <Smartphone className="h-3 w-3 shrink-0" />
-                <span className="truncate">{p.deviceName ?? 'Manual'}</span>
-                <span className="shrink-0">&middot; {formatPunchTime(p.timestamp)}</span>
+              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+                <span>{formatPunchDate(p.timestamp)}</span>
+                <span className="text-text-muted/50">&middot;</span>
+                <span>{formatPunchTime(p.timestamp)}</span>
               </p>
             </div>
             <span
               className={cn(
-                'shrink-0 text-xs font-medium',
-                p.direction ? DIRECTION_COLOR[p.direction] ?? 'text-text-secondary' : 'text-text-secondary',
+                'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                p.direction ? DIRECTION_BADGE[p.direction] ?? 'bg-surface-sunken text-text-secondary' : 'bg-surface-sunken text-text-secondary',
               )}
             >
               {p.direction ? DIRECTION_LABEL[p.direction] ?? p.direction : '—'}

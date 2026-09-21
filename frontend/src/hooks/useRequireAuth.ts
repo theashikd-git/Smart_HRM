@@ -2,16 +2,28 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, homeRouteForRole } from '@/lib/auth-store';
 
-/** Guards a route behind login, and keeps staff (ADMIN/HR/MANAGER) and
- *  EMPLOYEE self-service accounts in their own area of the app -- staff use
- *  /workbench, employees use /employee-portal. `area` says which one this
- *  route belongs to, so a signed-in user who lands in the wrong area (e.g.
- *  an employee hitting /workbench directly) is bounced to their own home
- *  instead of seeing a screen that was never meant for them. Defaults to
- *  'staff' so existing callers (AppShellRoot) don't need to change. */
-export function useRequireAuth(area: 'staff' | 'employee' = 'staff') {
+type Area = 'staff' | 'employee' | 'manager' | 'supervisor';
+
+function inArea(area: Area, role?: string | null) {
+  if (area === 'employee') return role === 'EMPLOYEE';
+  if (area === 'manager') return role === 'MANAGER';
+  if (area === 'supervisor') return role === 'SUPERVISOR';
+  return role !== 'EMPLOYEE' && role !== 'MANAGER' && role !== 'SUPERVISOR';
+}
+
+/** Guards a route behind login, and keeps each login type at its own home:
+ *  ADMIN/HR/MANAGING_DIRECTOR use /workbench (area 'staff'), MANAGER uses
+ *  /manager-portal (area 'manager'), SUPERVISOR uses /supervisor-portal
+ *  (area 'supervisor'), EMPLOYEE uses /employee-portal (area 'employee').
+ *  `area` says which one this route belongs to, so a signed-in user who
+ *  lands in the wrong area (e.g. a Supervisor hitting /manager-portal, or
+ *  an employee hitting /workbench) is bounced to their own home via
+ *  homeRouteForRole instead of seeing a screen that was never meant for
+ *  them. Defaults to 'staff' so existing callers (AppShellRoot) don't need
+ *  to change. */
+export function useRequireAuth(area: Area = 'staff') {
   const router = useRouter();
   const { token, user, hydrated, hydrate } = useAuthStore();
 
@@ -25,13 +37,11 @@ export function useRequireAuth(area: 'staff' | 'employee' = 'staff') {
       router.replace('/login');
       return;
     }
-    if (area === 'staff' && user?.role === 'EMPLOYEE') {
-      router.replace('/employee-portal');
-    } else if (area === 'employee' && user && user.role !== 'EMPLOYEE') {
-      router.replace('/workbench');
+    if (user && !inArea(area, user.role)) {
+      router.replace(homeRouteForRole(user.role));
     }
   }, [hydrated, token, user, area, router]);
 
-  const inRightArea = area === 'staff' ? user?.role !== 'EMPLOYEE' : user?.role === 'EMPLOYEE';
+  const inRightArea = !!user && inArea(area, user.role);
   return { ready: hydrated && !!token && (!!user ? inRightArea : true) };
 }

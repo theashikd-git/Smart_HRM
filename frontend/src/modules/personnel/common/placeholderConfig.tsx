@@ -22,18 +22,6 @@ export const PLACEHOLDER_CONFIG: Record<string, PlaceholderConfig> = {
     rows: mockResignedEmployees,
   },
 
-  'org-company': {
-    variant: 'info',
-    fields: [
-      { label: 'Company Name', value: 'Smart HRM Industries Ltd.' },
-      { label: 'Registration No.', value: 'BD-2014-778812' },
-      { label: 'Head Office', value: 'Dhaka, Bangladesh' },
-      { label: 'Industry', value: 'Manufacturing / Garments' },
-      { label: 'Total Branches', value: '3' },
-      { label: 'Total Employees', value: '1,248' },
-    ],
-  },
-
   'superior-management': {
     variant: 'table',
     rowKey: (r) => `${r.unit}-${r.title}`,

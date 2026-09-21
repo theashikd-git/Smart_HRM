@@ -23,8 +23,8 @@ export function ProgramWorkspace({
   children,
 }: ProgramWorkspaceProps) {
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-line bg-white px-4 py-2.5">
+    <div className="flex h-full flex-col print:h-auto">
+      <div className="flex items-center justify-between border-b border-line bg-white px-4 py-2.5 print:hidden">
         <div>
           <h1 className="text-[15px] font-semibold text-text-primary leading-tight">{title}</h1>
           <div className="mt-0.5 flex items-center gap-1 text-[11px] text-text-muted">
@@ -43,7 +43,7 @@ export function ProgramWorkspace({
         <ProgramTabs tabs={internalTabs} activeTab={activeInternalTab} onChange={onInternalTabChange} />
       )}
 
-      <div className="flex-1 overflow-auto bg-surface p-4">{children}</div>
+      <div className="flex-1 overflow-auto bg-surface p-4 print:h-auto print:overflow-visible print:bg-white print:p-0">{children}</div>
     </div>
   );
 }

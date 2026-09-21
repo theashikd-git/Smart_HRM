@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { DashboardSummary, MyTeamAttendance, MyTeamRecentPunches } from '@/types';
+import { DashboardSummary, MyTeamAttendance, MyTeamOnLeave, MyTeamRecentPunches } from '@/types';
 
 export function useDashboardSummary() {
   return useQuery({
@@ -30,6 +30,18 @@ export function useMyTeamRecentPunches() {
     queryFn: async () =>
       (await api.get<MyTeamRecentPunches>('/dashboard/my-team-recent-punches')).data,
     refetchInterval: 15_000,
+  });
+}
+
+// Powers the "Team On Leave" panel -- current/upcoming APPROVED leave for a
+// department head's team, so an approval shows up here immediately. Same
+// { isManager: false } shape as useMyTeamAttendance for anyone who isn't a
+// department head.
+export function useMyTeamOnLeave() {
+  return useQuery({
+    queryKey: ['dashboard', 'my-team-on-leave'],
+    queryFn: async () => (await api.get<MyTeamOnLeave>('/dashboard/my-team-on-leave')).data,
+    refetchInterval: 30_000,
   });
 }
 

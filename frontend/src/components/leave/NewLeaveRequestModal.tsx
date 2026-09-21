@@ -10,11 +10,40 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { apiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
-export function NewLeaveRequestModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface SelectableEmployee {
+  id: string;
+  fullName: string;
+  employeeCode: string;
+  gender?: string | null;
+  joiningDate?: string | null;
+}
+
+export function NewLeaveRequestModal({
+  open,
+  onClose,
+  employees: employeesProp,
+  title = 'New Leave Request',
+  subtitle = 'Log a leave request on behalf of an employee',
+  hideSession = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  // Scopes the employee picker to a given list (e.g. a department head's
+  // own team on the Manager Portal's "Leave on Behalf" tab) instead of the
+  // full company employee list this modal otherwise fetches itself. See
+  // ManagerPortalView.
+  employees?: SelectableEmployee[];
+  title?: string;
+  subtitle?: string;
+  // Hides the Full Day / First Half / Second Half picker -- used on the
+  // Manager Portal's "Leave on Behalf" tab, where it stays Full Day.
+  hideSession?: boolean;
+}) {
   const user = useAuthStore((s) => s.user);
   const canOverride = user?.role === 'ADMIN' || user?.role === 'HR';
 
-  const { data: employees } = useEmployees({ pageSize: 200 });
+  const { data: allEmployees } = useEmployees({ pageSize: 200 }, { enabled: !employeesProp });
+  const employeeOptions: SelectableEmployee[] = employeesProp ?? allEmployees?.items ?? [];
   const { data: leaveTypes } = useLeaveTypes();
   const createRequest = useCreateLeaveRequest();
 
@@ -32,7 +61,7 @@ export function NewLeaveRequestModal({ open, onClose }: { open: boolean; onClose
   const { data: balances } = useLeaveBalances(employeeId || undefined);
   const selectedBalance = balances?.find((b) => b.leaveTypeId === leaveTypeId);
   const selectedLeaveType = leaveTypes?.find((t) => t.id === leaveTypeId);
-  const selectedEmployee = employees?.items.find((e) => e.id === employeeId);
+  const selectedEmployee = employeeOptions.find((e) => e.id === employeeId);
   const isCompensatory = selectedLeaveType?.specialRule === 'COMPENSATORY';
   const isMaternity = selectedLeaveType?.specialRule === 'MATERNITY';
 
@@ -110,8 +139,8 @@ export function NewLeaveRequestModal({ open, onClose }: { open: boolean; onClose
     <Modal
       open={open}
       onClose={onClose}
-      title="New Leave Request"
-      subtitle="Log a leave request on behalf of an employee"
+      title={title}
+      subtitle={subtitle}
       size="md"
       footer={
         <>
@@ -128,7 +157,7 @@ export function NewLeaveRequestModal({ open, onClose }: { open: boolean; onClose
         <FieldWrap label="Employee" required>
           <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
             <option value="">Select employee</option>
-            {employees?.items.map((emp) => (
+            {employeeOptions.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.fullName} ({emp.employeeCode})
               </option>
@@ -167,13 +196,15 @@ export function NewLeaveRequestModal({ open, onClose }: { open: boolean; onClose
           </FieldWrap>
         </div>
 
-        <FieldWrap label="Session">
-          <Select value={session} onChange={(e) => setSession(e.target.value as any)}>
-            <option value="FULL_DAY">Full Day</option>
-            <option value="FIRST_HALF">First Half</option>
-            <option value="SECOND_HALF">Second Half</option>
-          </Select>
-        </FieldWrap>
+        {!hideSession && (
+          <FieldWrap label="Session">
+            <Select value={session} onChange={(e) => setSession(e.target.value as any)}>
+              <option value="FULL_DAY">Full Day</option>
+              <option value="FIRST_HALF">First Half</option>
+              <option value="SECOND_HALF">Second Half</option>
+            </Select>
+          </FieldWrap>
+        )}
 
         {isCompensatory && (
           <FieldWrap

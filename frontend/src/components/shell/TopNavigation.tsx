@@ -23,7 +23,7 @@ export function TopNavigation() {
   const visibleModules = MODULES.filter((mod) => !mod.roles || (user && mod.roles.includes(user.role)));
 
   return (
-    <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-ink-line/40 bg-ink px-3 text-white">
+    <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-ink-line/40 bg-ink px-3 text-white print:hidden">
       <div className="flex items-center gap-1">
         <div className="flex items-center gap-2 pr-3 mr-1 border-r border-white/10">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent">

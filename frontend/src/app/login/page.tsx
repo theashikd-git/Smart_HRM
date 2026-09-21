@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Fingerprint, ShieldCheck, IdCard } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, homeRouteForRole } from '@/lib/auth-store';
 import { apiErrorMessage } from '@/lib/api';
 import { Input } from '@/components/ui/Form';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +28,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!hydrated || !token) return;
-    router.replace(user?.role === 'EMPLOYEE' ? '/employee-portal' : '/workbench');
+    router.replace(homeRouteForRole(user?.role));
   }, [hydrated, token, user, router]);
 
   function switchMode(next: Mode) {
@@ -49,7 +49,12 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       await employeeLogin(employeeCode.trim(), employeePassword);
-      router.replace('/employee-portal');
+      // Employee ID login covers EMPLOYEE, MANAGER, SUPERVISOR and
+      // MANAGING_DIRECTOR alike (see EMPLOYEE_ID_LOGIN_ROLES on the
+      // backend) -- read the just-set role fresh off the store rather
+      // than the `user` closed over at render time, which may still be
+      // the pre-login value here.
+      router.replace(homeRouteForRole(useAuthStore.getState().user?.role));
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

@@ -11,7 +11,7 @@ interface ProgramTabsProps {
 
 export function ProgramTabs({ tabs, activeTab, onChange }: ProgramTabsProps) {
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-4">
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-4 print:hidden">
       {tabs.map((tab) => {
         const active = tab.id === activeTab;
         return (

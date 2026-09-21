@@ -10,6 +10,7 @@ import { useMyLeaveRequests, useMyLeaveBalances, useCancelMyLeaveRequest } from 
 import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { MyLeaveRequestModal } from './MyLeaveRequestModal';
+import { LeaveRequest } from '@/types';
 
 /**
  * "My Leave" -- an employee's own leave: balances, Apply for Leave, and the
@@ -26,11 +27,17 @@ export function MyLeaveTab() {
   const cancelRequest = useCancelMyLeaveRequest();
   const [requestOpen, setRequestOpen] = useState(false);
 
-  async function handleCancel(id: string) {
-    if (!confirm('Cancel this leave request?')) return;
+  async function handleCancel(request: LeaveRequest) {
+    const isApproved = request.status === 'APPROVED';
+    const confirmed = confirm(
+      isApproved
+        ? 'Request cancellation of this approved leave? It will need to be approved before the leave is actually cancelled.'
+        : 'Withdraw this leave request?',
+    );
+    if (!confirmed) return;
     try {
-      await cancelRequest.mutateAsync(id);
-      toast.success('Leave request cancelled');
+      await cancelRequest.mutateAsync(request.id);
+      toast.success(isApproved ? 'Cancellation requested -- awaiting approval' : 'Leave request withdrawn');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -122,12 +129,37 @@ export function MyLeaveTab() {
                       ))}
                     </div>
                   )}
+                  {request.cancellationStatus === 'PENDING' && (
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
+                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                    </p>
+                  )}
+                  {request.cancellationStatus === 'REJECTED' && (
+                    <p className="mt-1.5 text-xs text-text-muted">Cancellation request was rejected -- leave remains approved.</p>
+                  )}
+                  {request.cancellationDecisions && request.cancellationDecisions.length > 0 && (
+                    <div className="mt-1.5 space-y-0.5 border-l-2 border-warning/50 pl-2">
+                      {request.cancellationDecisions.map((d) => (
+                        <p key={d.id} className="text-[11px] text-text-muted">
+                          Cancel:{' '}
+                          {d.decision === 'APPROVED' ? (
+                            <CheckCircle2 className="inline h-3 w-3 text-success mr-1" />
+                          ) : (
+                            <XCircle className="inline h-3 w-3 text-danger mr-1" />
+                          )}
+                          {d.tierLabel} &middot; {d.approver?.fullName ?? '—'} &middot; {formatDateTime(d.decidedAt)}
+                          {d.reason && ` — ${d.reason}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </Td>
                 <Td className="text-right">
-                  {(request.status === 'PENDING' || request.status === 'APPROVED') && (
+                  {(request.status === 'PENDING' ||
+                    (request.status === 'APPROVED' && request.cancellationStatus !== 'PENDING')) && (
                     <button
-                      onClick={() => handleCancel(request.id)}
-                      title="Cancel"
+                      onClick={() => handleCancel(request)}
+                      title={request.status === 'APPROVED' ? 'Request cancellation' : 'Withdraw'}
                       className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
                     >
                       <Ban className="h-4 w-4" />

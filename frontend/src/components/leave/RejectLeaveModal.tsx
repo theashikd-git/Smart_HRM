@@ -5,19 +5,30 @@ import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Textarea } from '@/components/ui/Form';
-import { useRejectLeaveRequest } from '@/hooks/useLeave';
+import { useRejectLeaveRequest, useRejectCancellation } from '@/hooks/useLeave';
 import { apiErrorMessage } from '@/lib/api';
 import { LeaveRequest } from '@/types';
 
+/**
+ * Shared reject dialog for both leave-decision chains: the original
+ * approval chain (mode="approval", the default) and the cancellation chain
+ * a request walks after it's already been approved (mode="cancellation").
+ * Same form either way -- only which mutation it fires and its copy
+ * differ. See useRejectLeaveRequest / useRejectCancellation.
+ */
 export function RejectLeaveModal({
   request,
   onClose,
+  mode = 'approval',
 }: {
   request: LeaveRequest | null;
   onClose: () => void;
+  mode?: 'approval' | 'cancellation';
 }) {
   const [reason, setReason] = useState('');
   const rejectRequest = useRejectLeaveRequest();
+  const rejectCancellation = useRejectCancellation();
+  const pending = mode === 'cancellation' ? rejectCancellation.isPending : rejectRequest.isPending;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,8 +38,13 @@ export function RejectLeaveModal({
       return;
     }
     try {
-      await rejectRequest.mutateAsync({ id: request.id, reason });
-      toast.success('Leave request rejected');
+      if (mode === 'cancellation') {
+        await rejectCancellation.mutateAsync({ id: request.id, reason });
+        toast.success('Cancellation rejected -- the leave remains approved');
+      } else {
+        await rejectRequest.mutateAsync({ id: request.id, reason });
+        toast.success('Leave request rejected');
+      }
       setReason('');
       onClose();
     } catch (err) {
@@ -40,7 +56,7 @@ export function RejectLeaveModal({
     <Modal
       open={!!request}
       onClose={onClose}
-      title="Reject Leave Request"
+      title={mode === 'cancellation' ? 'Reject Cancellation Request' : 'Reject Leave Request'}
       subtitle={request ? `${request.employee?.fullName} — ${request.leaveType?.name}` : undefined}
       size="sm"
       footer={
@@ -48,8 +64,8 @@ export function RejectLeaveModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="danger" type="submit" form="reject-leave-form" loading={rejectRequest.isPending}>
-            Reject Request
+          <Button variant="danger" type="submit" form="reject-leave-form" loading={pending}>
+            {mode === 'cancellation' ? 'Reject Cancellation' : 'Reject Request'}
           </Button>
         </>
       }
@@ -59,7 +75,11 @@ export function RejectLeaveModal({
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Why is this request being rejected?"
+            placeholder={
+              mode === 'cancellation'
+                ? 'Why is this cancellation request being rejected?'
+                : 'Why is this request being rejected?'
+            }
             autoFocus
           />
         </FieldWrap>

@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Card, CardHeader, Badge } from '@/components/ui/Card';
@@ -10,99 +9,10 @@ import { Modal } from '@/components/ui/Modal';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
-import { api, apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage } from '@/lib/api';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/hooks/useUsers';
 import { useEmployees } from '@/hooks/useEmployees';
 import type { SystemUser } from '@/types';
-
-function CompanySettings() {
-  const qc = useQueryClient();
-  const { data } = useQuery({
-    queryKey: ['company'],
-    queryFn: async () => (await api.get('/company')).data,
-  });
-  const [form, setForm] = useState({
-    name: '',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
-    timeZone: '',
-    officeHours: '',
-    workingDays: '',
-  });
-
-  useEffect(() => {
-    if (data) {
-      setForm({
-        name: data.name || '',
-        address: data.address || '',
-        phone: data.phone || '',
-        email: data.email || '',
-        website: data.website || '',
-        timeZone: data.timeZone || '',
-        officeHours: data.officeHours || '',
-        workingDays: data.workingDays || '',
-      });
-    }
-  }, [data]);
-
-  const update = useMutation({
-    mutationFn: async () => (await api.patch('/company', form)).data,
-    onSuccess: () => {
-      toast.success('Company profile updated');
-      qc.invalidateQueries({ queryKey: ['company'] });
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  });
-
-  function set<K extends keyof typeof form>(key: K, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  return (
-    <Card>
-      <CardHeader title="Company Profile" subtitle="Shown across reports and the login screen" />
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          update.mutate();
-        }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-5 pb-5"
-      >
-        <FieldWrap label="Company Name">
-          <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Time Zone">
-          <Input value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Phone">
-          <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Email">
-          <Input value={form.email} onChange={(e) => set('email', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Website">
-          <Input value={form.website} onChange={(e) => set('website', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Office Hours">
-          <Input value={form.officeHours} onChange={(e) => set('officeHours', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Working Days" hint="Comma separated, e.g. Sun,Mon,Tue,Wed,Thu">
-          <Input value={form.workingDays} onChange={(e) => set('workingDays', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Address">
-          <Input value={form.address} onChange={(e) => set('address', e.target.value)} />
-        </FieldWrap>
-        <div className="sm:col-span-2 flex justify-end">
-          <Button type="submit" loading={update.isPending}>
-            Save Company Profile
-          </Button>
-        </div>
-      </form>
-    </Card>
-  );
-}
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -480,9 +390,10 @@ export function SystemSettingsModuleView() {
     <div className="h-full overflow-auto bg-surface p-4">
       <div className="mb-4">
         <h1 className="text-[15px] font-semibold text-text-primary">System Settings</h1>
-        <p className="text-xs text-text-secondary">Company profile and system user accounts</p>
+        {/* Company Profile moved to Personnel > Organization > Company --
+            see CompanyProgram.tsx -- System Settings is now just accounts. */}
+        <p className="text-xs text-text-secondary">System user accounts</p>
       </div>
-      <CompanySettings />
       <UserManagement />
     </div>
   );

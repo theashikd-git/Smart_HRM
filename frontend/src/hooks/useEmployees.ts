@@ -12,11 +12,12 @@ export interface EmployeeQuery {
   pageSize?: number;
 }
 
-export function useEmployees(query: EmployeeQuery) {
+export function useEmployees(query: EmployeeQuery, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['employees', query],
     queryFn: async () =>
       (await api.get<Paginated<Employee>>('/employees', { params: query })).data,
+    enabled: options?.enabled,
   });
 }
 

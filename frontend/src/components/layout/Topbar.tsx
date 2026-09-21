@@ -11,7 +11,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white/85 backdrop-blur px-6 py-4">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white/85 backdrop-blur px-6 py-4 print:hidden">
       <div>
         <h1 className="text-lg font-semibold text-text-primary">{title}</h1>
         {subtitle && <p className="text-xs text-text-secondary mt-0.5">{subtitle}</p>}

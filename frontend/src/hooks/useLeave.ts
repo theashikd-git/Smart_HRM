@@ -222,7 +222,18 @@ export function useCreateLeaveRequest() {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       qc.invalidateQueries({ queryKey: ['leave-balances'] });
       qc.invalidateQueries({ queryKey: ['leave-pending-count'] });
+      qc.invalidateQueries({ queryKey: ['leave-applied-on-behalf'] });
     },
+  });
+}
+
+// Every request the signed-in login has filed for someone else (never for
+// themselves) -- powers the Manager Portal's "Leave on Behalf" tab. See
+// LeaveController.findAppliedOnBehalf.
+export function useAppliedOnBehalf() {
+  return useQuery({
+    queryKey: ['leave-applied-on-behalf'],
+    queryFn: async () => (await api.get<LeaveRequest[]>('/leave/my-team/on-behalf')).data,
   });
 }
 
@@ -249,6 +260,39 @@ export function useRejectLeaveRequest() {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       qc.invalidateQueries({ queryKey: ['leave-pending-count'] });
       qc.invalidateQueries({ queryKey: ['my-approvals'] });
+    },
+  });
+}
+
+// -- Leave cancellation approval (cancelling an already-APPROVED leave) -----
+// Deciding the CURRENT tier of a request's cancellation chain -- distinct
+// from useApproveLeaveRequest/useRejectLeaveRequest above, which decide the
+// original approval chain. See LeaveService.approveCancellation/
+// rejectCancellation.
+
+export function useApproveCancellation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.patch(`/leave/requests/${id}/approve-cancellation`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leave-requests'] });
+      qc.invalidateQueries({ queryKey: ['leave-balances'] });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['my-approvals'] });
+      qc.invalidateQueries({ queryKey: ['my-leave-requests'] });
+    },
+  });
+}
+
+export function useRejectCancellation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await api.patch(`/leave/requests/${id}/reject-cancellation`, { reason })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leave-requests'] });
+      qc.invalidateQueries({ queryKey: ['my-approvals'] });
+      qc.invalidateQueries({ queryKey: ['my-leave-requests'] });
     },
   });
 }
@@ -401,7 +445,10 @@ export function useCreateMyLeaveRequest() {
 export function useCancelMyLeaveRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.patch(`/leave/my/requests/${id}/cancel`)).data,
+    mutationFn: async (payload: string | { id: string; reason?: string }) => {
+      const { id, reason } = typeof payload === 'string' ? { id: payload, reason: undefined } : payload;
+      return (await api.patch(`/leave/my/requests/${id}/cancel`, reason ? { reason } : undefined)).data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-leave-requests'] });
       qc.invalidateQueries({ queryKey: ['my-leave-balances'] });

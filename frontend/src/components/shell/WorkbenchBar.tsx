@@ -12,7 +12,7 @@ export function WorkbenchBar() {
   const toggleSidebar = useWorkbenchStore((s) => s.toggleSidebar);
 
   return (
-    <div className="flex h-9 items-center border-b border-line bg-surface-sunken/70 pl-2 pr-1">
+    <div className="flex h-9 items-center border-b border-line bg-surface-sunken/70 pl-2 pr-1 print:hidden">
       <div className="flex items-center gap-0.5 pr-2 mr-1 border-r border-line">
         <button
           type="button"

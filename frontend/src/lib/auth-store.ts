@@ -3,7 +3,22 @@
 import { create } from 'zustand';
 import { api } from './api';
 import { clearPersistedWorkbench } from '@/hooks/useWorkbenchStore';
-import { User } from '@/types';
+import { User, Role } from '@/types';
+
+// Where a signed-in login's browser tab should land -- kept in one place so
+// /login, / and useRequireAuth never disagree about it. EMPLOYEE goes to the
+// Employee Portal; MANAGER and SUPERVISOR each get their own URL --
+// /manager-portal and /supervisor-portal -- though both render the exact
+// same ManagerPortalView component with the exact same tabs (only the
+// header badge text differs); SUPERVISOR's narrower permissions are
+// enforced server-side, not by giving it a different portal. Everyone else
+// (ADMIN/HR/MANAGING_DIRECTOR) gets the full Admin/HR Workbench.
+export function homeRouteForRole(role?: Role | null): string {
+  if (role === 'EMPLOYEE') return '/employee-portal';
+  if (role === 'MANAGER') return '/manager-portal';
+  if (role === 'SUPERVISOR') return '/supervisor-portal';
+  return '/workbench';
+}
 
 interface AuthState {
   user: User | null;

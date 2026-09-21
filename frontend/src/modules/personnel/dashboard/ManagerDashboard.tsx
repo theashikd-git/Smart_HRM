@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { MyCalendarCard } from '@/modules/employee-portal/MyCalendarCard';
 import { MyLeaveRequestModal } from '@/modules/employee-portal/MyLeaveRequestModal';
 import { RealTimeMonitor } from './RealTimeMonitor';
+import { TeamOnLeave } from './TeamOnLeave';
 
 function useGreeting() {
   const [greeting, setGreeting] = useState('Hello');
@@ -21,14 +22,16 @@ function useGreeting() {
  * DepartmentAttendanceTable, TodaysAttendance, PendingApprovals,
  * RecentActivity, QuickActions) -- a Manager sees the same "Dashboard" a
  * plain Employee Portal login does (just My Calendar, with Apply Leave),
- * with only the Real-Time Monitor added beside it for their team's live
- * punches. Still rendered inside the normal Workbench shell
+ * with Team On Leave and Real-Time Monitor added beside it: Team On Leave
+ * so an approved request shows up with the employee's name and dates the
+ * moment it's decided (see TeamOnLeave), Real-Time Monitor for their
+ * team's live punches. Still rendered inside the normal Workbench shell
  * (TopNavigation/WorkbenchBar/Sidebar), unlike the Employee Portal's own
  * separate shell -- a Manager still needs to reach Leave/Personnel/Device
  * from the top nav, an Employee Portal login doesn't.
  *
  * See PersonnelDashboard, which renders this instead of itself for
- * user.role === 'MANAGER'.
+ * user.role === 'MANAGER' or 'SUPERVISOR'.
  */
 export function ManagerDashboard() {
   const greeting = useGreeting();
@@ -49,6 +52,7 @@ export function ManagerDashboard() {
         <div className="min-w-0 flex-1">
           <MyCalendarCard onApplyLeave={() => setRequestOpen(true)} />
         </div>
+        <TeamOnLeave />
         <RealTimeMonitor />
       </div>
 

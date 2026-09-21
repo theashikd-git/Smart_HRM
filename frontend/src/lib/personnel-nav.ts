@@ -71,7 +71,9 @@ export const PROGRAM_REGISTRY: Record<string, ProgramDefinition> = {
     title: 'Attendance',
     breadcrumb: ['Personnel', 'Attendance'],
     internalTabs: [
-      { id: 'daily', label: 'Daily Attendance' },
+      // Real data + printable letterhead report now (see AttendanceReport) --
+      // kept the 'daily' id so nothing else referencing this tab needs to change.
+      { id: 'daily', label: 'Attendance Report' },
       { id: 'monthly', label: 'Monthly Attendance' },
       { id: 'late', label: 'Late' },
       { id: 'absent', label: 'Absent' },

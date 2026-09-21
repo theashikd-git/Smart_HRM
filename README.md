@@ -1,12 +1,15 @@
 # Smart HRM — Centralized Human Resource & Biometric Management System
 
-A full-stack HRM platform for managing employees, departments, shifts, attendance,
-and a ZKTeco uFace 800 Plus biometric terminal from a single web application.
+A full-stack HRM platform for a hospital: employees, departments, shifts,
+leave, attendance, and a ZKTeco uFace 800 Plus biometric terminal, all from
+one web application — with separate self-service portals for Employees,
+Managers, and Supervisors alongside the full staff (Admin/HR) workbench.
 
-This is a **real, working codebase** — not a mockup. The only piece that's simulated
-is the biometric device itself (no physical ZKTeco hardware is reachable during
-development), so a mock client stands in behind the exact same interface a real
-device SDK would implement. Swap one file and it talks to real hardware.
+This is a **real, working codebase** — not a mockup. The only piece that's
+simulated is the biometric device itself (no physical ZKTeco hardware is
+reachable during development), so a mock client stands in behind the exact
+same interface a real device SDK would implement. Swap one file and it talks
+to real hardware.
 
 ---
 
@@ -18,6 +21,60 @@ device SDK would implement. Swap one file and it talks to real hardware.
 | Backend   | NestJS, TypeScript, Prisma ORM, PostgreSQL, JWT auth, class-validator |
 | Device    | Mock ZKTeco uFace 800 Plus client (drop-in replaceable with a real SDK) |
 | Infra     | Docker Compose (Postgres + backend + frontend) |
+
+---
+
+## Roles & Portals
+
+| Role | Access |
+|------|--------|
+| **ADMIN** | Full staff workbench, plus System Settings, user management, audit logs, device removal |
+| **HR** | Full staff workbench — employees, departments, designations, shifts, devices, attendance, leave, reports |
+| **MANAGING DIRECTOR** | Same workbench as HR/Manager/Supervisor, minus System Settings (ADMIN-only). A dedicated MD dashboard is planned but not yet built |
+| **MANAGER** | Own dedicated **Manager Portal** (`/manager-portal`) — dashboard, My Leave, Leave Request, Leave on Behalf, Roster, Shift |
+| **SUPERVISOR** | Own dedicated **Supervisor Portal** (`/supervisor-portal`) — currently identical to the Manager Portal (schema documents a narrower, tier-based intent for a future release) |
+| **EMPLOYEE** | Own dedicated **Employee Portal** (`/employee-portal`) — self-service dashboard, My Leave, Leave Request |
+
+ADMIN/HR sign in with a username/password on the staff login form; every other
+role signs in with their Employee ID. Each role lands on its own home route
+automatically after login — there's no shared "workbench" landing page for
+Manager/Supervisor/Employee accounts.
+
+The Roster and Shift tabs in the Manager/Supervisor Portal are visible but
+**locked ("coming soon")** — held back for a future release.
+
+---
+
+## Core Modules
+
+- **Employees** — full CRUD, source of truth for the whole system; each
+  employee has a leave category (Permanent / Provision / Contractual / Trial)
+  that drives their leave entitlement.
+- **Departments, Designations, Shifts** — organizational structure and shift
+  rules (hours, grace period, overtime).
+- **Department Superiors** — who leads which department, resolved from both a
+  department's designated head and any Supervisor configured as a
+  fixed approver in that department's leave approval chain.
+- **Devices** — CRUD, connection control, and live sync against a ZKTeco
+  biometric terminal (see [Connecting a real ZKTeco device](#connecting-a-real-zkteco-device) below).
+- **Attendance** — punch ingestion from the device, manual punches,
+  corrections, approvals, and a printable **Attendance Report**: a
+  letterhead (company logo + name pulled from Company Profile), a compact
+  check-in/check-out table for the current filters, and totals — tuned to
+  print cleanly on A4 without spilling across many pages.
+- **Leave Management** — a 7-type leave policy: Permanent, Provision (6-month
+  probation), Contractual, Trial (custom duration set at hire), Compensatory
+  (claimed against a specific overtime day), Maternity (2+ years tenure,
+  up to 112 days, requires a document), and Unpaid. Balances, carry-forward
+  rules, and anniversary-based resets are configured per employee category in
+  **Leave Policy**; a daily scheduler handles rollovers and flags
+  upcoming probation/trial deadlines.
+- **Dashboard** — summary cards, charts, and (for Manager/Supervisor/HR/Admin)
+  a live "Team on Leave" and team attendance view for the departments they lead.
+- **Reports** — 9 report types with CSV export.
+- **Audit Logs** — system-wide activity trail.
+- **System Settings** — company profile (name, contact info, and now a
+  **company logo**, used on the Attendance Report letterhead), ADMIN-only.
 
 ---
 
@@ -82,12 +139,12 @@ The API runs on **http://localhost:4000/api** (Swagger UI at `/api/docs`).
 > that domain is reachable — this is the only external dependency Prisma needs
 > beyond the npm registry.
 
-> **Upgrading an existing install:** this update added a database-level
-> unique constraint on `attendance_logs(employeeId, timestamp)` as a second
-> line of defense against duplicate punches. Run
-> `npx prisma migrate dev --name add_attendance_log_unique` to apply it — if
-> you already have duplicate rows for the same employee/timestamp, Prisma
-> will tell you so you can clean them up first.
+> **Upgrading an existing install:** run `npx prisma migrate dev` after
+> pulling latest — recent additions (the 7-type leave policy fields, leave
+> attachments, and the attendance-log uniqueness constraint) all require a
+> migration. If a migration reports duplicate rows or employees missing a
+> required field (e.g. `leaveCategory`), resolve those in the data before
+> re-running.
 
 ### 3. Frontend
 
@@ -108,32 +165,40 @@ Open **http://localhost:3000**.
 smart-hrm/
 ├── backend/                   NestJS API
 │   ├── prisma/
-│   │   ├── schema.prisma      Full data model (users, employees, devices, attendance...)
+│   │   ├── schema.prisma      Full data model (users, employees, devices, leave, attendance...)
 │   │   └── seed.ts            Demo data seeder
 │   └── src/
-│       ├── auth/              JWT login, guards, role-based access
-│       ├── users/             Admin-managed HR/Manager accounts
-│       ├── company/           Single-row company profile
-│       ├── employees/         Core employee CRUD (source of truth)
-│       ├── departments/       Department CRUD
-│       ├── designations/      Job title CRUD
-│       ├── shifts/            Shift definitions (hours, grace, overtime)
-│       ├── devices/           Device CRUD + connection control + ZKTeco client
-│       │   ├── zkteco/        ZktecoClient interface, mock + real implementations
+│       ├── auth/              JWT login (staff + Employee ID), guards, role-based access
+│       ├── users/              Admin-managed HR/Manager/Supervisor accounts
+│       ├── company/            Single-row company profile (incl. logo)
+│       ├── employees/          Core employee CRUD (source of truth)
+│       ├── departments/        Department CRUD
+│       ├── department-superiors/  Department leadership resolution
+│       ├── designations/       Job title CRUD
+│       ├── shifts/             Shift definitions (hours, grace, overtime)
+│       ├── roster/             Roster scheduling (locked in the UI — next release)
+│       ├── devices/            Device CRUD + connection control + ZKTeco client
+│       │   ├── zkteco/         ZktecoClient interface, mock + real implementations
 │       │   └── device-sync.service.ts   Employee ⇄ device synchronization
-│       ├── attendance/        Punch ingestion, processing, corrections, approvals
-│       ├── dashboard/         Summary cards + chart data
-│       ├── reports/           9 report types + CSV export
-│       └── audit/             System-wide audit logging
+│       ├── attendance/         Punch ingestion, processing, corrections, approvals
+│       ├── leave/              Leave requests, category policies, approval tiers, attachments
+│       ├── dashboard/          Summary cards, chart data, team-on-leave / team-attendance
+│       ├── reports/            9 report types + CSV export
+│       ├── notifications/      In-app notifications
+│       └── audit/              System-wide audit logging
 │
 ├── frontend/                  Next.js app
 │   └── src/
-│       ├── app/                Routes: login, dashboard, employees, departments,
-│       │                       designations, shifts, attendance, device, reports,
-│       │                       audit-logs, settings
-│       ├── components/         UI primitives + feature components
-│       ├── hooks/               React Query hooks per resource
-│       └── lib/                 API client, auth store, utilities
+│       ├── app/                 Routes: login, dashboard, employees, departments,
+│       │                        designations, shifts, attendance, device, reports,
+│       │                        leave, audit-logs, settings, workbench, and the
+│       │                        role portals: employee-portal, manager-portal,
+│       │                        supervisor-portal
+│       ├── components/          UI primitives + feature components
+│       ├── modules/             Portal views (Employee/Manager Portal), Personnel
+│       │                        module screens (dashboard, attendance report, etc.)
+│       ├── hooks/                React Query hooks per resource
+│       └── lib/                  API client, auth store (incl. per-role home routing), utilities
 │
 └── docker-compose.yml
 ```
@@ -219,7 +284,7 @@ All of these live in `backend/.env` (see `.env.example` for defaults):
 ## Core Workflow
 
 ```
-Employee created in HRM
+Employee created in HRM (leave category assigned)
         │
         ▼
 Assigned department / designation / shift
@@ -238,33 +303,33 @@ Raw punches processed into daily AttendanceRecord
    (late minutes, overtime, work hours calculated from shift rules)
         │
         ▼
-Reports & dashboard
+Dashboard, printable Attendance Report, and the 9 report types
 ```
 
----
-
-## Default Roles
-
-| Role       | Permissions |
-|------------|-------------|
-| ADMIN      | Full access — including user management, audit logs, device removal |
-| HR         | Employee/attendance/department/shift management, device control, reports |
-| MANAGER    | Read-only views of employees, attendance, and reports |
+Leave runs in parallel: an Employee/Manager/Supervisor submits a request from
+their portal (or HR logs one on an employee's behalf), it routes through that
+department's approval chain, and approved leave feeds back into attendance
+status and the "Team on Leave" dashboard view.
 
 ---
 
 ## Known limitations / next steps
 
+- **Roster and Shift are locked in the Manager/Supervisor Portal** — visible
+  with a "coming soon" indicator, intentionally held back for a future release.
+- **Supervisor is currently identical to Manager** in the portal UI; the data
+  model already supports a narrower, tier-based permission set for Supervisor
+  (see the `Role` enum in `schema.prisma`) for whenever that's wanted.
+- **Managing Director** has no dedicated dashboard yet — sees the same
+  workbench as HR/Manager/Supervisor.
 - **XLSX/PDF report export** is not yet implemented — CSV export is available for
-  every report. Adding `exceljs` (Excel) or the existing `pdf` skill pattern would
-  extend this easily.
+  every report; the Attendance Report is print/PDF-via-browser only for now.
 - **Real-time push sync** (device → server without polling) would require the
   ZKTeco Push SDK / webhook support instead of the current pull-based
   `POST /attendance/sync`.
-- **Multi-device / multi-company** support is intentionally out of scope for v1,
-  per the original spec — the schema and services are structured so both can be
-  added later without a rewrite (e.g. `Device` and `Company` are already separate
-  tables from `Employee`).
+- **Multi-device / multi-company** support is intentionally out of scope for v1 —
+  the schema and services are structured so both can be added later without a
+  rewrite (e.g. `Device` and `Company` are already separate tables from `Employee`).
 - Employee **document uploads** (resume, contract, certificates) have a `Document`
-  table and relations ready, but no file upload endpoint yet — would pair well
-  with S3-compatible storage.
+  table and relations ready, and leave attachments (for Maternity leave) are
+  implemented; a general-purpose employee document upload endpoint is still open.

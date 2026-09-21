@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { RefreshCw, CalendarCheck, PenSquare, CheckCircle2, PlusCircle, AlertTriangle } from 'lucide-react';
+import { RefreshCw, CalendarCheck, PenSquare, CheckCircle2, PlusCircle, AlertTriangle, Download } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,8 @@ import { StatusPill } from '@/components/ui/Card';
 import { ManualPunchModal } from '@/components/attendance/ManualPunchModal';
 import { CorrectionModal } from '@/components/attendance/CorrectionModal';
 import { useAttendance, useSyncAttendance, useApproveAttendance, useMissingPunches } from '@/hooks/useAttendance';
+import { useCompany } from '@/hooks/useCompany';
+import { downloadAttendanceReportPdf } from '@/lib/attendance-report-pdf';
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, formatDate, formatTime, minutesToHm } from '@/lib/utils';
 import { AttendanceRecord } from '@/types';
@@ -34,6 +36,25 @@ export default function AttendancePage() {
   const { data: missing } = useMissingPunches();
   const syncAttendance = useSyncAttendance();
   const approveAttendance = useApproveAttendance();
+  const { data: company } = useCompany();
+  // Full-dataset query for the printable report below -- ignores the
+  // management table's `page`, since a printed report should list
+  // everything the current filters match, not just the on-screen
+  // 15-per-page slice.
+  const { data: printData } = useAttendance({
+    status: status || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    page: 1,
+    pageSize: 2000,
+  });
+
+  function periodLabel() {
+    if (startDate && endDate) return startDate === endDate ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    if (startDate) return `From ${formatDate(startDate)}`;
+    if (endDate) return `Through ${formatDate(endDate)}`;
+    return 'All Dates';
+  }
 
   async function handleSync() {
     try {
@@ -55,7 +76,7 @@ export default function AttendancePage() {
   return (
     <AppShell title="Attendance" subtitle="Fingerprint, face, RFID, and manual punches, all in one place">
       {missing && missing.length > 0 && (
-        <Card className="mb-4 border-warning/30 bg-warning-soft/40 p-4 flex items-start gap-3">
+        <Card className="mb-4 border-warning/30 bg-warning-soft/40 p-4 flex items-start gap-3 print:hidden">
           <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
           <p className="text-sm text-text-primary">
             <span className="font-medium">{missing.length} missing punch{missing.length > 1 ? 'es' : ''}</span>{' '}
@@ -64,7 +85,7 @@ export default function AttendancePage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="print:hidden">
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 p-5 border-b border-line items-center">
           <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="sm:w-40">
             <option value="">All Status</option>
@@ -83,6 +104,21 @@ export default function AttendancePage() {
           <Button variant="outline" onClick={() => setManualOpen(true)}>
             <PlusCircle className="h-4 w-4" />
             Manual Punch
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadAttendanceReportPdf({
+                company,
+                rows: printData?.items ?? [],
+                periodLabel: periodLabel(),
+                scopeLabel: status ? `Status: ${status.replace('_', ' ')}` : undefined,
+              })
+            }
+            disabled={!printData?.items.length}
+          >
+            <Download className="h-4 w-4" />
+            Download PDF
           </Button>
           <Button onClick={handleSync} loading={syncAttendance.isPending}>
             <RefreshCw className="h-4 w-4" />
@@ -177,6 +213,7 @@ export default function AttendancePage() {
           </div>
         )}
       </Card>
+
 
       <ManualPunchModal open={manualOpen} onClose={() => setManualOpen(false)} />
       <CorrectionModal open={!!correctionRecord} onClose={() => setCorrectionRecord(null)} record={correctionRecord} />

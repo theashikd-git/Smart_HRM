@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, homeRouteForRole } from '@/lib/auth-store';
 
 export default function Home() {
   const router = useRouter();
@@ -18,7 +18,7 @@ export default function Home() {
       router.replace('/login');
       return;
     }
-    router.replace(user?.role === 'EMPLOYEE' ? '/employee-portal' : '/workbench');
+    router.replace(homeRouteForRole(user?.role));
   }, [hydrated, token, user, router]);
 
   return null;

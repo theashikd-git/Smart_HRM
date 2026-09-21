@@ -16,6 +16,7 @@ import {
   useLeavePendingCount,
   useApproveLeaveRequest,
   useCancelLeaveRequest,
+  useApproveCancellation,
 } from '@/hooks/useLeave';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -51,7 +52,7 @@ function LeaveRequestsPanel() {
   const [leaveTypeId, setLeaveTypeId] = useState('');
   const [page, setPage] = useState(1);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
-  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{ request: LeaveRequest; mode: 'approval' | 'cancellation' } | null>(null);
   const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
 
   const { data, isLoading } = useLeaveRequests({
@@ -69,6 +70,7 @@ function LeaveRequestsPanel() {
 
   const approveRequest = useApproveLeaveRequest();
   const cancelRequest = useCancelLeaveRequest();
+  const approveCancellation = useApproveCancellation();
 
   async function handleApprove(request: LeaveRequest) {
     try {
@@ -83,6 +85,15 @@ function LeaveRequestsPanel() {
     try {
       await cancelRequest.mutateAsync(request.id);
       toast.success('Leave request cancelled');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  async function handleApproveCancellation(request: LeaveRequest) {
+    try {
+      await approveCancellation.mutateAsync(request.id);
+      toast.success('Cancellation approved');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -224,6 +235,30 @@ function LeaveRequestsPanel() {
                       ))}
                     </div>
                   )}
+                  {request.cancellationStatus === 'PENDING' && (
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
+                      <Clock className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                    </p>
+                  )}
+                  {request.cancellationStatus === 'REJECTED' && (
+                    <p className="mt-1.5 text-xs text-text-muted">Cancellation request was rejected -- leave remains approved.</p>
+                  )}
+                  {request.cancellationDecisions && request.cancellationDecisions.length > 0 && (
+                    <div className="mt-1.5 space-y-0.5 border-l-2 border-warning/50 pl-2">
+                      {request.cancellationDecisions.map((d) => (
+                        <p key={d.id} className="text-[11px] text-text-muted">
+                          Cancel:{' '}
+                          {d.decision === 'APPROVED' ? (
+                            <CheckCircle2 className="inline h-3 w-3 text-success mr-1" />
+                          ) : (
+                            <XCircle className="inline h-3 w-3 text-danger mr-1" />
+                          )}
+                          {d.tierLabel} &middot; {d.approver?.fullName ?? '—'} &middot; {formatDateTime(d.decidedAt)}
+                          {d.reason && ` — ${d.reason}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </Td>
                 <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? '—'}</Td>
                 <Td>
@@ -238,8 +273,26 @@ function LeaveRequestsPanel() {
                           <CheckCircle2 className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => setRejectTarget(request)}
+                          onClick={() => setRejectTarget({ request, mode: 'approval' })}
                           title="Reject"
+                          className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                    {request.cancellationStatus === 'PENDING' && (
+                      <>
+                        <button
+                          onClick={() => handleApproveCancellation(request)}
+                          title="Approve Cancellation"
+                          className="rounded-md p-1.5 text-text-muted hover:bg-success-soft hover:text-success"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setRejectTarget({ request, mode: 'cancellation' })}
+                          title="Reject Cancellation"
                           className="rounded-md p-1.5 text-text-muted hover:bg-danger-soft hover:text-danger"
                         >
                           <XCircle className="h-4 w-4" />
@@ -288,7 +341,11 @@ function LeaveRequestsPanel() {
       </Card>
 
       <NewLeaveRequestModal open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
-      <RejectLeaveModal request={rejectTarget} onClose={() => setRejectTarget(null)} />
+      <RejectLeaveModal
+        request={rejectTarget?.request ?? null}
+        mode={rejectTarget?.mode}
+        onClose={() => setRejectTarget(null)}
+      />
     </>
   );
 }

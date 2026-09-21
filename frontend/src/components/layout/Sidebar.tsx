@@ -40,7 +40,7 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
 
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-ink text-white h-screen sticky top-0">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-ink text-white h-screen sticky top-0 print:hidden">
       <div className="flex items-center gap-2.5 px-5 py-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
           <ShieldCheck className="h-4.5 w-4.5 text-white" />

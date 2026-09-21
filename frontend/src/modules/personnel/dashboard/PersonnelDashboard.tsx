@@ -12,6 +12,7 @@ import { DepartmentAttendanceTable } from './DepartmentAttendanceTable';
 import { MyTeamAttendance } from './MyTeamAttendance';
 import { PendingApprovals } from './PendingApprovals';
 import { RealTimeMonitor } from './RealTimeMonitor';
+import { TeamOnLeave } from './TeamOnLeave';
 import { TodaysAttendance } from './TodaysAttendance';
 import { RecentActivity } from './RecentActivity';
 import { QuickActions } from './QuickActions';
@@ -34,11 +35,13 @@ export function PersonnelDashboard() {
   // actually a team to show, instead of leaving an empty gap for everyone else.
   const { data: myTeam } = useMyTeamAttendance();
 
-  // A Manager login gets its own, much simpler landing view -- see
-  // ManagerDashboard for why (not a copy of the Admin/HR reporting
+  // A Manager or Supervisor login gets its own, much simpler landing view --
+  // see ManagerDashboard for why (not a copy of the Admin/HR reporting
   // dashboard below, just My Calendar + Real-Time Monitor, same idea as
-  // the Employee Portal's own Dashboard tab).
-  if (user?.role === 'MANAGER') {
+  // the Employee Portal's own Dashboard tab). Dead code in practice --
+  // AppShellRoot already intercepts both roles before this component is
+  // ever reached; kept as a defensive fallback.
+  if (user?.role === 'MANAGER' || user?.role === 'SUPERVISOR') {
     return <ManagerDashboard />;
   }
 
@@ -84,6 +87,7 @@ export function PersonnelDashboard() {
               <div className="min-w-0 flex-1">
                 <MyCalendarCard />
               </div>
+              <TeamOnLeave />
               <RealTimeMonitor />
             </div>
           )}

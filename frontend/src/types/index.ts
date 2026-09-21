@@ -334,6 +334,25 @@ export interface LeaveRequest {
    *  when it's showing up purely as a past-decision record of theirs.
    *  Absent on every other endpoint's LeaveRequest rows. */
   canDecide?: boolean;
+  /** Cancelling an already-APPROVED leave is its own tier-wise approval
+   *  chain -- see LeaveService.requestCancellation/approveCancellation.
+   *  cancellationStatus is undefined/null until a cancellation is
+   *  requested; 'PENDING' while it's being decided (the leave itself stays
+   *  APPROVED throughout); 'APPROVED' once fully approved (status then
+   *  flips to CANCELLED); 'REJECTED' if a tier turns it down (the leave
+   *  stays APPROVED and the employee may request again). */
+  cancellationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+  cancellationReason?: string | null;
+  cancellationCurrentTierOrder?: number | null;
+  cancellationCurrentTierLabel?: string | null;
+  cancellationRequestedAt?: string | null;
+  cancellationRequestedBy?: { id: string; fullName: string } | null;
+  cancellationDecisions?: LeaveApprovalDecision[];
+  /** Only set on items returned by /leave/my/approvals: true when this
+   *  signed-in login can decide the PENDING cancellation right now (mirrors
+   *  canDecide, but for the cancellation chain instead of the original
+   *  approval chain). */
+  canDecideCancellation?: boolean;
   employee?: {
     id: string;
     fullName: string;
@@ -374,6 +393,11 @@ export interface MyTeamMember {
   fullName: string;
   employeeCode: string;
   photo?: string | null;
+  // Not used by the attendance display itself -- carried along so this same
+  // list can double as the employee picker for the Manager Portal's "Leave
+  // on Behalf" tab (see NewLeaveRequestModal's Maternity Leave hint).
+  gender?: string | null;
+  joiningDate?: string | null;
   checkIn?: string | null;
   checkOut?: string | null;
   status: AttendanceStatus;
@@ -406,6 +430,29 @@ export interface MyTeamPunch {
 export interface MyTeamRecentPunches {
   isManager: boolean;
   punches: MyTeamPunch[];
+}
+
+// One approved (current or upcoming) leave for the "Team On Leave" panel --
+// see DashboardService.myTeamOnLeave. Deliberately its own lightweight shape
+// rather than the full LeaveRequest -- this panel only ever shows APPROVED
+// rows, so status/decisions/etc. would just be dead weight here.
+export interface MyTeamOnLeaveEntry {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  employeeCode: string;
+  photo: string | null;
+  leaveTypeName: string;
+  leaveTypeColor: string | null;
+  startDate: string;
+  endDate: string;
+  session: LeaveSession;
+  totalDays: number;
+}
+
+export interface MyTeamOnLeave {
+  isManager: boolean;
+  leaves: MyTeamOnLeaveEntry[];
 }
 
 export interface AuditLogEntry {

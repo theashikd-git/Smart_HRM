@@ -86,3 +86,51 @@ body {
 .table-row-hover {
   transition: background-color 120ms ease;
 }
+
+/* -----------------------------------------------------------------------
+   Print support for full-page printable reports (e.g. the Attendance
+   Report's "Print" button). Hiding the surrounding app chrome (top nav,
+   sidebar, workbench tab bar, filters) uses Tailwind's built-in
+   `print:hidden` utility directly on those elements -- nothing to define
+   here for that part. This block only handles what Tailwind utilities
+   can't reach: forcing small, tight typography across an entire report
+   subtree at once (wrap the report's markup in a `.print-report` div),
+   and the A4 page box itself.
+   ----------------------------------------------------------------------- */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm 12mm;
+  }
+
+  /* Small point size + tight leading is what keeps a few dozen attendance
+     rows on one A4 page instead of spilling onto a second or third --
+     still legible printed, just denser than the on-screen view. */
+  .print-report,
+  .print-report * {
+    font-size: 9pt !important;
+    line-height: 1.35 !important;
+    color: #000 !important;
+  }
+
+  .print-report table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .print-report th,
+  .print-report td {
+    padding: 2px 6px !important;
+  }
+
+  /* Repeats the header row on every page a long table spills onto,
+     instead of leaving page 2 onward unlabeled. */
+  .print-report thead {
+    display: table-header-group;
+  }
+
+  .print-report tr {
+    break-inside: avoid;
+  }
+}

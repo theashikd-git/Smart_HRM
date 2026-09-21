@@ -2,6 +2,7 @@ import type { WorkbenchTab } from '@/types/workbench';
 import { EmployeeProgram } from './employee/EmployeeProgram';
 import { ReportsProgram } from './reports/ReportsProgram';
 import { AttendanceProgram } from './attendance/AttendanceProgram';
+import { CompanyProgram } from './organization/CompanyProgram';
 import { DepartmentProgram } from './department/DepartmentProgram';
 import { DesignationProgram } from './designation/DesignationProgram';
 import { RosterProgram } from './roster/RosterProgram';
@@ -24,6 +25,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <ReportsProgram tab={tab} />;
     case 'attendance':
       return <AttendanceProgram tab={tab} />;
+    case 'org-company':
+      return <CompanyProgram tab={tab} />;
     case 'org-department':
       return <DepartmentProgram tab={tab} />;
     case 'org-designation':
