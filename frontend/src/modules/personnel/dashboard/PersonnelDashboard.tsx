@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useMyTeamAttendance } from '@/hooks/useDashboard';
 import { MyCalendarCard } from '@/modules/employee-portal/MyCalendarCard';
+import { ManagerDashboard } from './ManagerDashboard';
 import { SummaryCards } from './SummaryCards';
 import { AttendanceOverview } from './AttendanceOverview';
 import { AttendanceTrend } from './AttendanceTrend';
@@ -32,6 +33,14 @@ export function PersonnelDashboard() {
   // -- read here too so the <aside> column only takes up width when there's
   // actually a team to show, instead of leaving an empty gap for everyone else.
   const { data: myTeam } = useMyTeamAttendance();
+
+  // A Manager login gets its own, much simpler landing view -- see
+  // ManagerDashboard for why (not a copy of the Admin/HR reporting
+  // dashboard below, just My Calendar + Real-Time Monitor, same idea as
+  // the Employee Portal's own Dashboard tab).
+  if (user?.role === 'MANAGER') {
+    return <ManagerDashboard />;
+  }
 
   return (
     <div className="h-full overflow-auto bg-surface p-4">
