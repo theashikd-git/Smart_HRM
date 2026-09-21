@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
+export type Role = 'ADMIN' | 'MANAGING_DIRECTOR' | 'HR' | 'MANAGER' | 'SUPERVISOR' | 'EMPLOYEE';
 
 export interface User {
   id: string;
@@ -362,6 +362,26 @@ export interface DashboardSummary {
   deviceStatus: DeviceConnectionStatus;
   deviceName: string | null;
   recentActivity: AuditLogEntry[];
+}
+
+export interface MyTeamMember {
+  id: string;
+  fullName: string;
+  employeeCode: string;
+  photo?: string | null;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  status: AttendanceStatus;
+  present: boolean;
+}
+
+// "My Team" dashboard panel -- populated only when the signed-in user is
+// set as the head of one or more departments (see backend DashboardService
+// .myTeamAttendance). isManager: false means the panel should stay hidden.
+export interface MyTeamAttendance {
+  isManager: boolean;
+  departments: string[];
+  members: MyTeamMember[];
 }
 
 export interface AuditLogEntry {

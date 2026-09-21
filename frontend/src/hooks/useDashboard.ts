@@ -1,11 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { DashboardSummary } from '@/types';
+import { DashboardSummary, MyTeamAttendance } from '@/types';
 
 export function useDashboardSummary() {
   return useQuery({
     queryKey: ['dashboard', 'summary'],
     queryFn: async () => (await api.get<DashboardSummary>('/dashboard/summary')).data,
+    refetchInterval: 30_000,
+  });
+}
+
+// Powers the "My Team" left-side panel on the dashboard -- comes back
+// { isManager: false } for anyone who isn't set as a department head, so
+// callers just check that flag rather than needing a separate "am I a
+// manager" check first.
+export function useMyTeamAttendance() {
+  return useQuery({
+    queryKey: ['dashboard', 'my-team-attendance'],
+    queryFn: async () => (await api.get<MyTeamAttendance>('/dashboard/my-team-attendance')).data,
     refetchInterval: 30_000,
   });
 }

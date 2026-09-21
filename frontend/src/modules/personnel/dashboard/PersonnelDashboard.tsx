@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
+import { useMyTeamAttendance } from '@/hooks/useDashboard';
 import { SummaryCards } from './SummaryCards';
 import { AttendanceOverview } from './AttendanceOverview';
 import { AttendanceTrend } from './AttendanceTrend';
 import { DepartmentAttendanceTable } from './DepartmentAttendanceTable';
+import { MyTeamAttendance } from './MyTeamAttendance';
 import { PendingApprovals } from './PendingApprovals';
 import { TodaysAttendance } from './TodaysAttendance';
 import { RecentActivity } from './RecentActivity';
@@ -24,6 +26,10 @@ export function PersonnelDashboard() {
   const greeting = useGreeting();
   const user = useAuthStore((s) => s.user);
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  // Same query as MyTeamAttendance itself (React Query dedupes the request)
+  // -- read here too so the <aside> column only takes up width when there's
+  // actually a team to show, instead of leaving an empty gap for everyone else.
+  const { data: myTeam } = useMyTeamAttendance();
 
   return (
     <div className="h-full overflow-auto bg-surface p-4">
@@ -37,23 +43,33 @@ export function PersonnelDashboard() {
         <QuickActions />
       </div>
 
-      <div className="space-y-4">
-        <SummaryCards />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        {/* Left side -- only rendered at all for a department head, so it
+            never leaves an empty gap for anyone else. */}
+        {myTeam?.isManager && (
+          <aside className="w-full shrink-0 lg:w-64">
+            <MyTeamAttendance />
+          </aside>
+        )}
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <AttendanceTrend />
+        <div className="min-w-0 flex-1 space-y-4">
+          <SummaryCards />
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <AttendanceTrend />
+            </div>
+            <AttendanceOverview />
           </div>
-          <AttendanceOverview />
-        </div>
 
-        <DepartmentAttendanceTable />
+          <DepartmentAttendanceTable />
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <TodaysAttendance />
-          <div className="grid grid-cols-1 gap-4">
-            <PendingApprovals />
-            <RecentActivity />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TodaysAttendance />
+            <div className="grid grid-cols-1 gap-4">
+              <PendingApprovals />
+              <RecentActivity />
+            </div>
           </div>
         </div>
       </div>

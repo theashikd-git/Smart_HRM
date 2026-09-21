@@ -106,6 +106,7 @@ function CompanySettings() {
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
+  MANAGING_DIRECTOR: 'Managing Director',
   HR: 'HR Officer',
   MANAGER: 'Manager',
   SUPERVISOR: 'Supervisor',
@@ -309,6 +310,7 @@ function UserManagement() {
               onChange={(e) => setForm((f) => ({ ...EMPTY_FORM, role: e.target.value }))}
             >
               <option value="ADMIN">Administrator</option>
+              <option value="MANAGING_DIRECTOR">Managing Director</option>
               <option value="HR">HR Officer</option>
               <option value="MANAGER">Manager</option>
               <option value="SUPERVISOR">Supervisor</option>
@@ -390,6 +392,7 @@ function UserManagement() {
             <FieldWrap label="Role" required>
               <Select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
                 <option value="ADMIN">Administrator</option>
+                <option value="MANAGING_DIRECTOR">Managing Director</option>
                 <option value="HR">HR Officer</option>
                 <option value="MANAGER">Manager</option>
                 <option value="SUPERVISOR">Supervisor</option>

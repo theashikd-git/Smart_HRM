@@ -2,6 +2,7 @@ import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'cl
 
 export enum RoleDto {
   ADMIN = 'ADMIN',
+  MANAGING_DIRECTOR = 'MANAGING_DIRECTOR',
   HR = 'HR',
   MANAGER = 'MANAGER',
   SUPERVISOR = 'SUPERVISOR',

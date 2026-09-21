@@ -16,6 +16,12 @@ datasource db {
 
 enum Role {
   ADMIN
+  // No @Roles() guard grants this elevated access yet -- for now a
+  // Managing Director account sees the same modules as HR/MANAGER/
+  // SUPERVISOR (everything except System Settings, which stays ADMIN-only).
+  // A dedicated Managing Director dashboard/permission set is planned as
+  // separate follow-up work.
+  MANAGING_DIRECTOR
   HR
   MANAGER
   // Narrower than MANAGER: can approve/reject a leave request only when

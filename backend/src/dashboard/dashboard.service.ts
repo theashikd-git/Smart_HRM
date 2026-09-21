@@ -105,6 +105,80 @@ export class DashboardService {
     return result;
   }
 
+  /**
+   * "My Team" panel for a department head's dashboard -- only returns data
+   * when the signed-in user's linked Employee is set as headEmployeeId on
+   * one or more departments (see Department.manager in schema.prisma).
+   * Deliberately keyed off that, not off the User's Role, since being a
+   * department's Manager is a data fact (who's set as its head), not a
+   * permission level -- an ADMIN or MANAGING_DIRECTOR set as a department
+   * head sees this too, and a MANAGER not set as anyone's head does not.
+   */
+  async myTeamAttendance(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { employeeId: true },
+    });
+
+    if (!user?.employeeId) {
+      return { isManager: false, departments: [], members: [] };
+    }
+
+    const departments = await this.prisma.department.findMany({
+      where: { headEmployeeId: user.employeeId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (departments.length === 0) {
+      return { isManager: false, departments: [], members: [] };
+    }
+
+    const today = startOfDay(new Date());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        departmentId: { in: departments.map((d) => d.id) },
+        status: 'ACTIVE',
+        id: { not: user.employeeId }, // the department head isn't part of their own "team" list
+      },
+      select: {
+        id: true,
+        fullName: true,
+        employeeCode: true,
+        photo: true,
+        attendanceRecords: {
+          where: { date: { gte: today, lt: tomorrow } },
+          select: { checkIn: true, checkOut: true, status: true },
+          take: 1,
+        },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    const members = employees.map((e) => {
+      const record = e.attendanceRecords[0];
+      return {
+        id: e.id,
+        fullName: e.fullName,
+        employeeCode: e.employeeCode,
+        photo: e.photo,
+        checkIn: record?.checkIn ?? null,
+        checkOut: record?.checkOut ?? null,
+        status: record?.status ?? 'ABSENT',
+        present: !!record,
+      };
+    });
+
+    return {
+      isManager: true,
+      departments: departments.map((d) => d.name),
+      members,
+    };
+  }
+
   async employeeGrowth() {
     const months: { month: string; count: number }[] = [];
     const now = new Date();
