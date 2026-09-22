@@ -128,8 +128,12 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
       { type: 'leaf', id: 'leave-policy', label: 'Leave Policy', programId: 'leave-policy' },
     ],
   },
-  { type: 'leaf', id: 'roster', label: 'Roster', icon: CalendarDays, programId: 'roster' },
-  { type: 'leaf', id: 'shift', label: 'Shift', icon: Clock, programId: 'shift' },
+  // Roster and Shift are built but not turned on yet for this release --
+  // shown as disabled "Soon" entries (same treatment as the Manager/
+  // Supervisor Portal's locked tabs, see ManagerPortalView) and switched on
+  // in a later version.
+  { type: 'leaf', id: 'roster', label: 'Roster', icon: CalendarDays, programId: 'roster', locked: true },
+  { type: 'leaf', id: 'shift', label: 'Shift', icon: Clock, programId: 'shift', locked: true },
   { type: 'leaf', id: 'holiday', label: 'Government Holiday', icon: CalendarOff, programId: 'holiday' },
   { type: 'leaf', id: 'attendance', label: 'Attendance', icon: CalendarCheck, programId: 'attendance' },
   {

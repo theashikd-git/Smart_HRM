@@ -44,6 +44,8 @@ export interface SidebarLeaf {
   internalTabId?: string;
   /** Special case: the Dashboard entry activates the Workbench tab instead of opening a program. */
   isDashboard?: boolean;
+  /** Built but not released yet -- rendered as a disabled "Soon" entry instead of being removed. Same treatment as the Manager/Supervisor Portal's locked tabs (see ManagerPortalView). */
+  locked?: boolean;
 }
 
 export interface SidebarGroup {

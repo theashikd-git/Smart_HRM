@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { PERSONNEL_SIDEBAR, PROGRAM_REGISTRY } from '@/lib/personnel-nav';
@@ -79,6 +79,7 @@ function SidebarLeafItem({ node, depth }: { node: SidebarLeaf; depth: number }) 
   const openProgram = useWorkbenchStore((s) => s.openProgram);
   const activateTab = useWorkbenchStore((s) => s.activateTab);
   const Icon = node.icon;
+  const locked = node.locked ?? false;
 
   const openTab = openTabs.find((t) => t.programId === node.programId);
   const isActive = node.isDashboard
@@ -86,6 +87,7 @@ function SidebarLeafItem({ node, depth }: { node: SidebarLeaf; depth: number }) 
     : activeTabKey === node.programId && (!node.internalTabId || openTab?.activeInternalTab === node.internalTabId);
 
   function handleClick() {
+    if (locked) return;
     if (node.isDashboard) {
       activateTab('workbench');
       return;
@@ -99,16 +101,31 @@ function SidebarLeafItem({ node, depth }: { node: SidebarLeaf; depth: number }) 
     <button
       type="button"
       onClick={handleClick}
-      title={!sidebarExpanded ? node.label : undefined}
+      disabled={locked}
+      title={locked ? 'Coming soon -- next release' : !sidebarExpanded ? node.label : undefined}
       className={cn(
         'flex w-full items-center gap-2.5 py-2 text-[13px] transition-colors',
         sidebarExpanded ? (depth > 0 ? 'pl-9 pr-3.5' : 'px-3.5') : 'justify-center px-0',
-        isActive ? 'bg-accent text-white font-medium' : 'text-white/65 hover:bg-ink-soft hover:text-white',
+        locked
+          ? 'cursor-not-allowed text-white/30'
+          : isActive
+            ? 'bg-accent text-white font-medium'
+            : 'text-white/65 hover:bg-ink-soft hover:text-white',
       )}
     >
       {Icon && <Icon className="h-4 w-4 shrink-0" />}
       {!Icon && depth > 0 && <span className="h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />}
-      {sidebarExpanded && <span className="truncate text-left">{node.label}</span>}
+      {sidebarExpanded && (
+        <span className="flex flex-1 items-center justify-between gap-1.5 min-w-0">
+          <span className="truncate text-left">{node.label}</span>
+          {locked && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-white/10 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">
+              <Lock className="h-2.5 w-2.5" />
+              Soon
+            </span>
+          )}
+        </span>
+      )}
     </button>
   );
 }
