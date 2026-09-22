@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
@@ -11,7 +11,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCompany, type Company } from '@/hooks/useCompany';
-import { downloadAttendanceReportPdf } from '@/lib/attendance-report-pdf';
+import { downloadAttendanceReportPdf, printAttendanceReportPdf } from '@/lib/attendance-report-pdf';
 import { formatDate, formatTime } from '@/lib/utils';
 import type { AttendanceRecord } from '@/types';
 
@@ -33,18 +33,20 @@ function todayISO() {
  * presentation, no data fetching, so it can be dropped into more than one
  * place: the Workbench's own Attendance Report screen below
  * (AttendanceReport), and any other screen that already has a filtered
- * `AttendanceRecord[]` in hand. Mirrors the layout of the downloadable PDF
- * (see lib/attendance-report-pdf.ts) so what's on screen is what gets
- * printed: a Name/ID/Department header per employee, the dates selected
- * under it, then a totals line -- works the same for a single person, a
- * whole department, or a plain date range across everyone. Wrap it in a
- * `.print-report` element for the small/tight print typography rules in
- * globals.css to apply.
+ * `AttendanceRecord[]` in hand. Mirrors the layout of the downloadable/
+ * printable PDF (see lib/attendance-report-pdf.ts) so what's on screen is
+ * what gets printed: company letterhead, a Department line (always shown,
+ * so the scope is never ambiguous), then a Name/ID/Department header per
+ * employee with the dates selected underneath, then a totals line --
+ * works the same for a single person, a whole department, or a plain date
+ * range across everyone. Wrap it in a `.print-report` element for the
+ * small/tight print typography rules in globals.css to apply.
  */
 export function AttendanceReportPrintable({
   company,
   rows,
   periodLabel,
+  departmentLabel = 'All Departments',
   scopeLabel,
   isLoading,
 }: {
@@ -52,7 +54,9 @@ export function AttendanceReportPrintable({
   rows: AttendanceRecord[];
   /** e.g. "Sep 21, 2026" or "Sep 1 - Sep 21, 2026" */
   periodLabel: string;
-  /** e.g. "Department: Nursing" or "Employee: Jane Doe (EMP004)" -- appended after the period, omitted if not filtered */
+  /** Always shown right under the "Attendance Report" title -- the department this run was filtered to. Defaults to "All Departments" so the scope is never left implicit. */
+  departmentLabel?: string;
+  /** Extra scope appended after the period, e.g. "Employee: Jane Doe (EMP004)" -- omitted entirely when there's nothing extra to show */
   scopeLabel?: string;
   isLoading?: boolean;
 }) {
@@ -101,6 +105,10 @@ export function AttendanceReportPrintable({
         )}
         <h2 className="mt-2 text-sm font-semibold text-text-primary">Attendance Report</h2>
       </div>
+
+      {/* Department line -- always shown, even when the report covers
+          everyone, so a printed sheet never leaves its scope ambiguous. */}
+      <p className="mb-1.5 text-xs font-semibold text-text-primary">Department: {departmentLabel}</p>
 
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs text-text-muted">
@@ -174,12 +182,12 @@ export function AttendanceReportPrintable({
  * Workbench "Personnel > Attendance > Attendance Report" screen -- the
  * standard attendance register. Filter by a date range and, optionally, a
  * department or a single employee (picking an employee narrows to just
- * them regardless of department), then Print/Download PDF. Groups results
- * by employee -- name & ID as a header, the matching dates listed under it
- * -- so the same screen doubles as an individual attendance sheet when
- * scoped to one person. The real, daily-used Attendance page lives at
+ * them regardless of department), then Print or Download PDF. Groups
+ * results by employee -- name & ID as a header, the matching dates listed
+ * under it -- so the same screen doubles as an individual attendance sheet
+ * when scoped to one person. The real, daily-used Attendance page lives at
  * app/attendance/page.tsx (linked from the Sidebar) and has its own
- * Download PDF button reusing the same lib/attendance-report-pdf.ts
+ * Print/Download PDF buttons reusing the same lib/attendance-report-pdf.ts
  * generator; this screen is this module's own self-contained version,
  * with the on-screen preview to match.
  */
@@ -210,9 +218,14 @@ export function AttendanceReport() {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
   }
 
+  // The department this run was filtered to -- always shown on the
+  // report, so "All Departments" is spelled out rather than left blank.
+  function departmentLabel() {
+    return departmentName ?? 'All Departments';
+  }
+
   function scopeLabel() {
     if (selectedEmployee) return `Employee: ${selectedEmployee.fullName} (${selectedEmployee.employeeCode})`;
-    if (departmentName) return `Department: ${departmentName}`;
     return undefined;
   }
 
@@ -265,10 +278,28 @@ export function AttendanceReport() {
           type="button"
           variant="outline"
           onClick={() =>
+            printAttendanceReportPdf({
+              company,
+              rows,
+              periodLabel: periodLabel(),
+              departmentLabel: departmentLabel(),
+              scopeLabel: scopeLabel(),
+            })
+          }
+          disabled={rows.length === 0}
+        >
+          <Printer className="h-4 w-4" />
+          Print
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
             downloadAttendanceReportPdf({
               company,
               rows,
               periodLabel: periodLabel(),
+              departmentLabel: departmentLabel(),
               scopeLabel: scopeLabel(),
             })
           }
@@ -285,6 +316,7 @@ export function AttendanceReport() {
             company={company}
             rows={rows}
             periodLabel={periodLabel()}
+            departmentLabel={departmentLabel()}
             scopeLabel={scopeLabel()}
             isLoading={isLoading}
           />

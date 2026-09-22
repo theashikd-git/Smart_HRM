@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { RefreshCw, CalendarCheck, PenSquare, CheckCircle2, PlusCircle, AlertTriangle, Download } from 'lucide-react';
+import { RefreshCw, CalendarCheck, PenSquare, CheckCircle2, PlusCircle, AlertTriangle, Download, Printer } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ import { useAttendance, useSyncAttendance, useApproveAttendance, useMissingPunch
 import { useDepartments } from '@/hooks/useDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCompany } from '@/hooks/useCompany';
-import { downloadAttendanceReportPdf } from '@/lib/attendance-report-pdf';
+import { downloadAttendanceReportPdf, printAttendanceReportPdf } from '@/lib/attendance-report-pdf';
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, formatDate, formatTime, minutesToHm } from '@/lib/utils';
 import { AttendanceRecord } from '@/types';
@@ -66,15 +66,16 @@ export default function AttendancePage() {
     return 'All Dates';
   }
 
+  // The department this run was filtered to -- always shown on the
+  // report, so "All Departments" is spelled out rather than left blank.
+  function departmentLabel() {
+    return departments?.find((d) => d.id === departmentId)?.name ?? 'All Departments';
+  }
+
   function scopeLabel() {
     const parts: string[] = [];
     const selectedEmployee = employees?.items.find((e) => e.id === employeeId);
-    if (selectedEmployee) {
-      parts.push(`Employee: ${selectedEmployee.fullName} (${selectedEmployee.employeeCode})`);
-    } else {
-      const departmentName = departments?.find((d) => d.id === departmentId)?.name;
-      if (departmentName) parts.push(`Department: ${departmentName}`);
-    }
+    if (selectedEmployee) parts.push(`Employee: ${selectedEmployee.fullName} (${selectedEmployee.employeeCode})`);
     if (status) parts.push(`Status: ${status.replace('_', ' ')}`);
     return parts.length ? parts.join('   |   ') : undefined;
   }
@@ -155,10 +156,27 @@ export default function AttendancePage() {
           <Button
             variant="outline"
             onClick={() =>
+              printAttendanceReportPdf({
+                company,
+                rows: printData?.items ?? [],
+                periodLabel: periodLabel(),
+                departmentLabel: departmentLabel(),
+                scopeLabel: scopeLabel(),
+              })
+            }
+            disabled={!printData?.items.length}
+          >
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
               downloadAttendanceReportPdf({
                 company,
                 rows: printData?.items ?? [],
                 periodLabel: periodLabel(),
+                departmentLabel: departmentLabel(),
                 scopeLabel: scopeLabel(),
               })
             }

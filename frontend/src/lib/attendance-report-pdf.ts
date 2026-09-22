@@ -20,35 +20,43 @@ function dayName(dateStr: string) {
   return Number.isNaN(d.getTime()) ? '—' : DAY_NAME[d.getDay()];
 }
 
-/**
- * Builds and downloads the standard Attendance Report as a PDF, generated
- * entirely in JavaScript with jsPDF/jspdf-autotable -- text and table cells
- * drawn directly onto the page (no window.print()/HTML rasterizing).
- *
- * Layout: a letterhead (company logo + name, "Attendance Report" title,
- * period/scope) followed by one section per employee -- a Name/ID/Department
- * header bar, then a compact date-by-date table of that employee's records
- * for the selected period, and a per-employee totals line. This is the
- * "standard" register format: works the same whether `rows` covers a single
- * employee (the single-person filter), one department, or everyone in a
- * date range -- it just groups whatever rows it's given. A grand summary is
- * added at the end when more than one employee is included. autoTable
- * repeats each employee's table header on every page it spans, and section
- * headers never split across a page break, so long ranges paginate cleanly.
- */
-export function downloadAttendanceReportPdf({
-  company,
-  rows,
-  periodLabel,
-  scopeLabel,
-}: {
+interface AttendanceReportPdfArgs {
   company?: Company | null;
   rows: AttendanceRecord[];
   /** e.g. "Sep 21, 2026" or "Sep 1 - Sep 21, 2026" */
   periodLabel: string;
-  /** e.g. "Department: Nursing" or "Employee: Jane Doe (EMP004)" -- appended after the period, omitted if not filtered */
+  /** Always shown right under the "Attendance Report" title -- the department this run was filtered to. Defaults to "All Departments" so the printed sheet always states its scope, never leaves it implicit. */
+  departmentLabel?: string;
+  /** Extra scope appended after the period, e.g. "Employee: Jane Doe (EMP004)" or "Status: Present" -- omitted entirely when there's nothing extra to show. */
   scopeLabel?: string;
-}) {
+}
+
+/**
+ * Shared PDF builder -- the single source of truth for the standard
+ * Attendance Report layout, used by both downloadAttendanceReportPdf
+ * (saves the file) and printAttendanceReportPdf (opens it in a new tab and
+ * triggers the browser's print dialog immediately). Keeping one builder
+ * means the printed and downloaded versions can never drift apart.
+ *
+ * Layout: a letterhead (company logo + name, "Attendance Report" title,
+ * then a Department line -- always present -- and the period/scope)
+ * followed by one section per employee -- a Name/ID/Department header bar,
+ * then a compact date-by-date table of that employee's records for the
+ * selected period, and a per-employee totals line. This is the "standard"
+ * register format: works the same whether `rows` covers a single employee
+ * (the single-person filter), one department, or everyone in a date range
+ * -- it just groups whatever rows it's given. A grand summary is added at
+ * the end when more than one employee is included. autoTable repeats each
+ * employee's table header on every page it spans, and section headers
+ * never split across a page break, so long ranges paginate cleanly.
+ */
+function buildAttendanceReportPdf({
+  company,
+  rows,
+  periodLabel,
+  departmentLabel = 'All Departments',
+  scopeLabel,
+}: AttendanceReportPdfArgs): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -56,8 +64,8 @@ export function downloadAttendanceReportPdf({
   const bottomMargin = 16;
 
   // Letterhead -- company logo (if uploaded via Personnel > Organization >
-  // Company) centered above the name, contact line, then the report title
-  // and the period/scope this run was filtered to. Drawn once, on page 1.
+  // Company) centered above the name, contact line, then the report title.
+  // Drawn once, on page 1.
   let y = 14;
   if (company?.logo) {
     try {
@@ -94,6 +102,14 @@ export function downloadAttendanceReportPdf({
   doc.line(marginX, y, pageWidth - marginX, y);
   y += 6;
 
+  // Department line -- always shown right under the title (even when the
+  // report covers everyone), so a printed sheet never leaves its scope
+  // ambiguous.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`Department: ${departmentLabel}`, marginX, y);
+  y += 4.5;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(scopeLabel ? `${periodLabel}   —   ${scopeLabel}` : periodLabel, marginX, y);
@@ -108,8 +124,8 @@ export function downloadAttendanceReportPdf({
     doc.setFontSize(9);
     doc.setTextColor(140);
     doc.text('No attendance records for this period.', pageWidth / 2, y + 10, { align: 'center' });
-    doc.save(`attendance-report-${new Date().toISOString().slice(0, 10)}.pdf`);
-    return;
+    doc.setTextColor(30, 30, 30);
+    return doc;
   }
 
   // Group rows by employee -- name & ID become a section header, and every
@@ -239,5 +255,29 @@ export function downloadAttendanceReportPdf({
     doc.text(`Page ${i} of ${pageCount}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
   }
 
+  return doc;
+}
+
+/** Builds the standard Attendance Report and downloads it as a PDF file. */
+export function downloadAttendanceReportPdf(args: AttendanceReportPdfArgs) {
+  const doc = buildAttendanceReportPdf(args);
   doc.save(`attendance-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+/**
+ * Builds the standard Attendance Report and opens it straight into the
+ * browser's print dialog -- no need to find the downloaded file first.
+ * Uses jsPDF's autoPrint() (embeds a print instruction the browser's own
+ * PDF viewer runs once the file loads) plus opening a blob URL in a new
+ * tab, so this still never touches window.print()/HTML rasterizing on the
+ * app's own page. Falls back to a normal download if the new tab was
+ * blocked by a popup blocker, so the user still ends up with the file.
+ */
+export function printAttendanceReportPdf(args: AttendanceReportPdfArgs) {
+  const doc = buildAttendanceReportPdf(args);
+  doc.autoPrint();
+  const win = window.open(doc.output('bloburl'), '_blank');
+  if (!win) {
+    doc.save(`attendance-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
 }
