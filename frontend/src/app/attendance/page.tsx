@@ -12,6 +12,8 @@ import { StatusPill } from '@/components/ui/Card';
 import { ManualPunchModal } from '@/components/attendance/ManualPunchModal';
 import { CorrectionModal } from '@/components/attendance/CorrectionModal';
 import { useAttendance, useSyncAttendance, useApproveAttendance, useMissingPunches } from '@/hooks/useAttendance';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useEmployees } from '@/hooks/useEmployees';
 import { useCompany } from '@/hooks/useCompany';
 import { downloadAttendanceReportPdf } from '@/lib/attendance-report-pdf';
 import { apiErrorMessage } from '@/lib/api';
@@ -22,6 +24,8 @@ export default function AttendancePage() {
   const [status, setStatus] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [page, setPage] = useState(1);
   const [manualOpen, setManualOpen] = useState(false);
   const [correctionRecord, setCorrectionRecord] = useState<AttendanceRecord | null>(null);
@@ -30,6 +34,8 @@ export default function AttendancePage() {
     status: status || undefined,
     startDate: startDate || undefined,
     endDate: endDate || undefined,
+    departmentId: departmentId || undefined,
+    employeeId: employeeId || undefined,
     page,
     pageSize: 15,
   });
@@ -37,6 +43,8 @@ export default function AttendancePage() {
   const syncAttendance = useSyncAttendance();
   const approveAttendance = useApproveAttendance();
   const { data: company } = useCompany();
+  const { data: departments } = useDepartments();
+  const { data: employees } = useEmployees({ departmentId: departmentId || undefined, pageSize: 500 });
   // Full-dataset query for the printable report below -- ignores the
   // management table's `page`, since a printed report should list
   // everything the current filters match, not just the on-screen
@@ -45,6 +53,8 @@ export default function AttendancePage() {
     status: status || undefined,
     startDate: startDate || undefined,
     endDate: endDate || undefined,
+    departmentId: departmentId || undefined,
+    employeeId: employeeId || undefined,
     page: 1,
     pageSize: 2000,
   });
@@ -54,6 +64,19 @@ export default function AttendancePage() {
     if (startDate) return `From ${formatDate(startDate)}`;
     if (endDate) return `Through ${formatDate(endDate)}`;
     return 'All Dates';
+  }
+
+  function scopeLabel() {
+    const parts: string[] = [];
+    const selectedEmployee = employees?.items.find((e) => e.id === employeeId);
+    if (selectedEmployee) {
+      parts.push(`Employee: ${selectedEmployee.fullName} (${selectedEmployee.employeeCode})`);
+    } else {
+      const departmentName = departments?.find((d) => d.id === departmentId)?.name;
+      if (departmentName) parts.push(`Department: ${departmentName}`);
+    }
+    if (status) parts.push(`Status: ${status.replace('_', ' ')}`);
+    return parts.length ? parts.join('   |   ') : undefined;
   }
 
   async function handleSync() {
@@ -98,6 +121,30 @@ export default function AttendancePage() {
           </Select>
           <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} className="sm:w-40" />
           <Input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} className="sm:w-40" />
+          <Select
+            value={departmentId}
+            onChange={(e) => { setDepartmentId(e.target.value); setEmployeeId(''); setPage(1); }}
+            className="sm:w-44"
+          >
+            <option value="">All Departments</option>
+            {departments?.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={employeeId}
+            onChange={(e) => { setEmployeeId(e.target.value); setPage(1); }}
+            className="sm:w-48"
+          >
+            <option value="">All Employees</option>
+            {employees?.items.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.fullName} ({emp.employeeCode})
+              </option>
+            ))}
+          </Select>
 
           <div className="flex-1" />
 
@@ -112,7 +159,7 @@ export default function AttendancePage() {
                 company,
                 rows: printData?.items ?? [],
                 periodLabel: periodLabel(),
-                scopeLabel: status ? `Status: ${status.replace('_', ' ')}` : undefined,
+                scopeLabel: scopeLabel(),
               })
             }
             disabled={!printData?.items.length}
