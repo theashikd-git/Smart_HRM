@@ -39,7 +39,7 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       await login(username, password);
-      router.replace('/workbench');
+      router.replace('/hradmin-portal');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

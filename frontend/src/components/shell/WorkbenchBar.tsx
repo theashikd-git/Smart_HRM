@@ -3,6 +3,18 @@
 import { LayoutGrid, Menu, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
+import { useAuthStore } from '@/lib/auth-store';
+
+// The permanent first tab's label -- this same /workbench screen is shared
+// by ADMIN, HR and MANAGING_DIRECTOR (see homeRouteForRole in auth-store.ts),
+// so it reads out the signed-in role rather than the generic "Workbench",
+// mirroring the role-conditional header badge in ManagerPortalView.
+function homeTabLabel(role?: string | null): string {
+  if (role === 'ADMIN') return 'Administrator';
+  if (role === 'MANAGING_DIRECTOR') return 'Managing Director';
+  if (role === 'HR') return 'HR';
+  return 'Workbench';
+}
 
 export function WorkbenchBar() {
   const openTabs = useWorkbenchStore((s) => s.openTabs);
@@ -10,6 +22,7 @@ export function WorkbenchBar() {
   const activateTab = useWorkbenchStore((s) => s.activateTab);
   const closeTab = useWorkbenchStore((s) => s.closeTab);
   const toggleSidebar = useWorkbenchStore((s) => s.toggleSidebar);
+  const role = useAuthStore((s) => s.user?.role);
 
   return (
     <div className="flex h-9 items-center border-b border-line bg-surface-sunken/70 pl-2 pr-1 print:hidden">
@@ -40,7 +53,7 @@ export function WorkbenchBar() {
 
       <div className="flex h-full flex-1 items-center gap-0.5 overflow-x-auto">
         <WorkbenchTabButton
-          label="Workbench"
+          label={homeTabLabel(role)}
           active={activeTabKey === 'workbench'}
           onClick={() => activateTab('workbench')}
         />

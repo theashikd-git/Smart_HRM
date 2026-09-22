@@ -12,12 +12,12 @@ import { User, Role } from '@/types';
 // same ManagerPortalView component with the exact same tabs (only the
 // header badge text differs); SUPERVISOR's narrower permissions are
 // enforced server-side, not by giving it a different portal. Everyone else
-// (ADMIN/HR/MANAGING_DIRECTOR) gets the full Admin/HR Workbench.
+// (ADMIN/HR/MANAGING_DIRECTOR) gets the full Admin/HR area at /hradmin-portal.
 export function homeRouteForRole(role?: Role | null): string {
   if (role === 'EMPLOYEE') return '/employee-portal';
   if (role === 'MANAGER') return '/manager-portal';
   if (role === 'SUPERVISOR') return '/supervisor-portal';
-  return '/workbench';
+  return '/hradmin-portal';
 }
 
 interface AuthState {

@@ -14,12 +14,12 @@ function inArea(area: Area, role?: string | null) {
 }
 
 /** Guards a route behind login, and keeps each login type at its own home:
- *  ADMIN/HR/MANAGING_DIRECTOR use /workbench (area 'staff'), MANAGER uses
+ *  ADMIN/HR/MANAGING_DIRECTOR use /hradmin-portal (area 'staff'), MANAGER uses
  *  /manager-portal (area 'manager'), SUPERVISOR uses /supervisor-portal
  *  (area 'supervisor'), EMPLOYEE uses /employee-portal (area 'employee').
  *  `area` says which one this route belongs to, so a signed-in user who
  *  lands in the wrong area (e.g. a Supervisor hitting /manager-portal, or
- *  an employee hitting /workbench) is bounced to their own home via
+ *  an employee hitting /hradmin-portal) is bounced to their own home via
  *  homeRouteForRole instead of seeing a screen that was never meant for
  *  them. Defaults to 'staff' so existing callers (AppShellRoot) don't need
  *  to change. */
