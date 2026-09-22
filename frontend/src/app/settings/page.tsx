@@ -46,7 +46,15 @@ function CompanySettings() {
   }, [data]);
 
   const update = useMutation({
-    mutationFn: async () => (await api.patch('/company', form)).data,
+    mutationFn: async () => {
+      // Blank optional fields (e.g. Email left empty) go as undefined, not
+      // "" -- the backend's @IsEmail() would otherwise reject an empty
+      // string as an invalid email even though the field isn't required.
+      const payload = Object.fromEntries(
+        Object.entries(form).map(([key, value]) => [key, value === '' ? undefined : value]),
+      );
+      return (await api.patch('/company', payload)).data;
+    },
     onSuccess: () => {
       toast.success('Company profile updated');
       qc.invalidateQueries({ queryKey: ['company'] });
