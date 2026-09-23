@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { CalendarDays, CheckCircle2, XCircle, Ban, PlusCircle, Clock } from 'lucide-react';
-import { Card, StatusPill, Badge } from '@/components/ui/Card';
+import { CalendarDays, CheckCircle2, XCircle, Ban, PlusCircle, CalendarPlus, Clock, Clock3 } from 'lucide-react';
+import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { NewLeaveRequestModal } from '@/components/leave/NewLeaveRequestModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
+import { ProgramTabs } from '@/components/shell/ProgramTabs';
 import {
   useLeaveRequests,
   useLeaveTypes,
@@ -17,6 +18,7 @@ import {
   useApproveLeaveRequest,
   useCancelLeaveRequest,
   useApproveCancellation,
+  useAppliedOnBehalf,
 } from '@/hooks/useLeave';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -24,24 +26,39 @@ import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { LeaveRequest } from '@/types';
 
+const LEAVE_TABS = [
+  { id: 'requests', label: 'Leave Request' },
+  { id: 'on-behalf', label: 'Leave on Behalf' },
+];
+
 /**
  * Root view for the top-level "Leave" module (see TopNavigation's MODULES
- * list). Unlike Personnel's programs, Leave has no internal Workbench tabs
- * or sidebar of its own -- it's a single self-contained screen, structured
- * the same way PersonnelDashboard is (own header + content, no shared chrome
- * beyond TopNavigation). Leave Types management lives under Personnel >
- * Leave Management > Leave Type now (see LeaveTypeProgram) -- this view is
- * just Requests.
+ * list). Two internal tabs, same idea as the Manager Portal's leave tabs
+ * (see ManagerPortalView): "Leave Request" is the full, company-wide
+ * request queue HR decides on (LeaveRequestsPanel, unchanged); "Leave on
+ * Behalf" is HR filing a request FOR an employee who can't file it
+ * themselves (LeaveOnBehalfPanel) -- same idea as the Manager Portal's own
+ * "Leave on Behalf" tab, just scoped to every employee in the company
+ * instead of one department head's own team. Leave Types management lives
+ * under Personnel > Leave Management > Leave Type now (see
+ * LeaveTypeProgram) -- neither tab here duplicates that.
  */
 export function LeaveModuleView() {
+  const [activeTab, setActiveTab] = useState('requests');
+
   return (
-    <div className="h-full overflow-auto bg-surface p-4">
-      <div className="mb-4">
+    <div className="flex h-full flex-col overflow-hidden bg-surface">
+      <div className="p-4 pb-0">
         <h1 className="text-[15px] font-semibold text-text-primary">Leave</h1>
         <p className="text-xs text-text-secondary">Requests, approvals, and balances for every employee</p>
       </div>
 
-      <LeaveRequestsPanel />
+      <ProgramTabs tabs={LEAVE_TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+      <div className="flex-1 overflow-auto p-4">
+        {activeTab === 'requests' && <LeaveRequestsPanel />}
+        {activeTab === 'on-behalf' && <LeaveOnBehalfPanel />}
+      </div>
     </div>
   );
 }
@@ -350,3 +367,105 @@ function LeaveRequestsPanel() {
   );
 }
 
+
+/**
+ * "Leave on Behalf" -- HR/Admin files a leave request for an employee who
+ * can't file it themselves (no login yet, unwell, unfamiliar with the
+ * system, etc.). Same idea as the Manager Portal's "Leave on Behalf" tab
+ * (LeaveOnBehalfTab), but not scoped to one department head's own team --
+ * NewLeaveRequestModal is given no `employees` prop here, so it falls back
+ * to its own full company employee list, matching who HR is allowed to act
+ * for. The table below tracks only what THIS login has filed for someone
+ * else (see LeaveController.findAppliedOnBehalf / useAppliedOnBehalf), so
+ * it stays a clear record of "what has HR filed on someone's behalf",
+ * distinct from the "Leave Request" tab's full company-wide queue.
+ */
+function LeaveOnBehalfPanel() {
+  const { data: requests, isLoading } = useAppliedOnBehalf();
+  const [applyOpen, setApplyOpen] = useState(false);
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-text-secondary">
+            Apply for leave on behalf of an employee who can&apos;t apply for themselves
+          </p>
+        </div>
+        <Button onClick={() => setApplyOpen(true)}>
+          <CalendarPlus className="h-4 w-4" />
+          Apply on Behalf
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader title="Requests You've Filed" subtitle="Leave you've applied for on behalf of an employee" />
+        <Table>
+          <Thead>
+            <tr>
+              <Th>Employee</Th>
+              <Th>Leave Type</Th>
+              <Th>Dates</Th>
+              <Th>Days</Th>
+              <Th>Status</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {requests?.map((request) => (
+              <Tr key={request.id}>
+                <Td>
+                  <p className="font-medium">{request.employee?.fullName}</p>
+                  <p className="text-xs text-text-muted font-mono">{request.employee?.employeeCode}</p>
+                </Td>
+                <Td>
+                  <Badge>{request.leaveType?.name}</Badge>
+                  {!request.leaveType?.paid && <span className="ml-1.5 text-xs text-text-muted">Unpaid</span>}
+                </Td>
+                <Td className="text-xs">
+                  {formatDate(request.startDate)}
+                  {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                </Td>
+                <Td>{request.totalDays}</Td>
+                <Td className="max-w-[260px]">
+                  <StatusPill label={request.status} colors={leaveStatusColors[request.status]} />
+                  {request.status === 'PENDING' && request.currentTierLabel && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
+                      <Clock3 className="h-3 w-3" /> Awaiting: {request.currentTierLabel}
+                    </p>
+                  )}
+                  {request.status === 'REJECTED' && request.rejectionReason && (
+                    <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
+                  )}
+                  {request.cancellationStatus === 'PENDING' && (
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
+                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                    </p>
+                  )}
+                  {request.cancellationStatus === 'REJECTED' && (
+                    <p className="mt-1.5 text-xs text-text-muted">Cancellation request was rejected -- leave remains approved.</p>
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+
+        {!isLoading && (requests?.length ?? 0) === 0 && (
+          <EmptyState
+            icon={<CalendarDays className="h-8 w-8" />}
+            title="Nothing filed yet"
+            subtitle="Leave you apply for on behalf of an employee will show up here."
+          />
+        )}
+      </Card>
+
+      <NewLeaveRequestModal
+        open={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        title="Apply Leave on Behalf"
+        subtitle="Log a leave request for an employee who can't apply for themselves"
+        hideSession
+      />
+    </>
+  );
+}
