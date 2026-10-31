@@ -96,7 +96,10 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Batch-resolve employees instead of one findUnique() per punch.
-      const deviceUserIds = [...new Set(punches.map((p) => p.deviceUserId))];
+      // Explicitly typed -- avoids an incremental-build TS inference gap
+      // where this spread occasionally came back as `unknown[]` instead of
+      // `string[]`, which the Prisma `in` filter below then rejected.
+      const deviceUserIds: string[] = [...new Set(punches.map((p) => p.deviceUserId))];
       const employees = await this.prisma.employee.findMany({
         where: { deviceUserId: { in: deviceUserIds } },
       });
