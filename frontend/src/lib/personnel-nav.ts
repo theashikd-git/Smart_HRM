@@ -119,7 +119,13 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
     label: 'Leave Management',
     icon: CalendarClock,
     children: [
-      { type: 'leaf', id: 'superior-management', label: 'Superior Management', programId: 'superior-management' },
+      // Superior Management is no longer a separate menu entry -- it was a
+      // mock-data placeholder (unit/title/employee), and who approves leave
+      // for a department is now assigned directly per tier in Leave
+      // Workflows instead, so it duplicated that screen without being wired
+      // to anything real. The 'superior-management' program/placeholder
+      // config is left intact in case it's ever needed again, just not
+      // linked here.
       { type: 'leaf', id: 'leave-workflows', label: 'Leave Workflows', programId: 'leave-workflows' },
       // Leave Type is no longer a separate menu entry -- Leave Policy now
       // creates/renames leave types inline (see LeavePolicyProgram). The
