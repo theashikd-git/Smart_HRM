@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, Menu, Search, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { useAuthStore } from '@/lib/auth-store';
@@ -34,20 +34,6 @@ export function WorkbenchBar() {
           className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-surface-sunken hover:text-text-primary"
         >
           <Menu className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Program launcher"
-          className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Search programs"
-          className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-        >
-          <Search className="h-3.5 w-3.5" />
         </button>
       </div>
 
