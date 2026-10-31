@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, User } from 'lucide-react';
+import { ChevronDown, KeyRound, LogOut, User } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { initials } from '@/lib/utils';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 export function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -45,6 +47,15 @@ export function UserMenu() {
           <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-text-secondary hover:bg-surface-sunken">
             <User className="h-3.5 w-3.5" /> My Profile
           </button>
+          <button
+            onClick={() => {
+              setChangePasswordOpen(true);
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-text-secondary hover:bg-surface-sunken"
+          >
+            <KeyRound className="h-3.5 w-3.5" /> Change Password
+          </button>
           <div className="my-1 border-t border-line" />
           <button
             onClick={() => logout()}
@@ -54,6 +65,8 @@ export function UserMenu() {
           </button>
         </div>
       )}
+
+      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </div>
   );
 }
