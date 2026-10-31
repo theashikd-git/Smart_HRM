@@ -17,6 +17,7 @@ import { ReportsModule } from './reports/reports.module';
 import { AuditModule } from './audit/audit.module';
 import { DepartmentSuperiorsModule } from './department-superiors/department-superiors.module';
 import { RosterModule } from './roster/roster.module';
+import { HolidaysModule } from './holidays/holidays.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
@@ -39,6 +40,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuditModule,
     DepartmentSuperiorsModule,
     RosterModule,
+    HolidaysModule,
     NotificationsModule,
   ],
 })

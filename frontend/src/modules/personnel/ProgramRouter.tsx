@@ -10,6 +10,7 @@ import { RosterProgram } from './roster/RosterProgram';
 import { LeaveWorkflowsProgram } from './leave-management/LeaveWorkflowsProgram';
 import { LeaveTypeProgram } from './leave-management/LeaveTypeProgram';
 import { LeavePolicyProgram } from './leave-management/LeavePolicyProgram';
+import { HolidayProgram } from './holiday/HolidayProgram';
 import { PlaceholderProgram } from './common/PlaceholderProgram';
 import { PLACEHOLDER_CONFIG } from './common/placeholderConfig';
 
@@ -42,6 +43,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <LeaveTypeProgram tab={tab} />;
     case 'leave-policy':
       return <LeavePolicyProgram tab={tab} />;
+    case 'holiday':
+      return <HolidayProgram tab={tab} />;
     default: {
       const config = PLACEHOLDER_CONFIG[tab.programId];
       if (!config) {

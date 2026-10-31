@@ -340,6 +340,28 @@ model Shift {
   @@map("shifts")
 }
 
+enum HolidayType {
+  GOVERNMENT
+  COMPANY
+}
+
+// A declared non-working day (see Personnel > Government Holiday). Checked
+// by AttendanceService.processDay (so a punch on a holiday still records
+// status=HOLIDAY instead of PRESENT/LATE/HALF_DAY) and by DashboardService's
+// team-attendance view (so an employee with no punch on a holiday shows as
+// HOLIDAY instead of the default ABSENT fallback).
+model Holiday {
+  id        String      @id @default(uuid())
+  name      String
+  date      DateTime    @db.Date
+  type      HolidayType @default(GOVERNMENT)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([date])
+  @@map("holidays")
+}
+
 enum RosterDayType {
   SHIFT
   OFF

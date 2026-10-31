@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { HolidaysService } from '../holidays/holidays.service';
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -9,7 +10,10 @@ function startOfDay(date: Date): Date {
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private holidaysService: HolidaysService,
+  ) {}
 
   async summary() {
     const today = startOfDay(new Date());
@@ -167,6 +171,7 @@ export class DashboardService {
     const today = startOfDay(new Date());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const isHolidayToday = await this.holidaysService.isHoliday(today);
 
     const employees = await this.prisma.employee.findMany({
       where: {
@@ -205,7 +210,9 @@ export class DashboardService {
         joiningDate: e.joiningDate,
         checkIn: record?.checkIn ?? null,
         checkOut: record?.checkOut ?? null,
-        status: record?.status ?? 'ABSENT',
+        // No punch today: show HOLIDAY rather than the default ABSENT
+        // fallback when today is a declared holiday (see Holiday / HolidaysService.isHoliday).
+        status: record?.status ?? (isHolidayToday ? 'HOLIDAY' : 'ABSENT'),
         present: !!record,
       };
     });

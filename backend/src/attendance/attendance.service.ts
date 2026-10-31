@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { HolidaysService } from '../holidays/holidays.service';
 import { ZktecoClient, RawPunch } from '../devices/zkteco/zkteco-client.interface';
 import { ZKTECO_CLIENT } from '../devices/zkteco/zkteco-client.token';
 import {
@@ -39,6 +40,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     private prisma: PrismaService,
     private auditService: AuditService,
     private config: ConfigService,
+    private holidaysService: HolidaysService,
     @Inject(ZKTECO_CLIENT) private zkteco: ZktecoClient,
   ) {}
 
@@ -255,7 +257,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     let earlyLeaveMinutes = 0;
     let overtimeMinutes = 0;
     let workHours: number | null = null;
-    let status: 'PRESENT' | 'LATE' | 'HALF_DAY' = 'PRESENT';
+    let status: 'PRESENT' | 'LATE' | 'HALF_DAY' | 'HOLIDAY' = 'PRESENT';
 
     if (employee.shift) {
       const shiftStartMin = toMinutes(employee.shift.startTime);
@@ -281,6 +283,13 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (checkOut) {
       workHours = Math.round(((checkOut.getTime() - checkIn.getTime()) / 3600000) * 100) / 100;
       if (workHours < 4) status = 'HALF_DAY';
+    }
+
+    // A punch still gets logged on a declared holiday (someone came in
+    // anyway), but it's recorded as HOLIDAY rather than PRESENT/LATE/HALF_DAY
+    // so holiday work is visible as such everywhere attendance status is shown.
+    if (await this.holidaysService.isHoliday(dayStart)) {
+      status = 'HOLIDAY';
     }
 
     const record = await this.prisma.attendanceRecord.upsert({

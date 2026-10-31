@@ -57,6 +57,15 @@ export interface Shift {
   _count?: { employees: number };
 }
 
+export type HolidayType = 'GOVERNMENT' | 'COMPANY';
+
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  type: HolidayType;
+}
+
 export type RosterDayType = 'SHIFT' | 'OFF';
 
 export interface RosterAssignment {

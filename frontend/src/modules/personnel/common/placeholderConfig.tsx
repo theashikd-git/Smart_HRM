@@ -3,7 +3,6 @@ import { DataTableColumn } from '@/components/shell/DataTable';
 import {
   mockSuperiors,
   mockShifts,
-  mockHolidays,
   mockResignedEmployees,
 } from '@/data/mock/personnel';
 import type { PlaceholderConfig } from './PlaceholderProgram';
@@ -47,16 +46,6 @@ export const PLACEHOLDER_CONFIG: Record<string, PlaceholderConfig> = {
     ] satisfies DataTableColumn<(typeof mockShifts)[number]>[],
     rows: mockShifts,
   },
-
-  holiday: {
-    variant: 'table',
-    rowKey: (r) => r.name,
-    addLabel: 'Add Holiday',
-    columns: [
-      { key: 'name', header: 'Holiday' },
-      { key: 'date', header: 'Date' },
-      { key: 'type', header: 'Type' },
-    ] satisfies DataTableColumn<(typeof mockHolidays)[number]>[],
-    rows: mockHolidays,
-  },
+  // 'holiday' is no longer a placeholder -- it's a real CRUD page now
+  // (see ./holiday/HolidayProgram.tsx), routed directly in ProgramRouter.
 };
