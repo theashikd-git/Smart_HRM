@@ -77,19 +77,19 @@ export class DevicesController {
   }
 
   @Get(':id/info')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   getInfo(@Param('id') id: string) {
     return this.devicesService.getInfo(id);
   }
 
   @Get(':id/users')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   getUsers(@Param('id') id: string) {
     return this.devicesService.getUsers(id);
   }
 
   @Get(':id/logs')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   getLogs(@Param('id') id: string) {
     return this.devicesService.getLogs(id);
   }
@@ -115,7 +115,7 @@ export class DevicesController {
   }
 
   @Get('sync/history')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   syncHistory(@Query('employeeId') employeeId?: string) {
     return this.deviceSyncService.getSyncHistory(employeeId);
   }

@@ -21,7 +21,7 @@ export class ReportsController {
   }
 
   @Get('daily-attendance')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async dailyAttendance(@Query('date') date?: string, @Query('format') format?: string, @Res() res?: Response) {
     const data = await this.reportsService.dailyAttendance(date);
     if (format === 'csv') return this.sendCsv(res!, 'daily-attendance.csv', data);
@@ -29,7 +29,7 @@ export class ReportsController {
   }
 
   @Get('monthly-attendance')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async monthlyAttendance(@Query('month') month?: string, @Query('format') format?: string, @Res() res?: Response) {
     const data = await this.reportsService.monthlyAttendance(month);
     if (format === 'csv') return this.sendCsv(res!, 'monthly-attendance.csv', data);
@@ -37,7 +37,7 @@ export class ReportsController {
   }
 
   @Get('employee-attendance')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async employeeAttendance(
     @Query('employeeId') employeeId: string,
     @Query('startDate') startDate?: string,
@@ -51,7 +51,7 @@ export class ReportsController {
   }
 
   @Get('late')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async lateReport(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -64,7 +64,7 @@ export class ReportsController {
   }
 
   @Get('overtime')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async overtimeReport(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -77,7 +77,7 @@ export class ReportsController {
   }
 
   @Get('department-attendance')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
   async departmentAttendance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -90,7 +90,7 @@ export class ReportsController {
   }
 
   @Get('device-activity')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   async deviceActivity(@Query('format') format?: string, @Res() res?: Response) {
     const data = await this.reportsService.deviceActivity();
     if (format === 'csv') return this.sendCsv(res!, 'device-activity.csv', data);
@@ -98,7 +98,7 @@ export class ReportsController {
   }
 
   @Get('sync-history')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   async syncHistory(@Query('format') format?: string, @Res() res?: Response) {
     const data = await this.reportsService.syncHistoryReport();
     if (format === 'csv') return this.sendCsv(res!, 'sync-history.csv', data);
