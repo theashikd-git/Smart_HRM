@@ -1,5 +1,6 @@
 import type { WorkbenchTab } from '@/types/workbench';
 import { EmployeeProgram } from './employee/EmployeeProgram';
+import { ResignedEmployeesProgram } from './resigned-employees/ResignedEmployeesProgram';
 import { ReportsProgram } from './reports/ReportsProgram';
 import { AttendanceProgram } from './attendance/AttendanceProgram';
 import { CompanyProgram } from './organization/CompanyProgram';
@@ -21,6 +22,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
   switch (tab.programId) {
     case 'employee':
       return <EmployeeProgram tab={tab} />;
+    case 'resigned-employees':
+      return <ResignedEmployeesProgram tab={tab} />;
     case 'reports':
       return <ReportsProgram tab={tab} />;
     case 'attendance':

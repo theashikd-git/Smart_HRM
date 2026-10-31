@@ -4,7 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
 import { UsersService } from '../users/users.service';
 import { LeaveService } from '../leave/leave.service';
-import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
+import { CreateEmployeeDto, EmployeeQueryDto, ResignEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -291,11 +291,42 @@ export class EmployeesService {
     return updated;
   }
 
+  // POST /employees/:id/resign -- powers the Employee profile's "Mark as
+  // Resigned" action and the Resigned Employees screen (which just filters
+  // the normal employee list to status=RESIGNED, see findAll's `status`
+  // query param). Same device/audit handling as disable() -- a resigned
+  // employee shouldn't still be enrolled on the biometric terminal either
+  // -- plus the resignation date/reason disable() never needed.
+  async resign(id: string, dto: ResignEmployeeDto, actorId?: string) {
+    const employee = await this.findOne(id);
+    const updated = await this.prisma.employee.update({
+      where: { id },
+      data: {
+        status: 'RESIGNED',
+        resignationDate: new Date(dto.resignationDate),
+        resignationReason: dto.reason,
+      },
+    });
+    await this.auditService.log({
+      userId: actorId,
+      action: 'EMPLOYEE_RESIGNED',
+      entity: 'Employee',
+      entityId: id,
+    });
+    if (employee.deviceUserId) {
+      this.deviceSyncService.pushDelete(id, employee.deviceUserId).catch(() => undefined);
+    }
+    return updated;
+  }
+
   async activate(id: string, actorId?: string) {
     await this.findOne(id);
     await this.prisma.employee.update({
       where: { id },
-      data: { status: 'ACTIVE', syncStatus: 'PENDING' },
+      // Clears any resignation record too -- reinstating someone who was
+      // marked resigned shouldn't leave a stale resignationDate/Reason
+      // sitting on an otherwise-active employee.
+      data: { status: 'ACTIVE', syncStatus: 'PENDING', resignationDate: null, resignationReason: null },
     });
     await this.auditService.log({
       userId: actorId,

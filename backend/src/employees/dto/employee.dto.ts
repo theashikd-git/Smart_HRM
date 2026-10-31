@@ -43,6 +43,7 @@ export enum EmployeeStatusDto {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   TERMINATED = 'TERMINATED',
+  RESIGNED = 'RESIGNED',
 }
 
 export class CreateEmployeeDto {
@@ -190,4 +191,11 @@ export class EmployeeQueryDto {
   @IsOptional() @IsEnum(EmployeeStatusDto) status?: EmployeeStatusDto;
   @IsOptional() @IsString() page?: string;
   @IsOptional() @IsString() pageSize?: string;
+}
+
+// POST /employees/:id/resign -- mirrors disable()/activate() but also
+// records when and why (see EmployeesService.resign).
+export class ResignEmployeeDto {
+  @IsNotEmpty() @IsDateString() resignationDate: string;
+  @Transform(blankToUndefined) @IsOptional() @IsString() reason?: string;
 }

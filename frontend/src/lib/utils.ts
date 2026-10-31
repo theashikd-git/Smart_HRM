@@ -44,6 +44,7 @@ export const employeeStatusColors: Record<string, { text: string; bg: string; do
   ACTIVE: { text: 'text-success', bg: 'bg-success-soft', dot: 'bg-success' },
   INACTIVE: { text: 'text-warning', bg: 'bg-warning-soft', dot: 'bg-warning' },
   TERMINATED: { text: 'text-danger', bg: 'bg-danger-soft', dot: 'bg-danger' },
+  RESIGNED: { text: 'text-text-muted', bg: 'bg-surface-sunken', dot: 'bg-text-muted' },
 };
 
 export const syncStatusColors: Record<string, { text: string; bg: string; dot: string }> = {

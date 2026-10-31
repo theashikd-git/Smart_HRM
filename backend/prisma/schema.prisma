@@ -38,6 +38,7 @@ enum EmployeeStatus {
   ACTIVE
   INACTIVE
   TERMINATED
+  RESIGNED
 }
 
 enum EmploymentType {
@@ -396,6 +397,12 @@ model Employee {
   employmentType   EmploymentType @default(FULL_TIME)
   salary           Decimal?       @db.Decimal(12, 2)
   status           EmployeeStatus @default(ACTIVE)
+  // Set together when HR marks someone resigned (POST /employees/:id/resign)
+  // -- cleared again if they're later reinstated via activate(). Kept as
+  // plain nullable fields rather than a join table since this is just a
+  // record of the one resignation event, not a history of several.
+  resignationDate   DateTime?
+  resignationReason String?
 
   // Which kind of login this person gets -- see the EmployeeRole enum
   // above for what each value means and EmployeesService/UsersService for

@@ -182,6 +182,7 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
                 <option value="TERMINATED">Terminated</option>
+                <option value="RESIGNED">Resigned</option>
               </Select>
             </div>
           </div>

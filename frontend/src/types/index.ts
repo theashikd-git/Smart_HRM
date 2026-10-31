@@ -90,7 +90,7 @@ export interface RosterWeekData {
 }
 
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
-export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
+export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED' | 'RESIGNED';
 export type SyncStatus = 'NOT_SYNCED' | 'PENDING' | 'SYNCED' | 'FAILED';
 // Picked on the Add/Edit Employee form. EMPLOYEE/MANAGER/SUPERVISOR/
 // MANAGING_DIRECTOR each grant that same real access level (Role, below)
@@ -122,6 +122,8 @@ export interface Employee {
   employmentType: EmploymentType;
   salary?: number | null;
   status: EmployeeStatus;
+  resignationDate?: string | null;
+  resignationReason?: string | null;
   deviceUserId?: string | null;
   syncStatus: SyncStatus;
   lastSyncDate?: string | null;

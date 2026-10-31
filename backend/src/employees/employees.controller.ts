@@ -5,7 +5,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { EmployeesService } from './employees.service';
-import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
+import { CreateEmployeeDto, EmployeeQueryDto, ResignEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 // HR can create/edit employees, but granting Administrator-level access
 // (a staff login with role ADMIN) through the Employee Role field is kept
@@ -64,6 +64,12 @@ export class EmployeesController {
   @Roles('ADMIN', 'HR')
   activate(@Param('id') id: string, @CurrentUser() user: any) {
     return this.employeesService.activate(id, user.id);
+  }
+
+  @Post(':id/resign')
+  @Roles('ADMIN', 'HR')
+  resign(@Param('id') id: string, @Body() dto: ResignEmployeeDto, @CurrentUser() user: any) {
+    return this.employeesService.resign(id, dto, user.id);
   }
 
   // HR/Admin "forgot password" reset for this employee's self-service

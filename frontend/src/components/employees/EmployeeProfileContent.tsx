@@ -3,7 +3,7 @@
 import { ReactNode, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Fingerprint, Scan, CreditCard, ShieldCheck, Ban, CheckCircle2 } from 'lucide-react';
+import { Fingerprint, Scan, CreditCard, ShieldCheck, Ban, CheckCircle2, UserX } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,7 @@ import { employeeStatusColors, syncStatusColors, formatDate, formatDateTime } fr
 import { useAuthStore } from '@/lib/auth-store';
 import { useUpdateUser } from '@/hooks/useUsers';
 import { useDisableEmployee, useActivateEmployee } from '@/hooks/useEmployees';
+import { ResignEmployeeModal } from './ResignEmployeeModal';
 import { apiErrorMessage } from '@/lib/api';
 import { Employee, Role } from '@/types';
 
@@ -91,14 +92,20 @@ function AccountAccessSection({ employee }: { employee: Employee }) {
   );
 }
 
-/** Admin/HR-only Activate/Disable control -- lives on the profile now that
- *  the Employee List table only shows the clock/edit/delete icons, so the
- *  capability the old row-level "..." menu offered isn't lost. */
+/** Admin/HR-only Activate/Disable/Resign controls -- lives on the profile
+ *  now that the Employee List table only shows the clock/edit/delete
+ *  icons, so the capability the old row-level "..." menu offered isn't
+ *  lost. RESIGNED is a third state alongside ACTIVE/INACTIVE: "Mark as
+ *  Resigned" (ResignEmployeeModal) records a last working day + reason and
+ *  moves them off the active Disable/Activate toggle entirely, onto a
+ *  single "Reinstate" button (just activate() under the hood -- see
+ *  EmployeesService.activate, which clears the resignation record again). */
 function EmployeeStatusToggle({ employee }: { employee: Employee }) {
   const viewer = useAuthStore((s) => s.user);
   const canManage = viewer?.role === 'ADMIN' || viewer?.role === 'HR';
   const disableEmployee = useDisableEmployee();
   const activateEmployee = useActivateEmployee();
+  const [resignOpen, setResignOpen] = useState(false);
   const qc = useQueryClient();
 
   if (!canManage) return null;
@@ -110,7 +117,7 @@ function EmployeeStatusToggle({ employee }: { employee: Employee }) {
         toast.success(`${employee.fullName} disabled`);
       } else {
         await activateEmployee.mutateAsync(employee.id);
-        toast.success(`${employee.fullName} activated`);
+        toast.success(employee.status === 'RESIGNED' ? `${employee.fullName} reinstated` : `${employee.fullName} activated`);
       }
       qc.invalidateQueries({ queryKey: ['employee', employee.id] });
       qc.invalidateQueries({ queryKey: ['employees'] });
@@ -121,14 +128,30 @@ function EmployeeStatusToggle({ employee }: { employee: Employee }) {
 
   const pending = disableEmployee.isPending || activateEmployee.isPending;
 
-  return employee.status === 'ACTIVE' ? (
-    <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
-      <Ban className="h-3.5 w-3.5" /> Disable
-    </Button>
-  ) : (
-    <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
-      <CheckCircle2 className="h-3.5 w-3.5" /> Activate
-    </Button>
+  if (employee.status === 'RESIGNED') {
+    return (
+      <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
+        <CheckCircle2 className="h-3.5 w-3.5" /> Reinstate
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {employee.status === 'ACTIVE' ? (
+        <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
+          <Ban className="h-3.5 w-3.5" /> Disable
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={handleToggle} loading={pending}>
+          <CheckCircle2 className="h-3.5 w-3.5" /> Activate
+        </Button>
+      )}
+      <Button variant="outline" size="sm" onClick={() => setResignOpen(true)}>
+        <UserX className="h-3.5 w-3.5" /> Mark as Resigned
+      </Button>
+      <ResignEmployeeModal employee={resignOpen ? employee : null} onClose={() => setResignOpen(false)} />
+    </div>
   );
 }
 
@@ -177,6 +200,12 @@ export function EmployeeProfileContent({ employee }: { employee: Employee }) {
                 pulsing={employee.syncStatus === 'PENDING'}
               />
             </div>
+            {employee.status === 'RESIGNED' && (
+              <p className="mt-1.5 text-xs text-text-muted">
+                Last working day {formatDate(employee.resignationDate)}
+                {employee.resignationReason ? ` — ${employee.resignationReason}` : ''}
+              </p>
+            )}
           </div>
         </div>
         <EmployeeStatusToggle employee={employee} />
@@ -210,6 +239,12 @@ export function EmployeeProfileContent({ employee }: { employee: Employee }) {
         <Field label="Employment Type" value={employee.employmentType?.replace('_', ' ')} />
         <Field label="Joining Date" value={formatDate(employee.joiningDate)} />
         <Field label="Salary" value={salary} />
+        {employee.status === 'RESIGNED' && (
+          <>
+            <Field label="Last Working Day" value={formatDate(employee.resignationDate)} />
+            <Field label="Resignation Reason" value={employee.resignationReason} />
+          </>
+        )}
       </Section>
 
       <Section title="Biometric & Device">

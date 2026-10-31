@@ -65,6 +65,19 @@ export function useActivateEmployee() {
   });
 }
 
+// POST /employees/:id/resign -- used by the Employee profile's "Mark as
+// Resigned" action (ResignEmployeeModal). The Resigned Employees screen
+// itself just reads from useEmployees({ status: 'RESIGNED' }), same list
+// endpoint everything else uses.
+export function useResignEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, resignationDate, reason }: { id: string; resignationDate: string; reason?: string }) =>
+      (await api.post(`/employees/${id}/resign`, { resignationDate, reason })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+}
+
 // HR/Admin "forgot password" reset for an employee's self-service portal
 // login -- the backend generates a fresh temporary password, forces the
 // employee to set their own on next sign-in, and returns the temporary
