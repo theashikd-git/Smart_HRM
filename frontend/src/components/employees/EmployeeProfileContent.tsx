@@ -3,7 +3,7 @@
 import { ReactNode, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Fingerprint, Scan, CreditCard, ShieldCheck, Ban, CheckCircle2, UserX } from 'lucide-react';
+import { Fingerprint, Scan, CreditCard, ShieldCheck, Ban, CheckCircle2, UserX, Pencil } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useUpdateUser } from '@/hooks/useUsers';
 import { useDisableEmployee, useActivateEmployee } from '@/hooks/useEmployees';
 import { ResignEmployeeModal } from './ResignEmployeeModal';
+import { EmployeeFormModal } from './EmployeeFormModal';
 import { apiErrorMessage } from '@/lib/api';
 import { Employee, Role } from '@/types';
 
@@ -179,6 +180,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
  * real employee data/formatting logic exists in exactly one place.
  */
 export function EmployeeProfileContent({ employee }: { employee: Employee }) {
+  const [editOpen, setEditOpen] = useState(false);
   const salary =
     employee.salary != null
       ? Number(employee.salary).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -208,8 +210,15 @@ export function EmployeeProfileContent({ employee }: { employee: Employee }) {
             )}
           </div>
         </div>
-        <EmployeeStatusToggle employee={employee} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-3.5 w-3.5" /> Edit
+          </Button>
+          <EmployeeStatusToggle employee={employee} />
+        </div>
       </div>
+
+      <EmployeeFormModal open={editOpen} onClose={() => setEditOpen(false)} employee={employee} />
 
       <AccountAccessSection employee={employee} />
 
