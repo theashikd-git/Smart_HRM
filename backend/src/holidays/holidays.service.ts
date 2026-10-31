@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { HolidayType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateHolidayDto, UpdateHolidayDto } from './dto/holiday.dto';
@@ -45,7 +46,7 @@ export class HolidaysService {
 
   async update(id: string, dto: UpdateHolidayDto, actorId?: string) {
     await this.findOne(id);
-    const data: { name?: string; date?: Date; type?: string } = {};
+    const data: { name?: string; date?: Date; type?: HolidayType } = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.date !== undefined) data.date = startOfDay(new Date(dto.date));
     if (dto.type !== undefined) data.type = dto.type;
