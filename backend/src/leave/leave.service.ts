@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { EmployeeRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -478,12 +479,76 @@ export class LeaveService {
     }
   }
 
-  async create(dto: CreateLeaveRequestDto, actorId?: string) {
+  /**
+   * Backend-side guard for Leave on Behalf (POST /leave/requests called by
+   * a MANAGER/SUPERVISOR login -- see LeaveController.createRequest). The
+   * frontend's employee picker is already scoped to the actor's own led
+   * department and tier (DashboardService.myTeamAttendance has the matching
+   * filter -- see tierExcludedEmployeeRoles there), but the API itself must
+   * not just trust dto.employeeId: without this, any MANAGER/SUPERVISOR
+   * could file leave for an employeeId in any department, or for someone
+   * above their own tier, simply by posting a different id. ADMIN/HR are
+   * exempt -- they're expected to file for anyone, org-wide, same as
+   * before this guard existed. Not called at all for self-service
+   * (createForSelf never passes actorRole), so it never affects someone
+   * filing their own leave.
+   */
+  private async assertCanActOnBehalf(
+    actorUserId: string,
+    actorRole: string,
+    target: { departmentId: string | null; employeeRole: EmployeeRole },
+  ) {
+    if (actorRole !== 'MANAGER' && actorRole !== 'SUPERVISOR') return;
+
+    const actorUser = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { employeeId: true },
+    });
+    if (!actorUser?.employeeId) {
+      throw new ForbiddenException('You are not linked to an employee record, so you cannot file leave on behalf of anyone.');
+    }
+
+    const [headed, tiered] = await Promise.all([
+      this.prisma.department.findMany({
+        where: { headEmployeeId: actorUser.employeeId },
+        select: { id: true },
+      }),
+      this.prisma.leaveApprovalTier.findMany({
+        where: { type: 'SPECIFIC_USER', approverUserId: actorUserId, workflow: { isActive: true } },
+        select: { workflow: { select: { departmentId: true } } },
+      }),
+    ]);
+    const ledDepartmentIds = new Set<string>([
+      ...headed.map((d) => d.id),
+      ...tiered.map((t) => t.workflow.departmentId),
+    ]);
+
+    // Internal department only -- never someone else's department, even if
+    // their tier would otherwise be low enough to act on behalf of.
+    if (!target.departmentId || !ledDepartmentIds.has(target.departmentId)) {
+      throw new ForbiddenException('You can only file leave on behalf of someone in your own department.');
+    }
+
+    // Tier rule: a Supervisor can't act on behalf of a Manager (or a
+    // Managing Director); a Manager can't act on behalf of a Managing
+    // Director. Both can act for a plain Employee, and a Manager can act
+    // for a Supervisor.
+    const excludedRoles: EmployeeRole[] = actorRole === 'SUPERVISOR' ? ['MANAGER', 'MANAGING_DIRECTOR'] : ['MANAGING_DIRECTOR'];
+    if (excludedRoles.includes(target.employeeRole)) {
+      throw new ForbiddenException('You are not permitted to file leave on behalf of this employee.');
+    }
+  }
+
+  async create(dto: CreateLeaveRequestDto, actorId?: string, actorRole?: string) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: dto.employeeId },
       include: { shift: true },
     });
     if (!employee) throw new NotFoundException('Employee not found');
+
+    if (actorId && actorRole) {
+      await this.assertCanActOnBehalf(actorId, actorRole, employee);
+    }
 
     const leaveType = await this.prisma.leaveType.findUnique({ where: { id: dto.leaveTypeId } });
     if (!leaveType) throw new NotFoundException('Leave type not found');

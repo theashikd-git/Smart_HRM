@@ -34,6 +34,7 @@ export class LeaveController {
     return this.service.create(
       { ...dto, overrideBalance: canOverride ? dto.overrideBalance : false },
       user.id,
+      user.role,
     );
   }
 

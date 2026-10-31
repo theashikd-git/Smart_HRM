@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EmployeeRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { HolidaysService } from '../holidays/holidays.service';
 
@@ -120,6 +121,22 @@ export class DashboardService {
    * LeaveService.resolveTierApprover), so they're already covered by the
    * headEmployeeId half of this union and aren't queried again here.
    */
+  /**
+   * Tier rule for "My Team": a SUPERVISOR can't see a MANAGER's (or
+   * MANAGING_DIRECTOR's) check-in/out time, and can't pick them for Leave
+   * on Behalf either -- both read from this same filtered list (see
+   * myTeamAttendance, reused as-is by LeaveOnBehalfTab's employee picker).
+   * A MANAGER can see/pick a SUPERVISOR, just not a MANAGING_DIRECTOR. Only
+   * applies when the viewer IS actually a SUPERVISOR/MANAGER login -- an
+   * ADMIN/HR/MANAGING_DIRECTOR set as a department head still sees everyone,
+   * same as before this rule existed.
+   */
+  private tierExcludedEmployeeRoles(viewerRole?: string | null): EmployeeRole[] {
+    if (viewerRole === 'SUPERVISOR') return ['MANAGER', 'MANAGING_DIRECTOR'];
+    if (viewerRole === 'MANAGER') return ['MANAGING_DIRECTOR'];
+    return [];
+  }
+
   private async resolveLedDepartments(userId: string, employeeId: string | null) {
     const [headed, tiered] = await Promise.all([
       employeeId
@@ -155,7 +172,7 @@ export class DashboardService {
   async myTeamAttendance(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { employeeId: true },
+      select: { employeeId: true, role: true },
     });
 
     if (!user?.employeeId) {
@@ -172,12 +189,14 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const isHolidayToday = await this.holidaysService.isHoliday(today);
+    const excludedRoles = this.tierExcludedEmployeeRoles(user.role);
 
     const employees = await this.prisma.employee.findMany({
       where: {
         departmentId: { in: departments.map((d) => d.id) },
         status: 'ACTIVE',
         id: { not: user.employeeId }, // the department head isn't part of their own "team" list
+        ...(excludedRoles.length ? { employeeRole: { notIn: excludedRoles } } : {}),
       },
       select: {
         id: true,
@@ -300,7 +319,7 @@ export class DashboardService {
   async myTeamRecentPunches(userId: string, limit = 30) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { employeeId: true },
+      select: { employeeId: true, role: true },
     });
 
     if (!user?.employeeId) {
@@ -313,11 +332,14 @@ export class DashboardService {
       return { isManager: false, punches: [] };
     }
 
+    const excludedRoles = this.tierExcludedEmployeeRoles(user.role);
+
     const logs = await this.prisma.attendanceLog.findMany({
       where: {
         employee: {
           departmentId: { in: departments.map((d) => d.id) },
           id: { not: user.employeeId },
+          ...(excludedRoles.length ? { employeeRole: { notIn: excludedRoles } } : {}),
         },
       },
       include: {
