@@ -1,11 +1,12 @@
 'use client';
 
-import { LayoutGrid, Search, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { useAuthStore } from '@/lib/auth-store';
 import type { ModuleDefinition } from '@/types/workbench';
 import { NotificationBell } from './NotificationBell';
+import { ProgramSearch } from './ProgramSearch';
 import { UserMenu } from './UserMenu';
 
 const MODULES: ModuleDefinition[] = [
@@ -61,20 +62,7 @@ export function TopNavigation() {
       </div>
 
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          aria-label="Program launcher"
-          className="flex h-7 w-7 items-center justify-center rounded text-white/70 hover:bg-white/10 hover:text-white"
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="Search programs"
-          className="flex h-7 w-7 items-center justify-center rounded text-white/70 hover:bg-white/10 hover:text-white"
-        >
-          <Search className="h-4 w-4" />
-        </button>
+        <ProgramSearch />
         <NotificationBell />
         <UserMenu />
       </div>
