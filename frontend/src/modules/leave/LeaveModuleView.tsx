@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { NewLeaveRequestModal } from '@/components/leave/NewLeaveRequestModal';
 import { ApproveLeaveModal } from '@/components/leave/ApproveLeaveModal';
+import { CancelLeaveModal } from '@/components/leave/CancelLeaveModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
 import { ProgramTabs } from '@/components/shell/ProgramTabs';
 import {
@@ -16,7 +17,6 @@ import {
   useLeaveTypes,
   useLeaveBalances,
   useLeavePendingCount,
-  useCancelLeaveRequest,
   useApproveCancellation,
   useAppliedOnBehalf,
 } from '@/hooks/useLeave';
@@ -71,6 +71,7 @@ function LeaveRequestsPanel() {
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ request: LeaveRequest; mode: 'approval' | 'cancellation' } | null>(null);
   const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
   const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
 
   const { data, isLoading } = useLeaveRequests({
@@ -86,17 +87,7 @@ function LeaveRequestsPanel() {
   const { data: employees } = useEmployees({ pageSize: 200 });
   const { data: balances } = useLeaveBalances(balanceEmployeeId || undefined);
 
-  const cancelRequest = useCancelLeaveRequest();
   const approveCancellation = useApproveCancellation();
-
-  async function handleCancel(request: LeaveRequest) {
-    try {
-      await cancelRequest.mutateAsync(request.id);
-      toast.success('Leave request cancelled');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
 
   async function handleApproveCancellation(request: LeaveRequest) {
     try {
@@ -231,6 +222,9 @@ function LeaveRequestsPanel() {
                   {request.status === 'APPROVED' && request.approvalNote && (
                     <p className="text-xs text-text-muted mt-1">Note: {request.approvalNote}</p>
                   )}
+                  {request.status === 'CANCELLED' && request.cancelledReason && (
+                    <p className="text-xs text-text-muted mt-1">Cancelled: {request.cancelledReason}</p>
+                  )}
                   {request.decisions && request.decisions.length > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-l-2 border-line pl-2">
                       {request.decisions.map((d) => (
@@ -312,7 +306,7 @@ function LeaveRequestsPanel() {
                     )}
                     {(request.status === 'PENDING' || request.status === 'APPROVED') && (
                       <button
-                        onClick={() => handleCancel(request)}
+                        onClick={() => setCancelTarget(request)}
                         title="Cancel"
                         className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
                       >
@@ -353,6 +347,7 @@ function LeaveRequestsPanel() {
 
       <NewLeaveRequestModal open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
       <ApproveLeaveModal request={approveTarget} onClose={() => setApproveTarget(null)} />
+      <CancelLeaveModal request={cancelTarget} onClose={() => setCancelTarget(null)} />
 
       <RejectLeaveModal
         request={rejectTarget?.request ?? null}
@@ -434,6 +429,9 @@ function LeaveOnBehalfPanel() {
                   )}
                   {request.status === 'APPROVED' && request.approvalNote && (
                     <p className="mt-1 text-xs text-text-muted">Note: {request.approvalNote}</p>
+                  )}
+                  {request.status === 'CANCELLED' && request.cancelledReason && (
+                    <p className="mt-1 text-xs text-text-muted">Cancelled: {request.cancelledReason}</p>
                   )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">

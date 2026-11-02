@@ -685,6 +685,7 @@ model LeaveRequest {
   decidedById     String?
   decidedAt       DateTime?
   cancelledAt     DateTime?
+  cancelledReason String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 

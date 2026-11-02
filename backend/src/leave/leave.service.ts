@@ -1123,19 +1123,43 @@ export class LeaveService {
     return this.withTierLabel(updated);
   }
 
-  async cancel(id: string, actorId?: string) {
+  /** HR/Admin/Manager direct cancel -- an immediate, one-step override
+   *  that works no matter where the request currently stands: PENDING,
+   *  already APPROVED, or already REJECTED. (Only an already-CANCELLED
+   *  request can't be cancelled again.) This bypasses the employee's own
+   *  requestCancellation()/approveCancellation() chain entirely -- there's
+   *  no further approval needed, it takes effect right away. A reason is
+   *  required whenever the request being cancelled is currently APPROVED
+   *  (it was already granted -- on the calendar, deducted from balance,
+   *  marked in attendance -- so reversing it needs an explanation); for a
+   *  PENDING or already-REJECTED request a reason is accepted but
+   *  optional. The employee is always notified, whatever the reason. */
+  async cancel(id: string, actorId?: string, reason?: string) {
     const request = await this.findOne(id);
-    if (request.status !== 'PENDING' && request.status !== 'APPROVED') {
-      throw new BadRequestException(`Cannot cancel a request that is already ${request.status}`);
+    if (request.status === 'CANCELLED') {
+      throw new BadRequestException('This request has already been cancelled.');
+    }
+    if (request.status === 'APPROVED' && !reason?.trim()) {
+      throw new BadRequestException('A reason is required to cancel a leave request that has already been approved.');
     }
 
-    if (request.status === 'APPROVED') {
+    const previousStatus = request.status;
+    if (previousStatus === 'APPROVED') {
       await this.reverseApprovalSideEffects(request);
     }
 
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
-      data: { status: 'CANCELLED', cancelledAt: new Date(), currentTierOrder: null },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        cancelledReason: reason,
+        currentTierOrder: null,
+        // Any in-flight self-requested-cancellation chain is moot now that
+        // the request itself has been force-cancelled directly.
+        cancellationStatus: null,
+        cancellationCurrentTierOrder: null,
+      },
       include: this.includeRelations(),
     });
 
@@ -1144,7 +1168,15 @@ export class LeaveService {
       action: 'LEAVE_CANCELLED',
       entity: 'LeaveRequest',
       entityId: id,
+      details: `${updated.employee.fullName}: ${updated.leaveType.name} cancelled (was ${previousStatus})${reason ? ` -- Reason: ${reason}` : ''}`,
     });
+
+    await this.notificationsService.createForEmployee(
+      updated.employeeId,
+      'LEAVE',
+      'Leave request cancelled',
+      `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
+    );
 
     return this.withTierLabel(updated);
   }

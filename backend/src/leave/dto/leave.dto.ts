@@ -157,6 +157,21 @@ export class RejectLeaveRequestDto {
   reason: string;
 }
 
+// Body for the HR/Admin/Manager direct cancel (LeaveController.cancel /
+// LeaveService.cancel) -- distinct from RequestCancellationDto, which is
+// the EMPLOYEE asking to cancel their own already-approved leave and
+// starting a fresh approval chain for it. This one is an immediate,
+// one-step override available any time (pending, approved, or already
+// rejected) -- reason is optional here at the DTO level because it's only
+// actually required when cancelling a request that's currently APPROVED;
+// LeaveService.cancel enforces that conditional requirement itself, since
+// it depends on the request's current status.
+export class CancelLeaveRequestDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 // Body for requesting cancellation of an already-APPROVED leave (see
 // LeaveController.cancelMyRequest / LeaveService.requestCancellation) --
 // reason is optional, unlike rejecting a request, since the employee is

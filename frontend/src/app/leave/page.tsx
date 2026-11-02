@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import toast from 'react-hot-toast';
 import { CalendarDays, CheckCircle2, XCircle, Ban, PlusCircle, Clock } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader, StatusPill, Badge } from '@/components/ui/Card';
@@ -10,17 +9,16 @@ import { Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { NewLeaveRequestModal } from '@/components/leave/NewLeaveRequestModal';
 import { ApproveLeaveModal } from '@/components/leave/ApproveLeaveModal';
+import { CancelLeaveModal } from '@/components/leave/CancelLeaveModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
 import {
   useLeaveRequests,
   useLeaveTypes,
   useLeaveBalances,
   useLeavePendingCount,
-  useCancelLeaveRequest,
 } from '@/hooks/useLeave';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
-import { apiErrorMessage } from '@/lib/api';
 import { formatDate, leaveStatusColors } from '@/lib/utils';
 import { LeaveRequest } from '@/types';
 
@@ -32,6 +30,7 @@ export default function LeavePage() {
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
   const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
 
   const { data, isLoading } = useLeaveRequests({
@@ -47,16 +46,6 @@ export default function LeavePage() {
   const { data: employees } = useEmployees({ pageSize: 200 });
   const { data: balances } = useLeaveBalances(balanceEmployeeId || undefined);
 
-  const cancelRequest = useCancelLeaveRequest();
-
-  async function handleCancel(request: LeaveRequest) {
-    try {
-      await cancelRequest.mutateAsync(request.id);
-      toast.success('Leave request cancelled');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
 
   return (
     <AppShell title="Leave" subtitle="Requests, approvals, and balances for every employee">
@@ -180,6 +169,9 @@ export default function LeavePage() {
                   {request.status === 'APPROVED' && request.approvalNote && (
                     <p className="text-xs text-text-muted mt-1 max-w-[160px]">Note: {request.approvalNote}</p>
                   )}
+                  {request.status === 'CANCELLED' && request.cancelledReason && (
+                    <p className="text-xs text-text-muted mt-1 max-w-[160px]">Cancelled: {request.cancelledReason}</p>
+                  )}
                 </Td>
                 <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? ''}</Td>
                 <Td>
@@ -204,7 +196,7 @@ export default function LeavePage() {
                     )}
                     {(request.status === 'PENDING' || request.status === 'APPROVED') && (
                       <button
-                        onClick={() => handleCancel(request)}
+                        onClick={() => setCancelTarget(request)}
                         title="Cancel"
                         className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
                       >
@@ -245,6 +237,7 @@ export default function LeavePage() {
 
       <NewLeaveRequestModal open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
       <ApproveLeaveModal request={approveTarget} onClose={() => setApproveTarget(null)} />
+      <CancelLeaveModal request={cancelTarget} onClose={() => setCancelTarget(null)} />
       <RejectLeaveModal request={rejectTarget} onClose={() => setRejectTarget(null)} />
     </AppShell>
   );

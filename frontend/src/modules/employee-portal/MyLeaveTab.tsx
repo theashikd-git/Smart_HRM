@@ -114,6 +114,12 @@ export function MyLeaveTab() {
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
                   )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="mt-1 text-xs text-text-muted">Note: {request.approvalNote}</p>
+                  )}
+                  {request.status === 'CANCELLED' && request.cancelledReason && (
+                    <p className="mt-1 text-xs text-text-muted">Cancelled: {request.cancelledReason}</p>
+                  )}
                   {request.decisions && request.decisions.length > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-l-2 border-line pl-2">
                       {request.decisions.map((d) => (

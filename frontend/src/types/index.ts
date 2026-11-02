@@ -333,6 +333,7 @@ export interface LeaveRequest {
   approvalNote?: string | null;
   decidedAt?: string | null;
   cancelledAt?: string | null;
+  cancelledReason?: string | null;
   createdAt: string;
   // Tier-chain state -- set only while a tiered workflow is driving this
   // request (see LeaveApprovalWorkflow). currentTierLabel is the tier whose

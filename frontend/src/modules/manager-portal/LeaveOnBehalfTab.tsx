@@ -95,6 +95,12 @@ export function LeaveOnBehalfTab() {
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
                   )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="mt-1 text-xs text-text-muted">Note: {request.approvalNote}</p>
+                  )}
+                  {request.status === 'CANCELLED' && request.cancelledReason && (
+                    <p className="mt-1 text-xs text-text-muted">Cancelled: {request.cancelledReason}</p>
+                  )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
                       <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? ''}

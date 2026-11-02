@@ -314,7 +314,8 @@ export function useMyApprovals() {
 export function useCancelLeaveRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.patch(`/leave/requests/${id}/cancel`)).data,
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) =>
+      (await api.patch(`/leave/requests/${id}/cancel`, { reason })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       qc.invalidateQueries({ queryKey: ['leave-balances'] });

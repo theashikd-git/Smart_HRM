@@ -11,6 +11,7 @@ import {
   InitializeBalancesDto,
   LeaveQueryDto,
   ApproveLeaveRequestDto,
+  CancelLeaveRequestDto,
   RejectLeaveRequestDto,
   RequestCancellationDto,
 } from './dto/leave.dto';
@@ -65,10 +66,13 @@ export class LeaveController {
     return this.service.reject(id, dto, user.id, user.role);
   }
 
+  // Body is optional -- a reason is accepted here, but only actually
+  // required when the request being cancelled is currently APPROVED; see
+  // LeaveService.cancel.
   @Patch('requests/:id/cancel')
   @Roles('ADMIN', 'HR', 'MANAGER')
-  cancel(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.cancel(id, user.id);
+  cancel(@Param('id') id: string, @Body() dto: CancelLeaveRequestDto | undefined, @CurrentUser() user: any) {
+    return this.service.cancel(id, user.id, dto?.reason);
   }
 
   // -- Leave cancellation approval (cancelling an already-APPROVED leave) --
