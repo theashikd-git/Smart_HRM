@@ -9,6 +9,8 @@ import { SummaryCards } from './SummaryCards';
 import { AttendanceOverview } from './AttendanceOverview';
 import { AttendanceTrend } from './AttendanceTrend';
 import { DepartmentAttendanceTable } from './DepartmentAttendanceTable';
+import { LateToday } from './LateToday';
+import { OnLeaveToday } from './OnLeaveToday';
 import { MyTeamAttendance } from './MyTeamAttendance';
 import { PendingApprovals } from './PendingApprovals';
 import { RealTimeMonitor } from './RealTimeMonitor';
@@ -68,6 +70,16 @@ export function PersonnelDashboard() {
 
         <div className="min-w-0 flex-1 space-y-4">
           <SummaryCards />
+
+          {/* Hospital-wide, not gated on department headship -- see
+              LateToday/OnLeaveToday for why this differs from the
+              department-scoped My Team Attendance/Team On Leave below. A
+              Managing Director (or ADMIN/HR) sees this regardless of
+              whether they personally lead any one department. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <LateToday />
+            <OnLeaveToday />
+          </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
