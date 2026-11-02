@@ -76,38 +76,6 @@ The Roster and Shift tabs in the Manager/Supervisor Portal are visible but
 - **System Settings** — company profile (name, contact info, and now a
   **company logo**, used on the Attendance Report letterhead), ADMIN-only.
 
----
-
-## Quick Start (Docker — recommended)
-
-Requires Docker and Docker Compose.
-
-```bash
-docker compose up --build
-```
-
-This starts:
-- PostgreSQL on `localhost:5432`
-- Backend API on `http://localhost:4000/api` (Swagger docs at `/api/docs`)
-- Frontend on `http://localhost:3000`
-
-On first run, the backend pushes the Prisma schema to the database automatically.
-**Seed demo data** (admin account, sample departments/shifts/employees) after the
-containers are up:
-
-```bash
-docker compose exec backend npm run prisma:seed
-```
-
-Then open **http://localhost:3000** and sign in with:
-
-| Role  | Email                  | Password   |
-|-------|------------------------|------------|
-| Admin | admin@smarthrm.local   | Admin@123  |
-| HR    | hr@smarthrm.local      | Hr@12345   |
-
----
-
 ## Quick Start (manual / local development)
 
 ### 1. Database
