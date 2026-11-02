@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { NewLeaveRequestModal } from '@/components/leave/NewLeaveRequestModal';
+import { ApproveLeaveModal } from '@/components/leave/ApproveLeaveModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
 import { ProgramTabs } from '@/components/shell/ProgramTabs';
 import {
@@ -15,7 +16,6 @@ import {
   useLeaveTypes,
   useLeaveBalances,
   useLeavePendingCount,
-  useApproveLeaveRequest,
   useCancelLeaveRequest,
   useApproveCancellation,
   useAppliedOnBehalf,
@@ -70,6 +70,7 @@ function LeaveRequestsPanel() {
   const [page, setPage] = useState(1);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ request: LeaveRequest; mode: 'approval' | 'cancellation' } | null>(null);
+  const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
   const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
 
   const { data, isLoading } = useLeaveRequests({
@@ -85,18 +86,8 @@ function LeaveRequestsPanel() {
   const { data: employees } = useEmployees({ pageSize: 200 });
   const { data: balances } = useLeaveBalances(balanceEmployeeId || undefined);
 
-  const approveRequest = useApproveLeaveRequest();
   const cancelRequest = useCancelLeaveRequest();
   const approveCancellation = useApproveCancellation();
-
-  async function handleApprove(request: LeaveRequest) {
-    try {
-      await approveRequest.mutateAsync(request.id);
-      toast.success('Leave request approved');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
 
   async function handleCancel(request: LeaveRequest) {
     try {
@@ -237,6 +228,9 @@ function LeaveRequestsPanel() {
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="text-xs text-text-muted mt-1">{request.rejectionReason}</p>
                   )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="text-xs text-text-muted mt-1">Note: {request.approvalNote}</p>
+                  )}
                   {request.decisions && request.decisions.length > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-l-2 border-line pl-2">
                       {request.decisions.map((d) => (
@@ -283,7 +277,7 @@ function LeaveRequestsPanel() {
                     {request.status === 'PENDING' && (
                       <>
                         <button
-                          onClick={() => handleApprove(request)}
+                          onClick={() => setApproveTarget(request)}
                           title="Approve"
                           className="rounded-md p-1.5 text-text-muted hover:bg-success-soft hover:text-success"
                         >
@@ -358,6 +352,8 @@ function LeaveRequestsPanel() {
       </Card>
 
       <NewLeaveRequestModal open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
+      <ApproveLeaveModal request={approveTarget} onClose={() => setApproveTarget(null)} />
+
       <RejectLeaveModal
         request={rejectTarget?.request ?? null}
         mode={rejectTarget?.mode}
@@ -435,6 +431,9 @@ function LeaveOnBehalfPanel() {
                   )}
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
+                  )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="mt-1 text-xs text-text-muted">Note: {request.approvalNote}</p>
                   )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">

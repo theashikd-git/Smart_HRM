@@ -680,6 +680,7 @@ model LeaveRequest {
   reason          String?
   status          LeaveRequestStatus @default(PENDING)
   rejectionReason String?
+  approvalNote    String?
   appliedById     String?
   decidedById     String?
   decidedAt       DateTime?

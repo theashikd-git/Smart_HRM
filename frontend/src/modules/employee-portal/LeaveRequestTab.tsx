@@ -6,8 +6,9 @@ import { ClipboardCheck, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
 import { Card, StatusPill, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
+import { ApproveLeaveModal } from '@/components/leave/ApproveLeaveModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
-import { useMyApprovals, useApproveLeaveRequest, useApproveCancellation } from '@/hooks/useLeave';
+import { useMyApprovals, useApproveCancellation } from '@/hooks/useLeave';
 import { apiErrorMessage } from '@/lib/api';
 import { formatDate, formatDateTime, leaveStatusColors } from '@/lib/utils';
 import { LeaveRequest } from '@/types';
@@ -34,18 +35,9 @@ interface RejectTarget {
  */
 export function LeaveRequestTab() {
   const { data: requests, isLoading } = useMyApprovals();
-  const approveRequest = useApproveLeaveRequest();
   const approveCancellation = useApproveCancellation();
   const [rejectTarget, setRejectTarget] = useState<RejectTarget | null>(null);
-
-  async function handleApprove(id: string) {
-    try {
-      await approveRequest.mutateAsync(id);
-      toast.success('Leave request approved');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
+  const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
 
   async function handleApproveCancellation(id: string) {
     try {
@@ -98,6 +90,9 @@ export function LeaveRequestTab() {
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="mt-1 text-xs text-text-muted">Reason: {request.rejectionReason}</p>
                   )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="mt-1 text-xs text-text-muted">Note: {request.approvalNote}</p>
+                  )}
                   {request.decisions && request.decisions.length > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-l-2 border-line pl-2">
                       {request.decisions.map((d) => (
@@ -144,7 +139,7 @@ export function LeaveRequestTab() {
                       <Button size="sm" variant="outline" onClick={() => setRejectTarget({ request, mode: 'approval' })}>
                         Reject
                       </Button>
-                      <Button size="sm" onClick={() => handleApprove(request.id)} loading={approveRequest.isPending}>
+                      <Button size="sm" onClick={() => setApproveTarget(request)}>
                         Approve
                       </Button>
                     </div>
@@ -173,6 +168,8 @@ export function LeaveRequestTab() {
           />
         )}
       </Card>
+
+      <ApproveLeaveModal request={approveTarget} onClose={() => setApproveTarget(null)} />
 
       <RejectLeaveModal
         request={rejectTarget?.request ?? null}

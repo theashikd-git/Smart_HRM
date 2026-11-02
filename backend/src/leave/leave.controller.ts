@@ -10,6 +10,7 @@ import {
   CreateLeaveRequestDto,
   InitializeBalancesDto,
   LeaveQueryDto,
+  ApproveLeaveRequestDto,
   RejectLeaveRequestDto,
   RequestCancellationDto,
 } from './dto/leave.dto';
@@ -55,8 +56,8 @@ export class LeaveController {
   // resolves to (a System User, or whoever Superior Management names as the
   // department's Manager/Supervisor) is let through.
   @Patch('requests/:id/approve')
-  approve(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.approve(id, user.id, user.role);
+  approve(@Param('id') id: string, @Body() dto: ApproveLeaveRequestDto, @CurrentUser() user: any) {
+    return this.service.approve(id, dto, user.id, user.role);
   }
 
   @Patch('requests/:id/reject')

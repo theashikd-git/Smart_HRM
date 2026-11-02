@@ -9,13 +9,13 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { NewLeaveRequestModal } from '@/components/leave/NewLeaveRequestModal';
+import { ApproveLeaveModal } from '@/components/leave/ApproveLeaveModal';
 import { RejectLeaveModal } from '@/components/leave/RejectLeaveModal';
 import {
   useLeaveRequests,
   useLeaveTypes,
   useLeaveBalances,
   useLeavePendingCount,
-  useApproveLeaveRequest,
   useCancelLeaveRequest,
 } from '@/hooks/useLeave';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -31,6 +31,7 @@ export default function LeavePage() {
   const [page, setPage] = useState(1);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null);
   const [balanceEmployeeId, setBalanceEmployeeId] = useState('');
 
   const { data, isLoading } = useLeaveRequests({
@@ -46,17 +47,7 @@ export default function LeavePage() {
   const { data: employees } = useEmployees({ pageSize: 200 });
   const { data: balances } = useLeaveBalances(balanceEmployeeId || undefined);
 
-  const approveRequest = useApproveLeaveRequest();
   const cancelRequest = useCancelLeaveRequest();
-
-  async function handleApprove(request: LeaveRequest) {
-    try {
-      await approveRequest.mutateAsync(request.id);
-      toast.success('Leave request approved');
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
-  }
 
   async function handleCancel(request: LeaveRequest) {
     try {
@@ -186,6 +177,9 @@ export default function LeavePage() {
                   {request.status === 'REJECTED' && request.rejectionReason && (
                     <p className="text-xs text-text-muted mt-1 max-w-[160px]">{request.rejectionReason}</p>
                   )}
+                  {request.status === 'APPROVED' && request.approvalNote && (
+                    <p className="text-xs text-text-muted mt-1 max-w-[160px]">Note: {request.approvalNote}</p>
+                  )}
                 </Td>
                 <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? ''}</Td>
                 <Td>
@@ -193,7 +187,7 @@ export default function LeavePage() {
                     {request.status === 'PENDING' && (
                       <>
                         <button
-                          onClick={() => handleApprove(request)}
+                          onClick={() => setApproveTarget(request)}
                           title="Approve"
                           className="rounded-md p-1.5 text-text-muted hover:bg-success-soft hover:text-success"
                         >
@@ -250,6 +244,7 @@ export default function LeavePage() {
       </Card>
 
       <NewLeaveRequestModal open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
+      <ApproveLeaveModal request={approveTarget} onClose={() => setApproveTarget(null)} />
       <RejectLeaveModal request={rejectTarget} onClose={() => setRejectTarget(null)} />
     </AppShell>
   );

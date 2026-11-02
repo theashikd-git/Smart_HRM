@@ -143,6 +143,14 @@ export class CreateLeaveRequestDto {
   attachmentId?: string;
 }
 
+// Optional note an approver can attach when approving a request (unlike
+// RejectLeaveRequestDto.reason, this is never required).
+export class ApproveLeaveRequestDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class RejectLeaveRequestDto {
   @IsNotEmpty()
   @IsString()

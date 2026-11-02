@@ -330,6 +330,7 @@ export interface LeaveRequest {
   reason?: string | null;
   status: LeaveRequestStatus;
   rejectionReason?: string | null;
+  approvalNote?: string | null;
   decidedAt?: string | null;
   cancelledAt?: string | null;
   createdAt: string;

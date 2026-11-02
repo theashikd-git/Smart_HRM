@@ -8,6 +8,7 @@ import {
   CreateLeaveRequestDto,
   InitializeBalancesDto,
   LeaveQueryDto,
+  ApproveLeaveRequestDto,
   RejectLeaveRequestDto,
 } from './dto/leave.dto';
 
@@ -975,7 +976,7 @@ export class LeaveService {
     );
   }
 
-  async approve(id: string, actorId: string, actorRole: string) {
+  async approve(id: string, dto: ApproveLeaveRequestDto, actorId: string, actorRole: string) {
     const request = await this.findOne(id);
     if (request.status !== 'PENDING') {
       throw new BadRequestException(`Only PENDING requests can be approved (current status: ${request.status})`);
@@ -996,7 +997,7 @@ export class LeaveService {
       const nextTier = workflow?.tiers.find((t) => t.order > tier.order);
 
       await this.prisma.leaveApprovalDecision.create({
-        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'APPROVED' },
+        data: { requestId: id, tierOrder: tier.order, tierLabel: tier.label, approverId: actorId, decision: 'APPROVED', reason: dto.note },
       });
 
       if (nextTier) {
@@ -1025,7 +1026,7 @@ export class LeaveService {
       // Final tier -- fully approved.
       const updated = await this.prisma.leaveRequest.update({
         where: { id },
-        data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date(), currentTierOrder: null },
+        data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date(), currentTierOrder: null, approvalNote: dto.note },
         include: this.includeRelations(),
       });
       await this.applyApprovalSideEffects(updated);
@@ -1034,13 +1035,13 @@ export class LeaveService {
         action: 'LEAVE_APPROVED',
         entity: 'LeaveRequest',
         entityId: id,
-        details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s) (final approval at ${tier.label})`,
+        details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s) (final approval at ${tier.label})${dto.note ? ` -- Note: ${dto.note}` : ''}`,
       });
       await this.notificationsService.createForEmployee(
         updated.employeeId,
         'LEAVE',
         'Leave request approved',
-        `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.`,
+        `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.${dto.note ? ` Note: ${dto.note}` : ''}`,
       );
       return this.withTierLabel(updated);
     }
@@ -1048,7 +1049,7 @@ export class LeaveService {
     // No workflow for this department -- original simple flow.
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
-      data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
+      data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date(), approvalNote: dto.note },
       include: this.includeRelations(),
     });
     await this.applyApprovalSideEffects(updated);
@@ -1057,13 +1058,13 @@ export class LeaveService {
       action: 'LEAVE_APPROVED',
       entity: 'LeaveRequest',
       entityId: id,
-      details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s)`,
+      details: `${updated.employee.fullName}: ${updated.leaveType.name}, ${updated.totalDays} day(s)${dto.note ? ` -- Note: ${dto.note}` : ''}`,
     });
     await this.notificationsService.createForEmployee(
       updated.employeeId,
       'LEAVE',
       'Leave request approved',
-      `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.`,
+      `Your ${updated.leaveType.name} request (${formatDateRange(updated.startDate, updated.endDate)}) has been approved.${dto.note ? ` Note: ${dto.note}` : ''}`,
     );
     return this.withTierLabel(updated);
   }

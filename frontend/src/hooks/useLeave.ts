@@ -240,7 +240,8 @@ export function useAppliedOnBehalf() {
 export function useApproveLeaveRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.patch(`/leave/requests/${id}/approve`)).data,
+    mutationFn: async ({ id, note }: { id: string; note?: string }) =>
+      (await api.patch(`/leave/requests/${id}/approve`, { note })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       qc.invalidateQueries({ queryKey: ['leave-balances'] });
