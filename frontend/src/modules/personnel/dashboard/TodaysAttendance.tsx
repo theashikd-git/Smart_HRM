@@ -21,16 +21,16 @@ const columns: DataTableColumn<AttendanceRecord>[] = [
     header: 'Employee',
     render: (r) => (
       <div>
-        <p className="font-medium text-text-primary">{r.employee?.fullName ?? '—'}</p>
+        <p className="font-medium text-text-primary">{r.employee?.fullName ?? ''}</p>
         <p className="text-[11px] text-text-muted">{r.employee?.employeeCode}</p>
       </div>
     ),
   },
-  { key: 'department', header: 'Department', render: (r) => r.employee?.department?.name ?? '—' },
+  { key: 'department', header: 'Department', render: (r) => r.employee?.department?.name ?? '' },
   {
     key: 'shift',
     header: 'Shift',
-    render: (r) => (r.employee?.shift ? `${r.employee.shift.name} (${r.employee.shift.startTime}–${r.employee.shift.endTime})` : '—'),
+    render: (r) => (r.employee?.shift ? `${r.employee.shift.name} (${r.employee.shift.startTime}–${r.employee.shift.endTime})` : ''),
   },
   { key: 'checkIn', header: 'Check In', render: (r) => formatTime(r.checkIn) },
   { key: 'checkOut', header: 'Check Out', render: (r) => formatTime(r.checkOut) },

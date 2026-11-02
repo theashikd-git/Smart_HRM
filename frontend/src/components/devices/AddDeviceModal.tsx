@@ -42,7 +42,7 @@ export function AddDeviceModal({ open, onClose, device }: Props) {
     try {
       if (isEdit && device) {
         await updateDevice.mutateAsync({ id: device.id, name, ipAddress, port });
-        toast.success('Device updated — reconnect to apply the new address');
+        toast.success('Device updated. Reconnect to apply the new address.');
       } else {
         await createDevice.mutateAsync({ name, ipAddress, port });
         toast.success('Device added -- pulling anyone already enrolled on it in the background', { duration: 5000 });

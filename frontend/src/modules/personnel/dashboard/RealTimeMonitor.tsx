@@ -7,13 +7,13 @@ import { cn } from '@/lib/utils';
 
 function formatPunchDate(value: string): string {
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function formatPunchTime(value: string): string {
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
@@ -111,7 +111,7 @@ export function RealTimeMonitor() {
                 p.direction ? DIRECTION_BADGE[p.direction] ?? 'bg-surface-sunken text-text-secondary' : 'bg-surface-sunken text-text-secondary',
               )}
             >
-              {p.direction ? DIRECTION_LABEL[p.direction] ?? p.direction : '—'}
+              {p.direction ? DIRECTION_LABEL[p.direction] ?? p.direction : ''}
             </span>
           </div>
         ))}

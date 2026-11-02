@@ -60,7 +60,7 @@ export function PendingApprovals() {
               </div>
               <span className="flex-1 text-xs text-text-primary">{item.label}</span>
               {item.available ? (
-                <span className="text-xs font-semibold text-text-primary">{item.count ?? '—'}</span>
+                <span className="text-xs font-semibold text-text-primary">{item.count ?? ''}</span>
               ) : (
                 <span className="text-[11px] text-text-muted">Not built yet</span>
               )}

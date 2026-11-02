@@ -75,8 +75,8 @@ export function AttendanceReportPrintable({
       if (!map.has(key)) {
         map.set(key, {
           name: r.employee?.fullName ?? 'Unknown',
-          code: r.employee?.employeeCode ?? '—',
-          dept: r.employee?.department?.name ?? '—',
+          code: r.employee?.employeeCode ?? '',
+          dept: r.employee?.department?.name ?? '',
           rows: [],
         });
       }
@@ -146,7 +146,7 @@ export function AttendanceReportPrintable({
                   <Td>{new Date(r.date).toLocaleDateString(undefined, { weekday: 'short' })}</Td>
                   <Td>{formatTime(r.checkIn)}</Td>
                   <Td>{formatTime(r.checkOut)}</Td>
-                  <Td>{r.workHours ? `${r.workHours}h` : '—'}</Td>
+                  <Td>{r.workHours ? `${r.workHours}h` : ''}</Td>
                   <Td>
                     <StatusBadge status={ATTENDANCE_STATUS_LABEL[r.status] ?? r.status} />
                   </Td>

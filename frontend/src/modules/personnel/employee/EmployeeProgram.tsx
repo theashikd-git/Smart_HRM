@@ -59,7 +59,7 @@ export function EmployeeProgram({ tab }: { tab: WorkbenchTab }) {
 }
 
 // ---------------------------------------------------------------------------
-// Employee List — real API, ported from the legacy /employees page.
+// Employee List -- real API, ported from the legacy /employees page.
 // ---------------------------------------------------------------------------
 
 function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => void }) {
@@ -220,9 +220,9 @@ function EmployeeListTab({ onViewEmployee }: { onViewEmployee: (id: string) => v
                     {emp.fullName}
                   </button>
                 </Td>
-                <Td>{emp.department?.name || '—'}</Td>
+                <Td>{emp.department?.name || ''}</Td>
                 <Td>{formatDate(emp.joiningDate)}</Td>
-                <Td>{emp.leaveCategory?.name || '—'}</Td>
+                <Td>{emp.leaveCategory?.name || ''}</Td>
                 <Td className="text-center">
                   <button
                     onClick={() => setAttendanceFor(emp)}
@@ -294,7 +294,7 @@ const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Profile — real API via useEmployee(id), rendered inline instead of a modal.
+// Profile -- real API via useEmployee(id), rendered inline instead of a modal.
 // ---------------------------------------------------------------------------
 
 function EmployeeProfileTab({ employeeId }: { employeeId: string | null }) {
@@ -324,7 +324,7 @@ function EmployeeProfileTab({ employeeId }: { employeeId: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Documents / History — not yet built on the backend. Honest empty states,
+// Documents / History -- not yet built on the backend. Honest empty states,
 // not mock data, until these are implemented.
 // ---------------------------------------------------------------------------
 

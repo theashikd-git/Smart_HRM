@@ -219,7 +219,7 @@ function LeaveRequestsPanel() {
                 </Td>
                 <Td className="text-xs">
                   {formatDate(request.startDate)}
-                  {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                  {request.startDate !== request.endDate && <> to {formatDate(request.endDate)}</>}
                   {request.session !== 'FULL_DAY' && (
                     <span className="block text-text-muted">
                       {request.session === 'FIRST_HALF' ? 'First half' : 'Second half'}
@@ -246,15 +246,15 @@ function LeaveRequestsPanel() {
                           ) : (
                             <XCircle className="inline h-3 w-3 text-danger mr-1" />
                           )}
-                          {d.tierLabel} &middot; {d.approver?.fullName ?? '—'} &middot; {formatDateTime(d.decidedAt)}
-                          {d.reason && ` — ${d.reason}`}
+                          {d.tierLabel} &middot; {d.approver?.fullName ?? ''} &middot; {formatDateTime(d.decidedAt)}
+                          {d.reason && `: ${d.reason}`}
                         </p>
                       ))}
                     </div>
                   )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
-                      <Clock className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                      <Clock className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? ''}
                     </p>
                   )}
                   {request.cancellationStatus === 'REJECTED' && (
@@ -270,14 +270,14 @@ function LeaveRequestsPanel() {
                           ) : (
                             <XCircle className="inline h-3 w-3 text-danger mr-1" />
                           )}
-                          {d.tierLabel} &middot; {d.approver?.fullName ?? '—'} &middot; {formatDateTime(d.decidedAt)}
-                          {d.reason && ` — ${d.reason}`}
+                          {d.tierLabel} &middot; {d.approver?.fullName ?? ''} &middot; {formatDateTime(d.decidedAt)}
+                          {d.reason && `: ${d.reason}`}
                         </p>
                       ))}
                     </div>
                   )}
                 </Td>
-                <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? '—'}</Td>
+                <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? ''}</Td>
                 <Td>
                   <div className="flex justify-end gap-1">
                     {request.status === 'PENDING' && (
@@ -423,7 +423,7 @@ function LeaveOnBehalfPanel() {
                 </Td>
                 <Td className="text-xs">
                   {formatDate(request.startDate)}
-                  {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                  {request.startDate !== request.endDate && <> to {formatDate(request.endDate)}</>}
                 </Td>
                 <Td>{request.totalDays}</Td>
                 <Td className="max-w-[260px]">
@@ -438,7 +438,7 @@ function LeaveOnBehalfPanel() {
                   )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
-                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? ''}
                     </p>
                   )}
                   {request.cancellationStatus === 'REJECTED' && (

@@ -15,7 +15,7 @@ const columns: DataTableColumn<Row>[] = [
     key: 'pct',
     header: 'Present %',
     align: 'right',
-    render: (r) => (r.employees > 0 ? `${Math.round((r.present / r.employees) * 100)}%` : '—'),
+    render: (r) => (r.employees > 0 ? `${Math.round((r.present / r.employees) * 100)}%` : ''),
   },
 ];
 

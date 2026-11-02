@@ -1,5 +1,5 @@
 // Mock data for the Personnel module workbench prototype.
-// Nothing here touches the real API — this is for shell/navigation demo purposes only.
+// Nothing here touches the real API -- this is for shell/navigation demo purposes only.
 
 export const dashboardSummary = {
   totalEmployees: 1248,
@@ -237,5 +237,5 @@ export const mockRosterAssignments = [
 export const mockDailyAttendance = [
   { employee: 'Rahim Ahmed', employeeId: 'EMP-1001', department: 'Production', checkIn: '08:00', checkOut: '17:02', status: 'Present' },
   { employee: 'Karim Hasan', employeeId: 'EMP-1025', department: 'Finance', checkIn: '08:18', checkOut: '17:00', status: 'Late' },
-  { employee: 'Jamal Uddin', employeeId: 'EMP-1178', department: 'Quality Control', checkIn: '—', checkOut: '—', status: 'Absent' },
+  { employee: 'Jamal Uddin', employeeId: 'EMP-1178', department: 'Quality Control', checkIn: '', checkOut: '', status: 'Absent' },
 ];

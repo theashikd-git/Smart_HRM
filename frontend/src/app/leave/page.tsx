@@ -170,7 +170,7 @@ export default function LeavePage() {
                 </Td>
                 <Td className="text-xs">
                   {formatDate(request.startDate)}
-                  {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                  {request.startDate !== request.endDate && <> to {formatDate(request.endDate)}</>}
                   {request.session !== 'FULL_DAY' && (
                     <span className="block text-text-muted">
                       {request.session === 'FIRST_HALF' ? 'First half' : 'Second half'}
@@ -187,7 +187,7 @@ export default function LeavePage() {
                     <p className="text-xs text-text-muted mt-1 max-w-[160px]">{request.rejectionReason}</p>
                   )}
                 </Td>
-                <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? '—'}</Td>
+                <Td className="text-xs text-text-secondary">{request.appliedBy?.fullName ?? ''}</Td>
                 <Td>
                   <div className="flex justify-end gap-1">
                     {request.status === 'PENDING' && (

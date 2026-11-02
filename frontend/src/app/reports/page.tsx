@@ -118,7 +118,7 @@ export default function ReportsPage() {
                 <Tr key={i}>
                   {columns.map((c) => (
                     <Td key={c} className="text-xs">
-                      {String(row[c] ?? '—')}
+                      {String(row[c] ?? '')}
                     </Td>
                   ))}
                 </Tr>

@@ -46,14 +46,14 @@ export function OnLeaveToday() {
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: r.leaveType?.color ?? '#94a3b8' }}
               />
-              <p className="truncate font-medium text-text-primary">{r.employee?.fullName ?? '—'}</p>
+              <p className="truncate font-medium text-text-primary">{r.employee?.fullName ?? ''}</p>
             </div>
             <p className="mt-0.5 text-[11px] text-text-muted">
-              {r.employee?.employeeCode} &middot; {r.employee?.department?.name ?? '—'}
+              {r.employee?.employeeCode} &middot; {r.employee?.department?.name ?? ''}
             </p>
             <p className="mt-1 text-[11px] text-text-secondary">
               {r.leaveType?.name} &middot; {formatDate(r.startDate)}
-              {r.startDate !== r.endDate && <> — {formatDate(r.endDate)}</>}
+              {r.startDate !== r.endDate && <> to {formatDate(r.endDate)}</>}
             </p>
           </div>
         ))}

@@ -158,11 +158,11 @@ function DeviceCard({ device, onEdit }: { device: Device; onEdit: (device: Devic
         </div>
         <div>
           <p className="text-text-muted">Serial Number</p>
-          <p className="font-mono text-text-primary">{device.serialNumber || '—'}</p>
+          <p className="font-mono text-text-primary">{device.serialNumber || ''}</p>
         </div>
         <div>
           <p className="text-text-muted">Firmware</p>
-          <p className="text-text-primary">{device.firmwareVersion || '—'}</p>
+          <p className="text-text-primary">{device.firmwareVersion || ''}</p>
         </div>
         <div>
           <p className="text-text-muted">Last Communication</p>
@@ -230,7 +230,7 @@ function DeviceCard({ device, onEdit }: { device: Device; onEdit: (device: Devic
                     <Tr key={u.deviceUserId}>
                       <Td className="font-mono text-xs">{u.deviceUserId}</Td>
                       <Td>{u.name}</Td>
-                      <Td>{u.cardNumber || '—'}</Td>
+                      <Td>{u.cardNumber || ''}</Td>
                       <Td>{u.hasFingerprint ? 'Yes' : 'No'}</Td>
                       <Td>{u.hasFace ? 'Yes' : 'No'}</Td>
                     </Tr>
@@ -365,8 +365,8 @@ export function DeviceModuleView() {
           <Tbody>
             {syncHistory?.slice(0, 20).map((h: any) => (
               <Tr key={h.id}>
-                <Td>{h.employee ? `${h.employee.fullName} (${h.employee.employeeCode})` : '—'}</Td>
-                <Td>{h.device?.name || '—'}</Td>
+                <Td>{h.employee ? `${h.employee.fullName} (${h.employee.employeeCode})` : ''}</Td>
+                <Td>{h.device?.name || ''}</Td>
                 <Td>
                   <Badge>{h.operation}</Badge>
                 </Td>
@@ -382,7 +382,7 @@ export function DeviceModuleView() {
                     }
                   />
                 </Td>
-                <Td className="text-xs text-text-secondary max-w-xs truncate">{h.message || '—'}</Td>
+                <Td className="text-xs text-text-secondary max-w-xs truncate">{h.message || ''}</Td>
                 <Td className="text-xs">{formatDateTime(h.createdAt)}</Td>
               </Tr>
             ))}

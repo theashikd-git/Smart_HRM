@@ -104,7 +104,7 @@ export default function AttendancePage() {
           <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
           <p className="text-sm text-text-primary">
             <span className="font-medium">{missing.length} missing punch{missing.length > 1 ? 'es' : ''}</span>{' '}
-            detected — employees with a check-in but no check-out. Use “Correct” below to resolve them.
+            detected: employees with a check-in but no check-out. Use “Correct” below to resolve them.
           </p>
         </Card>
       )}
@@ -221,9 +221,9 @@ export default function AttendancePage() {
                     <span className="text-warning">Missing</span>
                   )}
                 </Td>
-                <Td>{record.workHours ? `${record.workHours}h` : '—'}</Td>
-                <Td>{record.lateMinutes > 0 ? minutesToHm(record.lateMinutes) : '—'}</Td>
-                <Td>{record.overtimeMinutes > 0 ? minutesToHm(record.overtimeMinutes) : '—'}</Td>
+                <Td>{record.workHours ? `${record.workHours}h` : ''}</Td>
+                <Td>{record.lateMinutes > 0 ? minutesToHm(record.lateMinutes) : ''}</Td>
+                <Td>{record.overtimeMinutes > 0 ? minutesToHm(record.overtimeMinutes) : ''}</Td>
                 <Td>
                   <StatusPill label={record.status.replace('_', ' ')} colors={attendanceStatusColors[record.status]} />
                 </Td>

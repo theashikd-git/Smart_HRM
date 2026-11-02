@@ -133,11 +133,11 @@ export function LeaveTypeProgram({ tab }: { tab: WorkbenchTab }) {
                 <Td>{type.paid ? 'Paid' : 'Unpaid'}</Td>
                 <Td>
                   {type.carryForward
-                    ? `Up to ${type.maxCarryForwardDays ?? '—'} day(s)`
+                    ? `Up to ${type.maxCarryForwardDays ?? ''} day(s)`
                     : 'No'}
                 </Td>
                 <Td className="text-xs text-text-secondary">
-                  {type.specialRule && type.specialRule !== 'NONE' ? SPECIAL_RULE_LABELS[type.specialRule] : '—'}
+                  {type.specialRule && type.specialRule !== 'NONE' ? SPECIAL_RULE_LABELS[type.specialRule] : ''}
                 </Td>
                 <Td>{type.requiresApproval ? 'Required' : 'Auto-approved'}</Td>
                 <Td>

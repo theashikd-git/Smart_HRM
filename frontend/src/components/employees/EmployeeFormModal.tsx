@@ -266,9 +266,9 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       if (saved.syncStatus === 'SYNCED') {
         toast.success(`Employee ${verb} and synced to the device`);
       } else if (saved.syncStatus === 'FAILED') {
-        toast.error(`Employee ${verb}, but device sync failed — it will auto-retry (or use Retry Failed on the Device page)`);
+        toast.error(`Employee ${verb}, but device sync failed. It will auto-retry (or use Retry Failed on the Device page)`);
       } else {
-        toast.success(`Employee ${verb} — syncing to the device in the background`);
+        toast.success(`Employee ${verb}. Syncing to the device in the background`);
       }
       onClose();
     } catch (err) {

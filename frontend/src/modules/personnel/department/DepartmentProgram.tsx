@@ -63,7 +63,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
                   </span>
                 </Td>
                 <Td className="font-mono text-xs text-text-muted">{dept.code}</Td>
-                <Td>{dept.manager?.fullName || '—'}</Td>
+                <Td>{dept.manager?.fullName || ''}</Td>
                 <Td className="text-right">{dept._count?.employees ?? 0}</Td>
                 <Td>
                   <div className="flex items-center justify-center gap-1">

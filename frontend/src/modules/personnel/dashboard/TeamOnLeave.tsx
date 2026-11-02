@@ -46,7 +46,7 @@ export function TeamOnLeave() {
             <p className="mt-0.5 text-[11px] text-text-muted">{l.employeeCode}</p>
             <p className="mt-1 text-[11px] text-text-secondary">
               {l.leaveTypeName} &middot; {formatDate(l.startDate)}
-              {l.startDate !== l.endDate && <> — {formatDate(l.endDate)}</>}
+              {l.startDate !== l.endDate && <> to {formatDate(l.endDate)}</>}
             </p>
           </div>
         ))}

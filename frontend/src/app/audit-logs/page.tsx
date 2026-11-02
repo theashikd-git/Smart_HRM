@@ -40,7 +40,7 @@ export default function AuditLogsPage() {
                 </Td>
                 <Td className="text-xs">{log.entity}</Td>
                 <Td className="text-xs">{log.user?.fullName || 'System'}</Td>
-                <Td className="text-xs text-text-secondary max-w-sm truncate">{log.details || '—'}</Td>
+                <Td className="text-xs text-text-secondary max-w-sm truncate">{log.details || ''}</Td>
                 <Td className="text-xs">{formatDateTime(log.createdAt)}</Td>
               </Tr>
             ))}

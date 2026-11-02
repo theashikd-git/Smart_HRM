@@ -16,7 +16,7 @@ import { PLACEHOLDER_CONFIG } from './common/placeholderConfig';
 
 /**
  * Central switch that maps an open Workbench tab to its program component.
- * This is the only place navigation is "wired" to content — individual
+ * This is the only place navigation is "wired" to content -- individual
  * components never need to know how they were opened.
  */
 export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {

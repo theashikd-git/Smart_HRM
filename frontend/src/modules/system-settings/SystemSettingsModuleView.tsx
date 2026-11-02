@@ -212,13 +212,13 @@ function UserManagement() {
             <Tr key={u.id}>
               <Td className="font-medium">{u.fullName}</Td>
               <Td className="text-xs font-mono">
-                {isEmployeeIdLogin(u) ? u.employee?.employeeCode ?? '—' : u.username}
+                {isEmployeeIdLogin(u) ? u.employee?.employeeCode ?? '' : u.username}
               </Td>
               <Td>
                 <Badge>{ROLE_LABELS[u.role] ?? u.role}</Badge>
               </Td>
               <Td className="text-xs text-text-secondary">
-                {u.employee ? `${u.employee.fullName} (${u.employee.employeeCode})` : '—'}
+                {u.employee ? `${u.employee.fullName} (${u.employee.employeeCode})` : ''}
               </Td>
               <Td className="text-xs">{u.isActive ? 'Active' : 'Inactive'}</Td>
               <Td className="text-right">

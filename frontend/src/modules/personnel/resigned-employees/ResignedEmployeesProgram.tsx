@@ -100,9 +100,9 @@ export function ResignedEmployeesProgram({ tab }: { tab: WorkbenchTab }) {
                 <Tr key={emp.id}>
                   <Td className="font-mono text-xs text-text-muted">{emp.employeeCode}</Td>
                   <Td className="font-medium text-text-primary">{emp.fullName}</Td>
-                  <Td>{emp.department?.name || '—'}</Td>
+                  <Td>{emp.department?.name || ''}</Td>
                   <Td>{formatDate(emp.resignationDate)}</Td>
-                  <Td>{emp.resignationReason || '—'}</Td>
+                  <Td>{emp.resignationReason || ''}</Td>
                   <Td className="text-center">
                     <Button
                       variant="outline"

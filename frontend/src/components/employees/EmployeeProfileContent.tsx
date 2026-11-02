@@ -169,7 +169,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <p className="text-xs text-text-muted">{label}</p>
-      <p className="text-sm text-text-primary mt-0.5">{value ?? '—'}</p>
+      <p className="text-sm text-text-primary mt-0.5">{value ?? ''}</p>
     </div>
   );
 }
@@ -205,7 +205,7 @@ export function EmployeeProfileContent({ employee }: { employee: Employee }) {
             {employee.status === 'RESIGNED' && (
               <p className="mt-1.5 text-xs text-text-muted">
                 Last working day {formatDate(employee.resignationDate)}
-                {employee.resignationReason ? ` — ${employee.resignationReason}` : ''}
+                {employee.resignationReason ? `: ${employee.resignationReason}` : ''}
               </p>
             )}
           </div>

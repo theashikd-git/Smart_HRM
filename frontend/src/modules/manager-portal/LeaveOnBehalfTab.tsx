@@ -82,7 +82,7 @@ export function LeaveOnBehalfTab() {
                 </Td>
                 <Td className="text-xs">
                   {formatDate(request.startDate)}
-                  {request.startDate !== request.endDate && <> — {formatDate(request.endDate)}</>}
+                  {request.startDate !== request.endDate && <> to {formatDate(request.endDate)}</>}
                 </Td>
                 <Td>{request.totalDays}</Td>
                 <Td className="max-w-[260px]">
@@ -97,7 +97,7 @@ export function LeaveOnBehalfTab() {
                   )}
                   {request.cancellationStatus === 'PENDING' && (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
-                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? '—'}
+                      <Clock3 className="h-3 w-3" /> Cancellation awaiting: {request.cancellationCurrentTierLabel ?? ''}
                     </p>
                   )}
                   {request.cancellationStatus === 'REJECTED' && (

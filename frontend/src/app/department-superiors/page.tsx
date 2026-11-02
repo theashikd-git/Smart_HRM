@@ -98,7 +98,7 @@ export default function DepartmentSuperiorsPage() {
                 <Td>
                   <Badge>{a.title}</Badge>
                 </Td>
-                <Td>{a.department?.name ?? '—'}</Td>
+                <Td>{a.department?.name ?? ''}</Td>
                 <Td className="text-right">
                   <div className="flex justify-end gap-1">
                     <button

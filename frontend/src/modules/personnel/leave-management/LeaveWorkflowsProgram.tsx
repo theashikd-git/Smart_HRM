@@ -80,7 +80,7 @@ export function LeaveWorkflowsProgram({ tab }: { tab: WorkbenchTab }) {
     id: d.id,
     label: d.name,
     sublabel: d.approvalWorkflow
-      ? `${d.approvalWorkflow.tiers.length} tier(s)${d.approvalWorkflow.isActive ? '' : ' — inactive'}`
+      ? `${d.approvalWorkflow.tiers.length} tier(s)${d.approvalWorkflow.isActive ? '' : ' (inactive)'}`
       : 'No chain configured yet',
   }));
 

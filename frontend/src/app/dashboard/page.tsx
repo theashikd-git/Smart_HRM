@@ -61,25 +61,25 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <SummaryCard
           label="Total Employees"
-          value={isLoading ? '—' : summary?.totalEmployees ?? 0}
+          value={isLoading ? '' : summary?.totalEmployees ?? 0}
           icon={Users}
           tint="bg-accent-soft text-accent-dark"
         />
         <SummaryCard
           label="Present Today"
-          value={isLoading ? '—' : summary?.presentToday ?? 0}
+          value={isLoading ? '' : summary?.presentToday ?? 0}
           icon={UserCheck}
           tint="bg-success-soft text-success"
         />
         <SummaryCard
           label="Absent Today"
-          value={isLoading ? '—' : summary?.absentToday ?? 0}
+          value={isLoading ? '' : summary?.absentToday ?? 0}
           icon={UserX}
           tint="bg-danger-soft text-danger"
         />
         <SummaryCard
           label="Late Employees"
-          value={isLoading ? '—' : summary?.lateToday ?? 0}
+          value={isLoading ? '' : summary?.lateToday ?? 0}
           icon={Clock3}
           tint="bg-warning-soft text-warning"
         />

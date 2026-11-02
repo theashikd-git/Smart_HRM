@@ -65,7 +65,7 @@ export function CorrectionModal({
       open={open}
       onClose={onClose}
       title="Correct Attendance"
-      subtitle={`${record.employee?.fullName} — ${new Date(record.date).toDateString()}`}
+      subtitle={`${record.employee?.fullName} · ${new Date(record.date).toDateString()}`}
       size="sm"
       footer={
         <>

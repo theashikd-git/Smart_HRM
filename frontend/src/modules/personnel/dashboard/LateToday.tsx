@@ -44,15 +44,15 @@ export function LateToday() {
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-2.5 px-3.5 py-2.5 text-xs">
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium text-text-primary">{r.employee?.fullName ?? '—'}</p>
+              <p className="truncate font-medium text-text-primary">{r.employee?.fullName ?? ''}</p>
               <p className="mt-0.5 truncate text-[11px] text-text-muted">
-                {r.employee?.employeeCode} &middot; {r.employee?.department?.name ?? '—'}
+                {r.employee?.employeeCode} &middot; {r.employee?.department?.name ?? ''}
               </p>
             </div>
             <div className="shrink-0 text-right">
               <p className="text-[11px] text-text-secondary">
                 {formatTime(r.checkIn)}
-                {r.checkOut && <> — {formatTime(r.checkOut)}</>}
+                {r.checkOut && <> to {formatTime(r.checkOut)}</>}
               </p>
               {r.lateMinutes > 0 && (
                 <p className="mt-0.5 text-[10px] font-medium text-warning">{r.lateMinutes}m late</p>

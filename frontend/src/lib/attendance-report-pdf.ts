@@ -17,7 +17,7 @@ const DAY_NAME = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function dayName(dateStr: string) {
   const d = new Date(dateStr);
-  return Number.isNaN(d.getTime()) ? '—' : DAY_NAME[d.getDay()];
+  return Number.isNaN(d.getTime()) ? '' : DAY_NAME[d.getDay()];
 }
 
 interface AttendanceReportPdfArgs {
@@ -112,7 +112,7 @@ function buildAttendanceReportPdf({
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text(scopeLabel ? `${periodLabel}   —   ${scopeLabel}` : periodLabel, marginX, y);
+  doc.text(scopeLabel ? `${periodLabel}   ·   ${scopeLabel}` : periodLabel, marginX, y);
   doc.setFontSize(8);
   doc.setTextColor(120);
   doc.text(`Generated ${formatDate(new Date())} ${formatTime(new Date())}`, pageWidth - marginX, y, { align: 'right' });
@@ -136,8 +136,8 @@ function buildAttendanceReportPdf({
     if (!groups.has(key)) {
       groups.set(key, {
         name: r.employee?.fullName ?? 'Unknown',
-        code: r.employee?.employeeCode ?? '—',
-        dept: r.employee?.department?.name ?? '—',
+        code: r.employee?.employeeCode ?? '',
+        dept: r.employee?.department?.name ?? '',
         rows: [],
       });
     }
@@ -177,7 +177,7 @@ function buildAttendanceReportPdf({
         dayName(r.date),
         formatTime(r.checkIn),
         formatTime(r.checkOut),
-        r.workHours ? `${r.workHours}h` : '—',
+        r.workHours ? `${r.workHours}h` : '',
         ATTENDANCE_STATUS_LABEL[r.status] ?? r.status,
       ]),
       styles: { fontSize: 8, cellPadding: 1.4, textColor: [30, 30, 30] },

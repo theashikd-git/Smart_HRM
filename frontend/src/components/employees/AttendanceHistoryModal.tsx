@@ -13,16 +13,16 @@ interface Props {
 }
 
 function formatDateLabel(value?: string | null): string {
-  if (!value) return '—';
+  if (!value) return '';
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '';
   return d.toISOString().slice(0, 10);
 }
 
 function formatTimeWithSeconds(value?: string | null): string {
-  if (!value) return '—';
+  if (!value) return '';
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
@@ -39,10 +39,10 @@ function pad(n: number): string {
  *  matches the exact format requested for the attendance popup, distinct
  *  from the non-padded "9h 4m" used elsewhere (lib/utils.ts minutesToHm). */
 function formatDuration(checkIn?: string | null, checkOut?: string | null): string {
-  if (!checkIn || !checkOut) return '—';
+  if (!checkIn || !checkOut) return '';
   const start = new Date(checkIn).getTime();
   const end = new Date(checkOut).getTime();
-  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '—';
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
   const totalSeconds = Math.floor((end - start) / 1000);
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);

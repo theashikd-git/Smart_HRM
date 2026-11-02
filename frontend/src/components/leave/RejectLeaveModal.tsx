@@ -57,7 +57,7 @@ export function RejectLeaveModal({
       open={!!request}
       onClose={onClose}
       title={mode === 'cancellation' ? 'Reject Cancellation Request' : 'Reject Leave Request'}
-      subtitle={request ? `${request.employee?.fullName} — ${request.leaveType?.name}` : undefined}
+      subtitle={request ? `${request.employee?.fullName} · ${request.leaveType?.name}` : undefined}
       size="sm"
       footer={
         <>

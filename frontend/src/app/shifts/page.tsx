@@ -115,7 +115,7 @@ export default function ShiftsPage() {
                 </Td>
                 <Td>{s.graceMinutes}m</Td>
                 <Td>{s.breakMinutes}m</Td>
-                <Td>{s.weekendRule || '—'}</Td>
+                <Td>{s.weekendRule || ''}</Td>
                 <Td>{s._count?.employees ?? 0}</Td>
                 <Td className="text-right">
                   <div className="flex justify-end gap-1">

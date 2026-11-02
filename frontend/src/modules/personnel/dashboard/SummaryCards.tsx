@@ -4,7 +4,7 @@ import { useDashboardSummary } from '@/hooks/useDashboard';
 
 export function SummaryCards() {
   const { data: summary, isLoading } = useDashboardSummary();
-  const v = (n: number | undefined) => (isLoading || n == null ? '—' : n.toLocaleString());
+  const v = (n: number | undefined) => (isLoading || n == null ? '' : n.toLocaleString());
 
   const presentPct =
     summary && summary.totalEmployees > 0
@@ -26,7 +26,7 @@ export function SummaryCards() {
       <DashboardCard
         icon={Fingerprint}
         label="Device Status"
-        value={summary?.deviceStatus ?? '—'}
+        value={summary?.deviceStatus ?? ''}
         secondary={summary?.deviceName ?? 'No device'}
         tone={summary?.deviceStatus === 'ONLINE' ? 'success' : summary?.deviceStatus === 'OFFLINE' ? 'danger' : 'default'}
       />

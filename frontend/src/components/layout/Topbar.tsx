@@ -26,7 +26,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
             <UserIcon className="h-3.5 w-3.5" />
           </div>
           <div className="text-left">
-            <p className="text-xs font-medium text-text-primary leading-tight">{user?.fullName || '—'}</p>
+            <p className="text-xs font-medium text-text-primary leading-tight">{user?.fullName || ''}</p>
             <p className="text-[10px] text-text-muted leading-tight">{user?.role}</p>
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-text-muted" />

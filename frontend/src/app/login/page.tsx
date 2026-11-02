@@ -196,8 +196,8 @@ export default function LoginPage() {
           {mode === 'staff' && (
             <div className="mt-6 rounded-lg border border-line bg-surface-sunken/60 p-3.5 text-xs text-text-secondary">
               <p className="font-medium text-text-primary mb-1">Demo credentials</p>
-              <p>Admin — admin@smarthrm.local / Admin@123</p>
-              <p>HR — hr@smarthrm.local / Hr@12345</p>
+              <p>Admin: admin@smarthrm.local / Admin@123</p>
+              <p>HR: hr@smarthrm.local / Hr@12345</p>
             </div>
           )}
         </div>
