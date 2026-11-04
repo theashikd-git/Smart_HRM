@@ -7,8 +7,7 @@ import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { NotificationBell } from '@/components/shell/NotificationBell';
 import { RosterProgram } from '@/modules/personnel/roster/RosterProgram';
-import { PlaceholderProgram } from '@/modules/personnel/common/PlaceholderProgram';
-import { PLACEHOLDER_CONFIG } from '@/modules/personnel/common/placeholderConfig';
+import { ShiftProgram } from '@/modules/personnel/shift/ShiftProgram';
 import { ManagerDashboard } from '@/modules/personnel/dashboard/ManagerDashboard';
 import { MyLeaveTab } from '@/modules/employee-portal/MyLeaveTab';
 import { LeaveRequestTab } from '@/modules/employee-portal/LeaveRequestTab';
@@ -20,16 +19,12 @@ import type { WorkbenchTab } from '@/types/workbench';
 
 type PortalTab = 'dashboard' | 'my-leave' | 'leave-request' | 'leave-on-behalf' | 'roster' | 'shift';
 
-// Roster and Shift are built but not turned on yet for the Manager/
-// Supervisor Portal -- shown as locked "Soon" tabs for this release and
-// switched on in a later one. See the `locked` handling below, which just
-// disables the tab button rather than removing it.
 const BASE_TABS: { id: PortalTab; label: string; locked?: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'my-leave', label: 'My Leave' },
   { id: 'leave-on-behalf', label: 'Leave on Behalf' },
-  { id: 'roster', label: 'Roster', locked: true },
-  { id: 'shift', label: 'Shift', locked: true },
+  { id: 'roster', label: 'Roster' },
+  { id: 'shift', label: 'Shift' },
 ];
 
 const ROSTER_TAB: WorkbenchTab = { key: 'roster', programId: 'roster', title: 'Roster', breadcrumb: ['Roster'] };
@@ -146,7 +141,7 @@ export function ManagerPortalView() {
           </div>
         )}
         {activeTab === 'roster' && <RosterProgram tab={ROSTER_TAB} />}
-        {activeTab === 'shift' && <PlaceholderProgram tab={SHIFT_TAB} config={PLACEHOLDER_CONFIG.shift} />}
+        {activeTab === 'shift' && <ShiftProgram tab={SHIFT_TAB} />}
       </main>
     </div>
   );
