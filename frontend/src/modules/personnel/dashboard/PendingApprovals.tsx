@@ -4,11 +4,16 @@ import { useRouter } from 'next/navigation';
 import { CalendarClock, ClipboardEdit, Timer, CalendarDays, ChevronRight } from 'lucide-react';
 import { useMissingPunches } from '@/hooks/useAttendance';
 import { useLeavePendingCount } from '@/hooks/useLeave';
+import { useRosterPendingCount } from '@/hooks/useRoster';
+import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
+import { PROGRAM_REGISTRY } from '@/lib/personnel-nav';
 
 export function PendingApprovals() {
   const router = useRouter();
+  const openProgram = useWorkbenchStore((s) => s.openProgram);
   const { data: missingPunches, isLoading } = useMissingPunches();
   const { data: pendingLeaveCount, isLoading: leaveLoading } = useLeavePendingCount();
+  const { data: pendingRosterCount, isLoading: rosterLoading } = useRosterPendingCount();
 
   const rows = [
     {
@@ -39,9 +44,12 @@ export function PendingApprovals() {
       id: 'roster',
       label: 'Roster Changes',
       icon: CalendarDays,
-      count: undefined,
-      available: false,
-      onClick: undefined as (() => void) | undefined,
+      count: rosterLoading ? undefined : pendingRosterCount ?? 0,
+      available: true,
+      onClick: () => {
+        const program = PROGRAM_REGISTRY['roster'];
+        if (program) openProgram(program);
+      },
     },
   ];
 

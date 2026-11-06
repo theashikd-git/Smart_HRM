@@ -27,6 +27,15 @@ export function useMyRoster(query: MyRosterQuery) {
   });
 }
 
+/** Dashboard widget helper (Pending Approvals -- "Roster Changes" row):
+ *  count of duties awaiting an HR/Admin decision. */
+export function useRosterPendingCount() {
+  return useQuery({
+    queryKey: ['roster-pending-count'],
+    queryFn: async () => (await api.get<number>('/roster/pending-count')).data,
+  });
+}
+
 export interface UpsertRosterPayload {
   employeeId: string;
   date: string;
@@ -46,6 +55,7 @@ export function useUpsertRosterAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });
+      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
     },
   });
 }
@@ -66,6 +76,7 @@ export function useApproveRosterAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });
+      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
     },
   });
 }
@@ -86,6 +97,7 @@ export function useClearRosterAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });
+      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
     },
   });
 }

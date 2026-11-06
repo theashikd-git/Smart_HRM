@@ -111,6 +111,13 @@ export class RosterService {
     return actorRole === 'ADMIN' || actorRole === 'HR';
   }
 
+  /** Small dashboard widget helper (Pending Approvals -- "Roster Changes"
+   *  row): count of duties awaiting an HR/Admin decision, same idea as
+   *  LeaveService.pendingCount(). */
+  async pendingCount() {
+    return this.prisma.rosterAssignment.count({ where: { status: 'PENDING' } });
+  }
+
   async upsert(employeeId: string, dateStr: string, dto: UpsertRosterAssignmentDto, actorId?: string, actorRole?: string) {
     const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, fullName: true } });
     if (!employee) throw new NotFoundException('Employee not found');

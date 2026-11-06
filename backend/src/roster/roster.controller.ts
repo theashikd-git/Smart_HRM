@@ -24,6 +24,14 @@ export class RosterController {
     return this.service.getMine(user.employeeId, query);
   }
 
+  // No @Roles -- same openness as leave's own pending-count (a read-only
+  // dashboard badge, not an action), so it works for whichever role lands
+  // on the Admin/HR dashboard (ADMIN, HR, or Managing Director).
+  @Get('pending-count')
+  pendingCount() {
+    return this.service.pendingCount();
+  }
+
   // MANAGER can assign/re-assign too now -- a Manager's own assignment
   // starts PENDING and waits for HR/Admin approval; the service blocks a
   // MANAGER from touching anything that's already APPROVED.
