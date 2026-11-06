@@ -2,16 +2,31 @@
 
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronLeft, ChevronRight, Users, CalendarCheck, CalendarOff, CalendarClock, type LucideIcon } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  CalendarCheck,
+  CalendarOff,
+  Lock,
+  Clock3,
+  type LucideIcon,
+} from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Form';
+import { Select, Textarea } from '@/components/ui/Form';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useShifts } from '@/hooks/useShifts';
-import { useRosterWeek, useUpsertRosterAssignment, useClearRosterAssignment } from '@/hooks/useRoster';
+import {
+  useRosterWeek,
+  useUpsertRosterAssignment,
+  useClearRosterAssignment,
+  useApproveRosterAssignment,
+} from '@/hooks/useRoster';
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, cn, initials } from '@/lib/utils';
+import { useAuthStore } from '@/lib/auth-store';
 import type { RosterAssignment, RosterDayType } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
@@ -62,11 +77,23 @@ function shortDate(d: Date): string {
  * shift, with real attendance status layered in for days that have already
  * happened. Distinct from Attendance (what actually happened) -- this is
  * what's *planned*, and clicking a cell assigns or clears that plan.
+ *
+ * Approval workflow: a MANAGER's assignment starts PENDING (shown here
+ * with a "Pending" tag so the Manager/HR can see it's awaiting a decision,
+ * but not yet on the employee's own dashboard -- see useMyRoster/
+ * MyCalendarCard). HR/Admin approves it from here, which is also the
+ * point it becomes locked to the Manager: once APPROVED, only HR/Admin
+ * can change or clear it, and only after typing a note explaining why.
  */
 export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [departmentId, setDepartmentId] = useState('');
   const [openCell, setOpenCell] = useState<string | null>(null);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+
+  const role = useAuthStore((s) => s.user?.role);
+  const isHrOrAdmin = role === 'ADMIN' || role === 'HR';
+  const isManager = role === 'MANAGER';
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const startDate = isoDate(days[0]);
@@ -78,6 +105,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const { data, isLoading } = useRosterWeek({ startDate, endDate, departmentId: departmentId || undefined });
   const upsertAssignment = useUpsertRosterAssignment();
   const clearAssignment = useClearRosterAssignment();
+  const approveAssignment = useApproveRosterAssignment();
 
   const sortedShiftIds = useMemo(() => (shifts ?? []).map((s) => s.id).sort(), [shifts]);
   function shiftColors(shiftId: string) {
@@ -100,21 +128,40 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const employees = data?.employees ?? [];
   const shiftsAssigned = (data?.assignments ?? []).filter((a) => a.type === 'SHIFT').length;
   const daysOff = (data?.assignments ?? []).filter((a) => a.type === 'OFF').length;
-  const unassigned = employees.length * 7 - (data?.assignments?.length ?? 0);
+  const pendingCount = (data?.assignments ?? []).filter((a) => a.status === 'PENDING').length;
 
-  async function handlePick(employeeId: string, date: string, type: RosterDayType, shiftId?: string) {
+  function closeCell(key: string) {
     setOpenCell(null);
+    setNoteDrafts((d) => {
+      const next = { ...d };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function handlePick(key: string, employeeId: string, date: string, type: RosterDayType, shiftId?: string, hrNote?: string) {
+    closeCell(key);
     try {
-      await upsertAssignment.mutateAsync({ employeeId, date, type, shiftId });
+      await upsertAssignment.mutateAsync({ employeeId, date, type, shiftId, hrNote });
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
   }
 
-  async function handleClear(employeeId: string, date: string) {
-    setOpenCell(null);
+  async function handleClear(key: string, employeeId: string, date: string, hrNote?: string) {
+    closeCell(key);
     try {
-      await clearAssignment.mutateAsync({ employeeId, date });
+      await clearAssignment.mutateAsync({ employeeId, date, hrNote });
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  }
+
+  async function handleApprove(key: string, employeeId: string, date: string, note?: string) {
+    closeCell(key);
+    try {
+      await approveAssignment.mutateAsync({ employeeId, date, note });
+      toast.success('Duty approved');
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -143,7 +190,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
         <StatTile icon={Users} label="Team Size" value={employees.length} tone="default" />
         <StatTile icon={CalendarCheck} label="Shifts Assigned" value={shiftsAssigned} tone="success" />
         <StatTile icon={CalendarOff} label="Days Off" value={daysOff} tone="default" />
-        <StatTile icon={CalendarClock} label="Unassigned" value={unassigned} tone={unassigned > 0 ? 'warning' : 'default'} />
+        <StatTile
+          icon={Clock3}
+          label="Pending Approval"
+          value={pendingCount}
+          tone={pendingCount > 0 ? 'warning' : 'default'}
+        />
       </div>
 
       <Card>
@@ -175,7 +227,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
           </div>
         </div>
 
-        {openCell && <div className="fixed inset-0 z-20" onClick={() => setOpenCell(null)} />}
+        {openCell && <div className="fixed inset-0 z-20" onClick={() => closeCell(openCell)} />}
 
         <div className="overflow-x-auto">
           <div className="min-w-[1180px]">
@@ -234,6 +286,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                       : shiftColors(assignment.shiftId ?? '')
                     : null;
 
+                  const isApproved = assignment?.status === 'APPROVED';
+                  const isPending = assignment?.status === 'PENDING';
+                  const lockedForManager = isApproved && isManager;
+                  const needsNote = isApproved && isHrOrAdmin;
+                  const noteDraft = noteDrafts[key] ?? '';
+
                   return (
                     <div key={i} className="relative border-l border-line p-1.5">
                       {assignment ? (
@@ -244,13 +302,20 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                             colors!.bg,
                           )}
                         >
-                          <span className={cn('flex items-center gap-1.5 text-[11px] font-semibold', colors!.text)}>
+                          <span className={cn('flex w-full items-center gap-1.5 text-[11px] font-semibold', colors!.text)}>
                             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', colors!.dot)} />
-                            {assignment.type === 'OFF' ? 'Day Off' : assignment.shift?.name ?? 'Shift'}
+                            <span className="truncate">{assignment.type === 'OFF' ? 'Day Off' : assignment.shift?.name ?? 'Shift'}</span>
+                            {lockedForManager && <Lock className="h-3 w-3 shrink-0 text-text-muted ml-auto" />}
                           </span>
                           {assignment.type === 'SHIFT' && assignment.shift && (
                             <span className="text-[10px] text-text-muted">
                               {assignment.shift.startTime}–{assignment.shift.endTime}
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-warning">
+                              <Clock3 className="h-2.5 w-2.5" />
+                              Pending
                             </span>
                           )}
                         </button>
@@ -272,20 +337,72 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         />
                       )}
 
-                      {openCell === key && (
+                      {openCell === key && lockedForManager && (
                         <div
                           className={cn(
-                            'absolute top-full mt-1 w-44 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',
+                            'absolute top-full mt-1 w-56 rounded-lg border border-line bg-white p-3 shadow-popover z-30',
                             alignRight ? 'right-0' : 'left-0',
                           )}
                         >
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-text-primary">
+                            <Lock className="h-3 w-3" />
+                            Approved by HR
+                          </p>
+                          <p className="mt-1 text-[11px] text-text-muted">
+                            This duty is locked. Only HR or an Admin can change it now.
+                          </p>
+                          {assignment?.hrNote && (
+                            <p className="mt-2 rounded-md bg-surface-sunken px-2 py-1.5 text-[11px] text-text-secondary">
+                              &ldquo;{assignment.hrNote}&rdquo;
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {openCell === key && !lockedForManager && (
+                        <div
+                          className={cn(
+                            'absolute top-full mt-1 w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',
+                            alignRight ? 'right-0' : 'left-0',
+                          )}
+                        >
+                          {isPending && isHrOrAdmin && (
+                            <button
+                              onClick={() => handleApprove(key, emp.id, dateIso, noteDraft.trim() || undefined)}
+                              className="w-full mb-1 flex items-center justify-center gap-1.5 rounded-md bg-success-soft px-2 py-1.5 text-[11px] font-semibold text-success hover:brightness-95"
+                            >
+                              <CalendarCheck className="h-3.5 w-3.5" />
+                              Approve as-is
+                            </button>
+                          )}
+
+                          {needsNote && (
+                            <div className="mb-1.5 px-0.5">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                                Required note to change
+                              </p>
+                              <Textarea
+                                value={noteDraft}
+                                onChange={(e) => setNoteDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                                placeholder="Why is this approved duty changing?"
+                                rows={2}
+                                className="mt-1 text-xs"
+                              />
+                            </div>
+                          )}
+
                           {(shifts ?? []).map((s) => {
                             const c = shiftColors(s.id);
+                            const disabled = needsNote && !noteDraft.trim();
                             return (
                               <button
                                 key={s.id}
-                                onClick={() => handlePick(emp.id, dateIso, 'SHIFT', s.id)}
-                                className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-sunken"
+                                disabled={disabled}
+                                onClick={() => handlePick(key, emp.id, dateIso, 'SHIFT', s.id, needsNote ? noteDraft.trim() : undefined)}
+                                className={cn(
+                                  'w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left',
+                                  disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-sunken',
+                                )}
                               >
                                 <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', c.dot)} />
                                 <span className="min-w-0">
@@ -298,16 +415,26 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                             );
                           })}
                           <button
-                            onClick={() => handlePick(emp.id, dateIso, 'OFF')}
-                            className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-sunken"
+                            disabled={needsNote && !noteDraft.trim()}
+                            onClick={() => handlePick(key, emp.id, dateIso, 'OFF', undefined, needsNote ? noteDraft.trim() : undefined)}
+                            className={cn(
+                              'w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left',
+                              needsNote && !noteDraft.trim() ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-sunken',
+                            )}
                           >
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-text-muted" />
                             <span className="text-xs font-medium text-text-primary">Day Off</span>
                           </button>
                           {assignment && (
                             <button
-                              onClick={() => handleClear(emp.id, dateIso)}
-                              className="w-full mt-1 border-t border-line pt-1.5 px-2 pb-0.5 text-left text-[11px] font-medium text-danger hover:bg-danger-soft rounded-b-md"
+                              disabled={needsNote && !noteDraft.trim()}
+                              onClick={() => handleClear(key, emp.id, dateIso, needsNote ? noteDraft.trim() : undefined)}
+                              className={cn(
+                                'w-full mt-1 border-t border-line pt-1.5 px-2 pb-0.5 text-left text-[11px] font-medium rounded-b-md',
+                                needsNote && !noteDraft.trim()
+                                  ? 'cursor-not-allowed text-text-muted opacity-60'
+                                  : 'text-danger hover:bg-danger-soft',
+                              )}
                             >
                               Clear assignment
                             </button>
@@ -347,6 +474,15 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
           <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
             <span className="h-1.5 w-1.5 rounded-full bg-danger" />
             Absent
+          </span>
+          <span className="h-3.5 w-px bg-line" />
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
+            <Clock3 className="h-3 w-3 text-warning" />
+            Pending HR approval
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
+            <Lock className="h-3 w-3 text-text-muted" />
+            Approved -- locked from Manager
           </span>
         </div>
       </Card>

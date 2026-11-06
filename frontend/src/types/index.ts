@@ -67,6 +67,7 @@ export interface Holiday {
 }
 
 export type RosterDayType = 'SHIFT' | 'OFF';
+export type RosterAssignmentStatus = 'PENDING' | 'APPROVED';
 
 export interface RosterAssignment {
   id: string;
@@ -75,6 +76,11 @@ export interface RosterAssignment {
   type: RosterDayType;
   shiftId?: string | null;
   shift?: { id: string; name: string; startTime: string; endTime: string } | null;
+  status: RosterAssignmentStatus;
+  hrNote?: string | null;
+  approvedAt?: string | null;
+  assignedBy?: { id: string; fullName: string; role: string } | null;
+  approvedBy?: { id: string; fullName: string } | null;
 }
 
 export interface RosterEmployee {

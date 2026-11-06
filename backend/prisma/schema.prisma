@@ -237,6 +237,8 @@ model User {
   tierDecisions         LeaveApprovalDecision[]     @relation("LeaveTierDecisionApprover")
   cancellationDecisions LeaveCancellationDecision[] @relation("LeaveCancellationDecisionApprover")
   notifications   Notification[]
+  rosterAssignmentsAssigned RosterAssignment[] @relation("RosterAssignedBy")
+  rosterAssignmentsApproved RosterAssignment[] @relation("RosterApprovedBy")
 
   @@map("users")
 }
@@ -367,6 +369,11 @@ enum RosterDayType {
   OFF
 }
 
+enum RosterAssignmentStatus {
+  PENDING
+  APPROVED
+}
+
 // One row per (employee, date) once a manager has made a call for that day --
 // either a specific Shift ("SHIFT" + shiftId) or a deliberate day off ("OFF",
 // shiftId left null). No row at all means nobody has assigned anything yet
@@ -382,8 +389,22 @@ model RosterAssignment {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  shift    Shift?   @relation(fields: [shiftId], references: [id])
+  // Approval workflow: a MANAGER's assignment starts PENDING and is only
+  // visible on the employee's own dashboard once an HR/Admin approves it
+  // (see RosterService). ADMIN/HR assignments are auto-approved -- they
+  // are the approver, so there's nothing to wait on. Once APPROVED, a
+  // MANAGER can no longer change or clear it; only HR/Admin can, and only
+  // with hrNote filled in (enforced in the service, not here).
+  status       RosterAssignmentStatus @default(APPROVED)
+  assignedById String?
+  approvedById String?
+  approvedAt   DateTime?
+  hrNote       String?
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift      Shift?   @relation(fields: [shiftId], references: [id])
+  assignedBy User?    @relation("RosterAssignedBy", fields: [assignedById], references: [id])
+  approvedBy User?    @relation("RosterApprovedBy", fields: [approvedById], references: [id])
 
   @@unique([employeeId, date])
   @@index([date])
