@@ -41,9 +41,8 @@ export interface UpsertRosterPayload {
   date: string;
   type: RosterDayType;
   shiftId?: string;
-  // Only required by the backend when changing an assignment that's
-  // already APPROVED -- an HR/Admin override of something a Manager can
-  // no longer touch (see RosterService.upsert).
+  // Only required by the backend when the date being assigned has
+  // already passed (see RosterService.upsert).
   hrNote?: string;
 }
 
@@ -84,8 +83,8 @@ export function useApproveRosterAssignment() {
 export interface ClearRosterPayload {
   employeeId: string;
   date: string;
-  // Only required by the backend when clearing an assignment that's
-  // already APPROVED (see RosterService.remove).
+  // Only required by the backend when the date being cleared has already
+  // passed (see RosterService.remove).
   hrNote?: string;
 }
 

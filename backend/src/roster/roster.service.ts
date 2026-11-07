@@ -149,10 +149,13 @@ export class RosterService {
   }
 
   /** Small dashboard widget helper (Pending Approvals -- "Roster Changes"
-   *  row): count of duties awaiting an HR/Admin decision, same idea as
-   *  LeaveService.pendingCount(). */
+   *  row): count of duties awaiting an HR/Admin decision -- a content
+   *  change still PENDING, or a removal request on an otherwise-APPROVED
+   *  row -- same idea as LeaveService.pendingCount(). */
   async pendingCount() {
-    return this.prisma.rosterAssignment.count({ where: { status: 'PENDING' } });
+    return this.prisma.rosterAssignment.count({
+      where: { OR: [{ status: 'PENDING' }, { pendingRemoval: true }] },
+    });
   }
 
   async upsert(
@@ -207,6 +210,9 @@ export class RosterService {
       status: autoApproved ? 'APPROVED' : 'PENDING',
       approvedById: autoApproved ? actorId : null,
       approvedAt: autoApproved ? new Date() : null,
+      // Picking new content always supersedes a pending removal request
+      // on the same cell -- they're keeping the duty, not clearing it.
+      pendingRemoval: false,
     };
 
     const assignment = await this.prisma.rosterAssignment.upsert({
@@ -270,6 +276,30 @@ export class RosterService {
       include: { shift: { select: { name: true, startTime: true, endTime: true } } },
     });
     if (!existing) throw new NotFoundException('Roster assignment not found');
+
+    // A removal request (see remove()) takes priority over whatever
+    // status/content is on the row -- approving it here finishes the
+    // removal instead of confirming the shift/day-off still on it.
+    if (existing.pendingRemoval) {
+      await this.prisma.rosterAssignment.deleteMany({ where: { employeeId, date } });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'ROSTER_REMOVAL_APPROVED',
+        entity: 'RosterAssignment',
+        entityId: existing.id,
+        details: `Approved clearing roster assignment for ${dateStr}${dto.note ? ` -- Note: ${dto.note}` : ''}`,
+      });
+      if (existing.status === 'APPROVED') {
+        await this.notificationsService.createForEmployee(
+          employeeId,
+          'SHIFT',
+          'Duty schedule updated',
+          `Your assigned duty on ${dateStr} was cleared.`,
+        );
+      }
+      return { success: true };
+    }
+
     if (existing.status !== 'PENDING') {
       throw new BadRequestException(`Only a pending duty can be approved (current status: ${existing.status}).`);
     }
@@ -322,17 +352,31 @@ export class RosterService {
     const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
     if (!existing) return { success: true };
 
-    // Same date-based gate as upsert() -- but clearing has no "pending"
-    // middle ground (there's nothing to approve once it's gone), so a
-    // Manager/Supervisor can't clear a past date directly at all; only
-    // HR/Admin can, and only with a reason.
+    // Same date-based gate as upsert(): a past date always needs a
+    // reason. HR/Admin clears it right away; a MANAGER/SUPERVISOR instead
+    // files a removal request -- the row (and its current content) stays
+    // exactly as it was for the employee until HR/Admin approves it (see
+    // approve()), which is when it's actually deleted.
     const hrOrAdmin = this.isHrOrAdmin(actorRole);
     const isBackdate = date < startOfDay(new Date());
-    if (isBackdate && !hrOrAdmin) {
-      throw new ForbiddenException('Clearing a roster entry for a date that has already passed can only be done by HR/Admin.');
-    }
-    if (isBackdate && hrOrAdmin && !dto?.hrNote?.trim()) {
+    if (isBackdate && !dto?.hrNote?.trim()) {
       throw new BadRequestException('A reason is required to clear a roster entry for a date that has already passed.');
+    }
+
+    if (isBackdate && !hrOrAdmin) {
+      const updated = await this.prisma.rosterAssignment.update({
+        where: { employeeId_date: { employeeId, date } },
+        data: { pendingRemoval: true, hrNote: dto?.hrNote, assignedById: actorId },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'ROSTER_REMOVAL_REQUESTED',
+        entity: 'RosterAssignment',
+        entityId: updated.id,
+        details: `Requested clearing roster assignment for ${dateStr} -- Note: ${dto?.hrNote}`,
+      });
+      return updated;
     }
 
     const wasApproved = existing.status === 'APPROVED';

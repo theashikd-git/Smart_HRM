@@ -398,17 +398,20 @@ model RosterAssignment {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  // Approval workflow: a MANAGER's assignment starts PENDING and is only
-  // visible on the employee's own dashboard once an HR/Admin approves it
-  // (see RosterService). ADMIN/HR assignments are auto-approved -- they
-  // are the approver, so there's nothing to wait on. Once APPROVED, a
-  // MANAGER can no longer change or clear it; only HR/Admin can, and only
-  // with hrNote filled in (enforced in the service, not here).
-  status       RosterAssignmentStatus @default(APPROVED)
-  assignedById String?
-  approvedById String?
-  approvedAt   DateTime?
-  hrNote       String?
+  // Approval workflow -- only gated for a date that's already passed (see
+  // RosterService): a MANAGER/SUPERVISOR's change to one starts PENDING
+  // and is only visible on the employee's own dashboard once HR/Admin
+  // approves it; a request to clear one instead sets pendingRemoval,
+  // leaving status/content untouched until HR/Admin approves it, at which
+  // point the row is deleted outright. ADMIN/HR's own past-date changes
+  // are auto-approved -- they are the approver, so there's nothing to
+  // wait on. Today/future dates are never gated at all.
+  status         RosterAssignmentStatus @default(APPROVED)
+  pendingRemoval Boolean                @default(false)
+  assignedById   String?
+  approvedById   String?
+  approvedAt     DateTime?
+  hrNote         String?
 
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   shift      Shift?   @relation(fields: [shiftId], references: [id])

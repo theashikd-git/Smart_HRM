@@ -28,9 +28,8 @@ export class UpsertRosterAssignmentDto {
   @IsString()
   shiftId?: string;
 
-  // HR/Admin only, and only when they are changing an assignment that is
-  // already APPROVED -- the service enforces that it's required in that
-  // case, not this decorator, so the error can say exactly why.
+  // Required only when the date being assigned has already passed -- the
+  // service enforces that, not this decorator, so the error can say why.
   @IsOptional()
   @IsString()
   hrNote?: string;
@@ -46,9 +45,10 @@ export class ApproveRosterAssignmentDto {
 }
 
 export class RemoveRosterAssignmentDto {
-  // Required only when clearing an assignment that is already APPROVED
-  // and the actor is HR/Admin (a MANAGER can't clear one at all once it's
-  // approved -- enforced in the service).
+  // Required only when the date being cleared has already passed. For
+  // HR/Admin it clears the entry right away; for MANAGER/SUPERVISOR it
+  // instead files a removal request awaiting HR/Admin's approval (see
+  // RosterService.remove/approve).
   @IsOptional()
   @IsString()
   hrNote?: string;

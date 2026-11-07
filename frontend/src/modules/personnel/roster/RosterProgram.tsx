@@ -81,12 +81,11 @@ function shortDate(d: Date): string {
  * Approval only kicks in for a date that's already passed: assigning or
  * changing today's or a future duty takes effect immediately for anyone
  * (Manager/Supervisor included), no reason and no HR approval needed. A
- * past date always needs a reason -- a Manager/Supervisor can't touch one
- * at all (shown locked here, see lockedForAssigner), and their request
- * would otherwise start PENDING (a "Pending" tag, not yet on the
- * employee's own dashboard -- see useMyRoster/MyCalendarCard) awaiting
- * HR/Admin's approve() here; HR/Admin can change/clear a past date
- * directly, but must type a reason to do it.
+ * past date always needs a reason from whoever touches it -- HR/Admin's
+ * applies right away, while a Manager/Supervisor's instead files a
+ * request (a change goes PENDING, a clear sets isPendingRemoval) that
+ * isn't final until HR/Admin approves it here, and isn't yet visible on
+ * the employee's own dashboard either (see useMyRoster/MyCalendarCard).
  */
 export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -96,10 +95,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
 
   const role = useAuthStore((s) => s.user?.role);
   const isHrOrAdmin = role === 'ADMIN' || role === 'HR';
-  // MANAGER and SUPERVISOR are both department-scoped assigners: each only
-  // ever sees/manages their own department's team, and either one is
-  // locked out of a cell the moment its date is in the past -- see
-  // lockedForAssigner below.
+  // MANAGER and SUPERVISOR are both department-scoped assigners: each
+  // only ever sees/manages their own department's team, and either one
+  // can still act on a past-date cell -- it just files a request awaiting
+  // HR/Admin's approval instead of taking effect right away.
   const isRestrictedAssigner = role === 'MANAGER' || role === 'SUPERVISOR';
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -300,14 +299,18 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                     : null;
 
                   const isPending = assignment?.status === 'PENDING';
+                  const isPendingRemoval = assignment?.pendingRemoval ?? false;
                   // Only a date that's already passed is gated now --
                   // today and the future are freely editable by anyone,
-                  // no reason or approval needed. A Manager/Supervisor
-                  // can't touch a past date at all (ask HR); HR/Admin can,
-                  // but must give a reason.
+                  // no reason or approval needed. A past date always
+                  // needs a reason from whoever touches it; for
+                  // Manager/Supervisor that reason files a request
+                  // awaiting HR/Admin's approval (a content change goes
+                  // PENDING, a clear sets isPendingRemoval instead -- see
+                  // RosterService), while HR/Admin's own reason applies
+                  // immediately either way.
                   const isBackdate = dateIso < todayIso;
-                  const lockedForAssigner = isBackdate && isRestrictedAssigner;
-                  const needsNote = isBackdate && isHrOrAdmin;
+                  const needsNote = isBackdate;
                   const noteDraft = noteDrafts[key] ?? '';
 
                   return (
@@ -323,17 +326,22 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                           <span className={cn('flex w-full items-center gap-1.5 text-[11px] font-semibold', colors!.text)}>
                             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', colors!.dot)} />
                             <span className="truncate">{assignment.type === 'OFF' ? 'Day Off' : assignment.shift?.name ?? 'Shift'}</span>
-                            {lockedForAssigner && <Lock className="h-3 w-3 shrink-0 text-text-muted ml-auto" />}
+                            {isPendingRemoval && <Lock className="h-3 w-3 shrink-0 text-danger ml-auto" />}
                           </span>
                           {assignment.type === 'SHIFT' && assignment.shift && (
                             <span className="text-[10px] text-text-muted">
                               {assignment.shift.startTime}–{assignment.shift.endTime}
                             </span>
                           )}
-                          {isPending && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-warning">
-                              <Clock3 className="h-2.5 w-2.5" />
-                              Pending
+                          {(isPending || isPendingRemoval) && (
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                                isPendingRemoval ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning',
+                              )}
+                            >
+                              {isPendingRemoval ? <Lock className="h-2.5 w-2.5" /> : <Clock3 className="h-2.5 w-2.5" />}
+                              {isPendingRemoval ? 'Removal Pending' : 'Pending'}
                             </span>
                           )}
                         </button>
@@ -355,43 +363,30 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         />
                       )}
 
-                      {openCell === key && lockedForAssigner && (
-                        <div
-                          className={cn(
-                            'absolute top-full mt-1 w-56 rounded-lg border border-line bg-white p-3 shadow-popover z-30',
-                            alignRight ? 'right-0' : 'left-0',
-                          )}
-                        >
-                          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-text-primary">
-                            <Lock className="h-3 w-3" />
-                            Past Date
-                          </p>
-                          <p className="mt-1 text-[11px] text-text-muted">
-                            This date has already passed. Only HR or an Admin can change it, and only with a reason.
-                          </p>
-                          {assignment?.hrNote && (
-                            <p className="mt-2 rounded-md bg-surface-sunken px-2 py-1.5 text-[11px] text-text-secondary">
-                              &ldquo;{assignment.hrNote}&rdquo;
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {openCell === key && !lockedForAssigner && (
+                      {openCell === key && (
                         <div
                           className={cn(
                             'absolute top-full mt-1 w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',
                             alignRight ? 'right-0' : 'left-0',
                           )}
                         >
-                          {isPending && isHrOrAdmin && (
+                          {(isPending || isPendingRemoval) && isHrOrAdmin && (
                             <button
                               onClick={() => handleApprove(key, emp.id, dateIso, noteDraft.trim() || undefined)}
-                              className="w-full mb-1 flex items-center justify-center gap-1.5 rounded-md bg-success-soft px-2 py-1.5 text-[11px] font-semibold text-success hover:brightness-95"
+                              className={cn(
+                                'w-full mb-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold hover:brightness-95',
+                                isPendingRemoval ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success',
+                              )}
                             >
-                              <CalendarCheck className="h-3.5 w-3.5" />
-                              Approve as-is
+                              {isPendingRemoval ? <Lock className="h-3.5 w-3.5" /> : <CalendarCheck className="h-3.5 w-3.5" />}
+                              {isPendingRemoval ? 'Confirm removal' : 'Approve as-is'}
                             </button>
+                          )}
+
+                          {isRestrictedAssigner && (isPending || isPendingRemoval) && (
+                            <p className="mb-1.5 px-0.5 text-[10px] text-text-muted">
+                              {isPendingRemoval ? 'Waiting on HR/Admin to confirm removal.' : 'Waiting on HR/Admin to approve.'}
+                            </p>
                           )}
 
                           {needsNote && (

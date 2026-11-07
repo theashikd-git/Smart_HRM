@@ -80,6 +80,10 @@ export interface RosterAssignment {
   shiftId?: string | null;
   shift?: { id: string; name: string; startTime: string; endTime: string } | null;
   status: RosterAssignmentStatus;
+  // A Manager/Supervisor's request to clear a past-date entry -- true
+  // while it's awaiting HR/Admin's approval; status/content stay as they
+  // were until then (see RosterService.remove/approve).
+  pendingRemoval?: boolean;
   hrNote?: string | null;
   approvedAt?: string | null;
   assignedBy?: { id: string; fullName: string; role: string } | null;
