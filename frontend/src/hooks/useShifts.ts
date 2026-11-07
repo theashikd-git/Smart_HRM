@@ -10,6 +10,9 @@ export interface ShiftPayload {
   breakMinutes?: number;
   weekendRule?: string;
   overtimeRule?: string;
+  // Omit/undefined = General (usable by every department). A MANAGER or
+  // SUPERVISOR's own value here is ignored server-side -- see ShiftsService.
+  departmentId?: string;
 }
 
 export function useShifts() {

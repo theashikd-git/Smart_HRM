@@ -15,14 +15,14 @@ export class ShiftsController {
   constructor(private service: ShiftsService) {}
 
   @Post()
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   create(@Body() dto: CreateShiftDto, @CurrentUser() user: any) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.role, user.employeeId);
   }
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@CurrentUser() user: any) {
+    return this.service.findAll(user.role, user.employeeId);
   }
 
   @Get(':id')
@@ -31,14 +31,14 @@ export class ShiftsController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'HR')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   update(@Param('id') id: string, @Body() dto: UpdateShiftDto, @CurrentUser() user: any) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.role, user.employeeId);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
   remove(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.role, user.employeeId);
   }
 }

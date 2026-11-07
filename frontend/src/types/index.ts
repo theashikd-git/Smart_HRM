@@ -54,6 +54,9 @@ export interface Shift {
   breakMinutes: number;
   weekendRule?: string | null;
   overtimeRule?: string | null;
+  // null departmentId = a "General" shift, usable by every department.
+  departmentId?: string | null;
+  department?: { id: string; name: string } | null;
   _count?: { employees: number };
 }
 

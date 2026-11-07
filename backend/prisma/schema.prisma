@@ -288,6 +288,7 @@ model Department {
   designations   Designation[]
   superiors      DepartmentSuperior[]
   approvalWorkflow LeaveApprovalWorkflow?
+  shifts         Shift[]
 
   @@map("departments")
 }
@@ -335,6 +336,14 @@ model Shift {
   overtimeRule   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Which department this shift belongs to. null = a "General" shift,
+  // usable by every department (how all pre-existing shifts stay working).
+  // A MANAGER/SUPERVISOR can only create/update shifts with their own
+  // department's id here (enforced in ShiftsService); ADMIN/HR can set
+  // any department or leave it General.
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   employees Employee[]
   rosterAssignments RosterAssignment[]

@@ -7,9 +7,11 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { FieldWrap, Input } from '@/components/ui/Form';
+import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { useShifts, useCreateShift, useUpdateShift, useDeleteShift, ShiftPayload } from '@/hooks/useShifts';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useAuthStore } from '@/lib/auth-store';
 import { apiErrorMessage } from '@/lib/api';
 import { Shift } from '@/types';
 
@@ -21,10 +23,15 @@ const EMPTY: ShiftPayload = {
   breakMinutes: 60,
   weekendRule: '',
   overtimeRule: '',
+  departmentId: undefined,
 };
 
 export default function ShiftsPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const isScoped = role === 'MANAGER' || role === 'SUPERVISOR';
+
   const { data, isLoading } = useShifts();
+  const { data: departments } = useDepartments();
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
@@ -49,6 +56,7 @@ export default function ShiftsPage() {
       breakMinutes: s.breakMinutes,
       weekendRule: s.weekendRule || '',
       overtimeRule: s.overtimeRule || '',
+      departmentId: s.departmentId || undefined,
     });
     setModalOpen(true);
   }
@@ -98,6 +106,7 @@ export default function ShiftsPage() {
           <Thead>
             <tr>
               <Th>Shift</Th>
+              <Th>Department</Th>
               <Th>Hours</Th>
               <Th>Grace</Th>
               <Th>Break</Th>
@@ -110,6 +119,7 @@ export default function ShiftsPage() {
             {data?.map((s) => (
               <Tr key={s.id}>
                 <Td className="font-medium">{s.name}</Td>
+                <Td>{s.department?.name ?? <span className="text-text-muted">General</span>}</Td>
                 <Td className="font-mono text-xs">
                   {s.startTime} – {s.endTime}
                 </Td>
@@ -161,6 +171,22 @@ export default function ShiftsPage() {
         <form id="shift-form" onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
           <FieldWrap label="Shift Name" required>
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required className="col-span-2" />
+          </FieldWrap>
+          <FieldWrap label="Department" hint={isScoped ? 'Set automatically to your own department' : 'Leave as General to make it usable by every department'}>
+            {isScoped ? (
+              <div className="flex h-9 items-center rounded-md border border-line bg-surface-sunken px-3 text-sm text-text-muted">
+                Your department
+              </div>
+            ) : (
+              <Select value={form.departmentId || ''} onChange={(e) => set('departmentId', e.target.value || undefined)}>
+                <option value="">General (all departments)</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            )}
           </FieldWrap>
           <FieldWrap label="Start Time" required>
             <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} required />

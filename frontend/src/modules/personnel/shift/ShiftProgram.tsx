@@ -7,9 +7,11 @@ import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { FieldWrap, Input } from '@/components/ui/Form';
+import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { useShifts, useCreateShift, useUpdateShift, useDeleteShift, ShiftPayload } from '@/hooks/useShifts';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useAuthStore } from '@/lib/auth-store';
 import { apiErrorMessage } from '@/lib/api';
 import { Shift } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
@@ -22,6 +24,7 @@ const EMPTY: ShiftPayload = {
   breakMinutes: 60,
   weekendRule: '',
   overtimeRule: '',
+  departmentId: undefined,
 };
 
 /**
@@ -29,9 +32,21 @@ const EMPTY: ShiftPayload = {
  * Shifts page (app/shifts) already used, not a mock placeholder. Brought
  * into the Workbench alongside Roster so Shift definitions can be managed
  * from the same program-tab surface as everything else here.
+ *
+ * Department-scoped: every shift now belongs to a department, or to none
+ * ("General" -- usable by every department, how all pre-existing shifts
+ * keep working). A MANAGER/SUPERVISOR only ever sees General shifts plus
+ * their own department's, and can only create/edit within their own
+ * department -- the backend enforces this regardless of what this form
+ * sends, so for those roles the department picker is replaced with a plain
+ * read-only note instead of a dropdown they can't actually change.
  */
 export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
+  const role = useAuthStore((s) => s.user?.role);
+  const isScoped = role === 'MANAGER' || role === 'SUPERVISOR';
+
   const { data, isLoading } = useShifts();
+  const { data: departments } = useDepartments();
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
@@ -56,6 +71,7 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
       breakMinutes: s.breakMinutes,
       weekendRule: s.weekendRule || '',
       overtimeRule: s.overtimeRule || '',
+      departmentId: s.departmentId || undefined,
     });
     setModalOpen(true);
   }
@@ -110,6 +126,7 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
           <Thead>
             <tr>
               <Th>Shift</Th>
+              <Th>Department</Th>
               <Th>Hours</Th>
               <Th>Grace</Th>
               <Th>Break</Th>
@@ -122,6 +139,9 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
             {data?.map((s) => (
               <Tr key={s.id}>
                 <Td className="font-medium">{s.name}</Td>
+                <Td>
+                  {s.department?.name ?? <span className="text-text-muted">General</span>}
+                </Td>
                 <Td className="font-mono text-xs">
                   {s.startTime} – {s.endTime}
                 </Td>
@@ -175,6 +195,22 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
         <form id="shift-program-form" onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
           <FieldWrap label="Shift Name" required>
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required className="col-span-2" />
+          </FieldWrap>
+          <FieldWrap label="Department" hint={isScoped ? 'Set automatically to your own department' : 'Leave as General to make it usable by every department'}>
+            {isScoped ? (
+              <div className="flex h-9 items-center rounded-md border border-line bg-surface-sunken px-3 text-sm text-text-muted">
+                Your department
+              </div>
+            ) : (
+              <Select value={form.departmentId || ''} onChange={(e) => set('departmentId', e.target.value || undefined)}>
+                <option value="">General (all departments)</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            )}
           </FieldWrap>
           <FieldWrap label="Start Time" required>
             <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} required />
