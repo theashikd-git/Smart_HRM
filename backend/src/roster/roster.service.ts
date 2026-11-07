@@ -40,13 +40,22 @@ export class RosterService {
    * can lay them out however the UI needs, same as how Attendance/Employee
    * pages already hand back flat lists rather than pre-built view models.
    */
-  async getWeek(query: RosterQueryDto) {
+  async getWeek(query: RosterQueryDto, actorRole?: string, actorEmployeeId?: string | null) {
     const start = startOfDay(new Date(query.startDate));
     const end = startOfDay(new Date(query.endDate));
     if (end < start) throw new BadRequestException('endDate must not be before startDate');
 
+    // A MANAGER/SUPERVISOR only ever sees their own department's team here
+    // -- the department filter in the query is ignored for them (there's
+    // nothing else for them to pick from); ADMIN/HR/Managing Director keep
+    // the full picker, same as before.
+    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
     const employeeWhere: any = { status: 'ACTIVE' };
-    if (query.departmentId) employeeWhere.departmentId = query.departmentId;
+    if (allowed !== null) {
+      employeeWhere.departmentId = { in: allowed };
+    } else if (query.departmentId) {
+      employeeWhere.departmentId = query.departmentId;
+    }
 
     const employees = await this.prisma.employee.findMany({
       where: employeeWhere,
@@ -111,6 +120,34 @@ export class RosterService {
     return actorRole === 'ADMIN' || actorRole === 'HR';
   }
 
+  /** Same resolution rule as ShiftsService: null = unrestricted (ADMIN/HR/
+   *  Managing Director/EMPLOYEE); for a MANAGER, the department(s) they
+   *  head (Department.headEmployeeId); for a SUPERVISOR, the single
+   *  department their own employee record belongs to -- there's no
+   *  "department I lead" concept for that role, so this is what "their
+   *  department" means for Roster duty assignment too. */
+  private async resolveActorDepartmentIds(
+    actorRole?: string,
+    actorEmployeeId?: string | null,
+  ): Promise<string[] | null> {
+    if (actorRole !== 'MANAGER' && actorRole !== 'SUPERVISOR') return null;
+    if (!actorEmployeeId) return [];
+
+    if (actorRole === 'MANAGER') {
+      const led = await this.prisma.department.findMany({
+        where: { headEmployeeId: actorEmployeeId },
+        select: { id: true },
+      });
+      return led.map((d) => d.id);
+    }
+
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: actorEmployeeId },
+      select: { departmentId: true },
+    });
+    return employee?.departmentId ? [employee.departmentId] : [];
+  }
+
   /** Small dashboard widget helper (Pending Approvals -- "Roster Changes"
    *  row): count of duties awaiting an HR/Admin decision, same idea as
    *  LeaveService.pendingCount(). */
@@ -118,9 +155,24 @@ export class RosterService {
     return this.prisma.rosterAssignment.count({ where: { status: 'PENDING' } });
   }
 
-  async upsert(employeeId: string, dateStr: string, dto: UpsertRosterAssignmentDto, actorId?: string, actorRole?: string) {
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, fullName: true } });
+  async upsert(
+    employeeId: string,
+    dateStr: string,
+    dto: UpsertRosterAssignmentDto,
+    actorId?: string,
+    actorRole?: string,
+    actorEmployeeId?: string | null,
+  ) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, fullName: true, departmentId: true },
+    });
     if (!employee) throw new NotFoundException('Employee not found');
+
+    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
+    if (allowed !== null && (!employee.departmentId || !allowed.includes(employee.departmentId))) {
+      throw new ForbiddenException('You can only assign duty to employees in your own department.');
+    }
 
     const date = startOfDay(new Date(dateStr));
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
@@ -246,9 +298,24 @@ export class RosterService {
     return assignment;
   }
 
-  async remove(employeeId: string, dateStr: string, dto: RemoveRosterAssignmentDto | undefined, actorId?: string, actorRole?: string) {
+  async remove(
+    employeeId: string,
+    dateStr: string,
+    dto: RemoveRosterAssignmentDto | undefined,
+    actorId?: string,
+    actorRole?: string,
+    actorEmployeeId?: string | null,
+  ) {
     const date = startOfDay(new Date(dateStr));
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
+
+    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
+    if (allowed !== null) {
+      const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { departmentId: true } });
+      if (!employee?.departmentId || !allowed.includes(employee.departmentId)) {
+        throw new ForbiddenException('You can only manage duty for employees in your own department.');
+      }
+    }
 
     const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
     if (!existing) return { success: true };

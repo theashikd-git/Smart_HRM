@@ -93,7 +93,11 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
 
   const role = useAuthStore((s) => s.user?.role);
   const isHrOrAdmin = role === 'ADMIN' || role === 'HR';
-  const isManager = role === 'MANAGER';
+  // MANAGER and SUPERVISOR are both department-scoped assigners now: each
+  // only ever sees/manages their own department's team, and either one is
+  // locked out of an assignment the moment HR/Admin approves it (same as
+  // the Manager-only rule this started as -- see lockedForAssigner below).
+  const isRestrictedAssigner = role === 'MANAGER' || role === 'SUPERVISOR';
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const startDate = isoDate(days[0]);
@@ -174,14 +178,20 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
       actions={
         <div className="flex items-center gap-2">
           <div className="shrink-0 sm:w-48">
-            <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">All Departments</option>
-              {departments?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
+            {isRestrictedAssigner ? (
+              <div className="flex h-9 items-center rounded-md border border-line bg-surface-sunken px-3 text-sm text-text-muted">
+                {employees[0]?.department?.name ?? 'Your department'}
+              </div>
+            ) : (
+              <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                <option value="">All Departments</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            )}
           </div>
         </div>
       }
@@ -288,7 +298,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
 
                   const isApproved = assignment?.status === 'APPROVED';
                   const isPending = assignment?.status === 'PENDING';
-                  const lockedForManager = isApproved && isManager;
+                  const lockedForAssigner = isApproved && isRestrictedAssigner;
                   const needsNote = isApproved && isHrOrAdmin;
                   const noteDraft = noteDrafts[key] ?? '';
 
@@ -305,7 +315,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                           <span className={cn('flex w-full items-center gap-1.5 text-[11px] font-semibold', colors!.text)}>
                             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', colors!.dot)} />
                             <span className="truncate">{assignment.type === 'OFF' ? 'Day Off' : assignment.shift?.name ?? 'Shift'}</span>
-                            {lockedForManager && <Lock className="h-3 w-3 shrink-0 text-text-muted ml-auto" />}
+                            {lockedForAssigner && <Lock className="h-3 w-3 shrink-0 text-text-muted ml-auto" />}
                           </span>
                           {assignment.type === 'SHIFT' && assignment.shift && (
                             <span className="text-[10px] text-text-muted">
@@ -337,7 +347,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         />
                       )}
 
-                      {openCell === key && lockedForManager && (
+                      {openCell === key && lockedForAssigner && (
                         <div
                           className={cn(
                             'absolute top-full mt-1 w-56 rounded-lg border border-line bg-white p-3 shadow-popover z-30',
@@ -359,7 +369,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         </div>
                       )}
 
-                      {openCell === key && !lockedForManager && (
+                      {openCell === key && !lockedForAssigner && (
                         <div
                           className={cn(
                             'absolute top-full mt-1 w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',

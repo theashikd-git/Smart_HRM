@@ -15,8 +15,8 @@ export class RosterController {
   constructor(private service: RosterService) {}
 
   @Get()
-  getWeek(@Query() query: RosterQueryDto) {
-    return this.service.getWeek(query);
+  getWeek(@Query() query: RosterQueryDto, @CurrentUser() user: any) {
+    return this.service.getWeek(query, user.role, user.employeeId);
   }
 
   @Get('mine')
@@ -32,18 +32,19 @@ export class RosterController {
     return this.service.pendingCount();
   }
 
-  // MANAGER can assign/re-assign too now -- a Manager's own assignment
-  // starts PENDING and waits for HR/Admin approval; the service blocks a
-  // MANAGER from touching anything that's already APPROVED.
+  // MANAGER/SUPERVISOR can assign/re-assign too -- their own assignment
+  // starts PENDING and waits for HR/Admin approval; the service blocks
+  // either role from touching anything that's already APPROVED, and from
+  // assigning duty to an employee outside their own department.
   @Put(':employeeId/:date')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   upsert(
     @Param('employeeId') employeeId: string,
     @Param('date') date: string,
     @Body() dto: UpsertRosterAssignmentDto,
     @CurrentUser() user: any,
   ) {
-    return this.service.upsert(employeeId, date, dto, user.id, user.role);
+    return this.service.upsert(employeeId, date, dto, user.id, user.role, user.employeeId);
   }
 
   @Patch(':employeeId/:date/approve')
@@ -58,13 +59,13 @@ export class RosterController {
   }
 
   @Delete(':employeeId/:date')
-  @Roles('ADMIN', 'HR', 'MANAGER')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
   remove(
     @Param('employeeId') employeeId: string,
     @Param('date') date: string,
     @Body() dto: RemoveRosterAssignmentDto | undefined,
     @CurrentUser() user: any,
   ) {
-    return this.service.remove(employeeId, date, dto, user.id, user.role);
+    return this.service.remove(employeeId, date, dto, user.id, user.role, user.employeeId);
   }
 }
