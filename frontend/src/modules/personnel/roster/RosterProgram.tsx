@@ -78,12 +78,15 @@ function shortDate(d: Date): string {
  * happened. Distinct from Attendance (what actually happened) -- this is
  * what's *planned*, and clicking a cell assigns or clears that plan.
  *
- * Approval workflow: a MANAGER's assignment starts PENDING (shown here
- * with a "Pending" tag so the Manager/HR can see it's awaiting a decision,
- * but not yet on the employee's own dashboard -- see useMyRoster/
- * MyCalendarCard). HR/Admin approves it from here, which is also the
- * point it becomes locked to the Manager: once APPROVED, only HR/Admin
- * can change or clear it, and only after typing a note explaining why.
+ * Approval only kicks in for a date that's already passed: assigning or
+ * changing today's or a future duty takes effect immediately for anyone
+ * (Manager/Supervisor included), no reason and no HR approval needed. A
+ * past date always needs a reason -- a Manager/Supervisor can't touch one
+ * at all (shown locked here, see lockedForAssigner), and their request
+ * would otherwise start PENDING (a "Pending" tag, not yet on the
+ * employee's own dashboard -- see useMyRoster/MyCalendarCard) awaiting
+ * HR/Admin's approve() here; HR/Admin can change/clear a past date
+ * directly, but must type a reason to do it.
  */
 export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -93,10 +96,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
 
   const role = useAuthStore((s) => s.user?.role);
   const isHrOrAdmin = role === 'ADMIN' || role === 'HR';
-  // MANAGER and SUPERVISOR are both department-scoped assigners now: each
-  // only ever sees/manages their own department's team, and either one is
-  // locked out of an assignment the moment HR/Admin approves it (same as
-  // the Manager-only rule this started as -- see lockedForAssigner below).
+  // MANAGER and SUPERVISOR are both department-scoped assigners: each only
+  // ever sees/manages their own department's team, and either one is
+  // locked out of a cell the moment its date is in the past -- see
+  // lockedForAssigner below.
   const isRestrictedAssigner = role === 'MANAGER' || role === 'SUPERVISOR';
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -296,10 +299,15 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                       : shiftColors(assignment.shiftId ?? '')
                     : null;
 
-                  const isApproved = assignment?.status === 'APPROVED';
                   const isPending = assignment?.status === 'PENDING';
-                  const lockedForAssigner = isApproved && isRestrictedAssigner;
-                  const needsNote = isApproved && isHrOrAdmin;
+                  // Only a date that's already passed is gated now --
+                  // today and the future are freely editable by anyone,
+                  // no reason or approval needed. A Manager/Supervisor
+                  // can't touch a past date at all (ask HR); HR/Admin can,
+                  // but must give a reason.
+                  const isBackdate = dateIso < todayIso;
+                  const lockedForAssigner = isBackdate && isRestrictedAssigner;
+                  const needsNote = isBackdate && isHrOrAdmin;
                   const noteDraft = noteDrafts[key] ?? '';
 
                   return (
@@ -356,10 +364,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         >
                           <p className="flex items-center gap-1.5 text-[11px] font-semibold text-text-primary">
                             <Lock className="h-3 w-3" />
-                            Approved by HR
+                            Past Date
                           </p>
                           <p className="mt-1 text-[11px] text-text-muted">
-                            This duty is locked. Only HR or an Admin can change it now.
+                            This date has already passed. Only HR or an Admin can change it, and only with a reason.
                           </p>
                           {assignment?.hrNote && (
                             <p className="mt-2 rounded-md bg-surface-sunken px-2 py-1.5 text-[11px] text-text-secondary">
@@ -389,12 +397,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                           {needsNote && (
                             <div className="mb-1.5 px-0.5">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                                Required note to change
+                                Reason required (past date)
                               </p>
                               <Textarea
                                 value={noteDraft}
                                 onChange={(e) => setNoteDrafts((d) => ({ ...d, [key]: e.target.value }))}
-                                placeholder="Why is this approved duty changing?"
+                                placeholder="Why is this past date's roster changing?"
                                 rows={2}
                                 className="mt-1 text-xs"
                               />

@@ -188,24 +188,26 @@ export class RosterService {
     const hrOrAdmin = this.isHrOrAdmin(actorRole);
     const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
 
-    // Once HR/Admin has approved an assignment, a Manager can no longer
-    // touch it at all -- only HR/Admin can, and only with a note
-    // explaining the change (see hrNote below).
-    if (existing?.status === 'APPROVED' && !hrOrAdmin) {
-      throw new ForbiddenException('This duty has already been approved by HR and can no longer be changed by a Manager.');
+    // Only a date that's already passed is gated now -- assigning or
+    // changing today's or a future duty takes effect immediately for
+    // anyone (Manager/Supervisor included), no reason and no HR approval
+    // needed. A past date always needs a reason, and if it's not HR/Admin
+    // making the change it goes PENDING for HR to confirm via approve().
+    const isBackdate = date < startOfDay(new Date());
+    if (isBackdate && !dto.hrNote?.trim()) {
+      throw new BadRequestException('A reason is required to change a roster entry for a date that has already passed.');
     }
-    if (existing?.status === 'APPROVED' && hrOrAdmin && !dto.hrNote?.trim()) {
-      throw new BadRequestException('A note is required to change a duty that has already been approved.');
-    }
+    const autoApproved = !isBackdate || hrOrAdmin;
 
-    // Re-assigning content on an existing assignment never changes its
-    // status by itself -- a still-PENDING one stays PENDING (HR/Admin must
-    // use the separate approve() action to confirm it), and an APPROVED
-    // one stays APPROVED, just with the note recorded for why it changed.
-    const updateData: Record<string, unknown> = { type: dto.type, shiftId, assignedById: actorId };
-    if (existing?.status === 'APPROVED') {
-      updateData.hrNote = dto.hrNote;
-    }
+    const updateData: Record<string, unknown> = {
+      type: dto.type,
+      shiftId,
+      assignedById: actorId,
+      hrNote: dto.hrNote,
+      status: autoApproved ? 'APPROVED' : 'PENDING',
+      approvedById: autoApproved ? actorId : null,
+      approvedAt: autoApproved ? new Date() : null,
+    };
 
     const assignment = await this.prisma.rosterAssignment.upsert({
       where: { employeeId_date: { employeeId, date } },
@@ -215,10 +217,10 @@ export class RosterService {
         type: dto.type,
         shiftId,
         assignedById: actorId,
-        status: hrOrAdmin ? 'APPROVED' : 'PENDING',
-        approvedById: hrOrAdmin ? actorId : null,
-        approvedAt: hrOrAdmin ? new Date() : null,
-        hrNote: hrOrAdmin ? dto.hrNote : undefined,
+        status: autoApproved ? 'APPROVED' : 'PENDING',
+        approvedById: autoApproved ? actorId : null,
+        approvedAt: autoApproved ? new Date() : null,
+        hrNote: dto.hrNote,
       },
       update: updateData,
       include: ASSIGNMENT_INCLUDE,
@@ -320,12 +322,17 @@ export class RosterService {
     const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
     if (!existing) return { success: true };
 
+    // Same date-based gate as upsert() -- but clearing has no "pending"
+    // middle ground (there's nothing to approve once it's gone), so a
+    // Manager/Supervisor can't clear a past date directly at all; only
+    // HR/Admin can, and only with a reason.
     const hrOrAdmin = this.isHrOrAdmin(actorRole);
-    if (existing.status === 'APPROVED' && !hrOrAdmin) {
-      throw new ForbiddenException('This duty has already been approved by HR and can no longer be changed by a Manager.');
+    const isBackdate = date < startOfDay(new Date());
+    if (isBackdate && !hrOrAdmin) {
+      throw new ForbiddenException('Clearing a roster entry for a date that has already passed can only be done by HR/Admin.');
     }
-    if (existing.status === 'APPROVED' && hrOrAdmin && !dto?.hrNote?.trim()) {
-      throw new BadRequestException('A note is required to clear a duty that has already been approved.');
+    if (isBackdate && hrOrAdmin && !dto?.hrNote?.trim()) {
+      throw new BadRequestException('A reason is required to clear a roster entry for a date that has already passed.');
     }
 
     const wasApproved = existing.status === 'APPROVED';
