@@ -101,35 +101,30 @@ export function useClearRosterAssignment() {
   });
 }
 
-export interface BulkAssignPayload {
-  employeeIds: string[];
-  startDate: string;
-  endDate: string;
-  type: RosterDayType;
+/** One staged edit from the Roster screen, sent on Save. */
+export interface RosterChange {
+  employeeId: string;
+  date: string;
+  action: 'SET' | 'CLEAR';
+  type?: RosterDayType;
   shiftId?: string;
-  /** JS getDay() values (0 = Sunday). Omit for every day in the range. */
-  weekdays?: number[];
-  /** true = leave days that already have a duty untouched. */
-  skipExisting?: boolean;
-  // Required by the backend when the range includes past dates.
+  // Required by the backend for a date that has already passed.
   hrNote?: string;
 }
 
-export interface BulkAssignResult {
-  employees: number;
-  days: number;
+export interface BatchRosterResult {
   applied: number;
-  skipped: number;
   pending: number;
+  failed: { employeeId: string; date: string; message: string }[];
 }
 
-/** "Assign Multiple" -- fills many employees x many days in one request
- *  (POST /roster/bulk). */
-export function useBulkAssignRoster() {
+/** "Save" on the Roster screen -- sends every staged change in one
+ *  request (POST /roster/batch). */
+export function useSaveRosterBatch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: BulkAssignPayload) =>
-      (await api.post<BulkAssignResult>('/roster/bulk', payload)).data,
+    mutationFn: async (changes: RosterChange[]) =>
+      (await api.post<BatchRosterResult>('/roster/batch', { changes })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });

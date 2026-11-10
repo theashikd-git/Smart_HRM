@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   ChevronLeft,
@@ -11,6 +11,8 @@ import {
   Lock,
   Clock3,
   CalendarPlus,
+  Save,
+  Shuffle,
   type LucideIcon,
 } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
@@ -21,15 +23,15 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useShifts } from '@/hooks/useShifts';
 import {
   useRosterWeek,
-  useUpsertRosterAssignment,
-  useClearRosterAssignment,
+  useSaveRosterBatch,
   useApproveRosterAssignment,
+  type RosterChange,
 } from '@/hooks/useRoster';
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, cn, initials } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
-import { BulkAssignModal } from './BulkAssignModal';
-import type { RosterAssignment, RosterDayType } from '@/types';
+import { BulkAssignModal, type BulkPlan } from './BulkAssignModal';
+import type { RosterAssignment, RosterDayType, RosterEmployee } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
 const WEEKDAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -62,6 +64,31 @@ function monthStartOf(d: Date): Date {
 }
 
 type ViewMode = 'week' | 'month';
+
+/** Edits are staged here (key = "employeeId|YYYY-MM-DD") until Save. */
+type Draft = Record<string, RosterChange>;
+
+/** Adds one staged change to a draft. A change that just puts the cell back
+ *  to what's already saved is dropped instead, so "unsaved changes" only ever
+ *  counts real differences. Pure -- returns a new draft. */
+function applyChange(draft: Draft, saved: RosterAssignment | undefined, change: RosterChange): Draft {
+  const key = `${change.employeeId}|${change.date}`;
+  const next = { ...draft };
+  if (change.action === 'CLEAR') {
+    if (!saved) delete next[key];
+    else next[key] = change;
+  } else {
+    const same =
+      saved &&
+      saved.status === 'APPROVED' &&
+      !saved.pendingRemoval &&
+      saved.type === change.type &&
+      (saved.shiftId ?? null) === (change.shiftId ?? null);
+    if (same) delete next[key];
+    else next[key] = change;
+  }
+  return next;
+}
 
 function addDays(d: Date, n: number): Date {
   const nd = new Date(d);
@@ -97,13 +124,20 @@ function shortDate(d: Date): string {
  *
  * Month view shows every day of the month in compact cells, and the
  * "Assign Multiple" tool fills many employees x many days in one go
- * (BulkAssignModal) so a whole month's roster isn't built cell by cell.
+ * (BulkAssignModal) so a whole month's roster isn't built cell by cell, and
+ * the shuffle button on a row sets one random day off per week for that
+ * employee.
+ *
+ * Nothing here is saved as you click: every assign / day off / clear / random
+ * off is only staged (highlighted, with an "unsaved changes" bar), and the
+ * manager reviews it and presses Save to confirm -- or Discard to drop it.
  */
 export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [anchor, setAnchor] = useState(() => monthStartOf(new Date()));
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEmployeeIds, setBulkEmployeeIds] = useState<string[]>([]);
+  const [draft, setDraft] = useState<Draft>({});
   const [departmentId, setDepartmentId] = useState('');
   const [openCell, setOpenCell] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -159,8 +193,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const { data: departments } = useDepartments();
   const { data: shifts } = useShifts();
   const { data, isLoading } = useRosterWeek({ startDate, endDate, departmentId: departmentId || undefined });
-  const upsertAssignment = useUpsertRosterAssignment();
-  const clearAssignment = useClearRosterAssignment();
+  const saveBatch = useSaveRosterBatch();
   const approveAssignment = useApproveRosterAssignment();
 
   const sortedShiftIds = useMemo(() => (shifts ?? []).map((s) => s.id).sort(), [shifts]);
@@ -181,6 +214,29 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
     return map;
   }, [data]);
 
+  const shiftById = useMemo(() => new Map((shifts ?? []).map((s) => [s.id, s])), [shifts]);
+  const draftCount = Object.keys(draft).length;
+
+  // Warn before leaving the page with edits that were never saved.
+  useEffect(() => {
+    if (draftCount === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [draftCount]);
+
+  /** What a cell will look like once Save is pressed: the staged change if
+   *  there is one, otherwise what's saved. */
+  function effective(key: string, d: Draft = draft): { type: RosterDayType } | undefined {
+    const dr = d[key];
+    if (dr) return dr.action === 'CLEAR' ? undefined : { type: dr.type as RosterDayType };
+    const saved = assignmentMap.get(key);
+    return saved ? { type: saved.type } : undefined;
+  }
+
   const employees = data?.employees ?? [];
   const shiftsAssigned = (data?.assignments ?? []).filter((a) => a.type === 'SHIFT').length;
   const daysOff = (data?.assignments ?? []).filter((a) => a.type === 'OFF').length;
@@ -195,19 +251,115 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
     });
   }
 
-  async function handlePick(key: string, employeeId: string, date: string, type: RosterDayType, shiftId?: string, hrNote?: string) {
+  function stage(employeeId: string, date: string, change: Omit<RosterChange, 'employeeId' | 'date'>) {
+    setDraft((d) => applyChange(d, assignmentMap.get(`${employeeId}|${date}`), { employeeId, date, ...change }));
+  }
+
+  function handlePick(key: string, employeeId: string, date: string, type: RosterDayType, shiftId?: string, hrNote?: string) {
     closeCell(key);
-    try {
-      await upsertAssignment.mutateAsync({ employeeId, date, type, shiftId, hrNote });
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
+    stage(employeeId, date, { action: 'SET', type, shiftId, hrNote });
+  }
+
+  function handleClear(key: string, employeeId: string, date: string, hrNote?: string) {
+    closeCell(key);
+    stage(employeeId, date, { action: 'CLEAR', hrNote });
+  }
+
+  /** One random day off in every week of the view, for one employee. Weeks
+   *  that already have a day off are left alone, past days are never touched,
+   *  and a day with no duty yet is preferred over replacing one. Pressing it
+   *  again re-shuffles the random days it staged before. */
+  function handleRandomOff(emp: RosterEmployee) {
+    // Drop this employee's earlier staged day-offs so a second click re-rolls.
+    let next: Draft = {};
+    for (const [k, c] of Object.entries(draft)) {
+      if (c.employeeId === emp.id && c.action === 'SET' && c.type === 'OFF') continue;
+      next[k] = c;
+    }
+
+    const weeks = new Map<string, Date[]>();
+    for (const day of days) {
+      const wk = isoDate(mondayOf(day));
+      weeks.set(wk, [...(weeks.get(wk) ?? []), day]);
+    }
+
+    let set = 0;
+    let skipped = 0;
+    for (const wd of weeks.values()) {
+      // A sliver of a week at the edge of the month (under 4 days) is left
+      // for the neighbouring month's view, so no week ends up with two.
+      if (wd.length < 4) continue;
+      if (wd.some((day) => effective(`${emp.id}|${isoDate(day)}`, next)?.type === 'OFF')) {
+        skipped++;
+        continue;
+      }
+      const candidates = wd.filter((day) => isoDate(day) >= todayIso);
+      if (candidates.length === 0) continue;
+      const empty = candidates.filter((day) => !effective(`${emp.id}|${isoDate(day)}`, next));
+      const pool = empty.length > 0 ? empty : candidates;
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      const date = isoDate(pick);
+      next = applyChange(next, assignmentMap.get(`${emp.id}|${date}`), { employeeId: emp.id, date, action: 'SET', type: 'OFF' });
+      set++;
+    }
+
+    setDraft(next);
+    setOpenCell(null);
+    if (set > 0) {
+      toast.success(`${set} random day${set === 1 ? '' : 's'} off for ${emp.fullName} -- change any you like, then press Save`);
+    } else {
+      toast(skipped > 0 ? 'Every week already has a day off.' : 'No upcoming days to give a day off.');
     }
   }
 
-  async function handleClear(key: string, employeeId: string, date: string, hrNote?: string) {
-    closeCell(key);
+  function handleBulkApply(plan: BulkPlan) {
+    let next = draft;
+    let staged = 0;
+    let skipped = 0;
+    for (const employeeId of plan.employeeIds) {
+      for (const date of plan.dates) {
+        if (plan.skipExisting && effective(`${employeeId}|${date}`, next)) {
+          skipped++;
+          continue;
+        }
+        next = applyChange(next, assignmentMap.get(`${employeeId}|${date}`), {
+          employeeId,
+          date,
+          action: 'SET',
+          type: plan.type,
+          shiftId: plan.shiftId,
+          hrNote: date < todayIso ? plan.hrNote : undefined,
+        });
+        staged++;
+      }
+    }
+    setDraft(next);
+    toast.success(`${staged} added${skipped ? ` (${skipped} skipped, already had a duty)` : ''} -- review, then press Save`);
+  }
+
+  async function handleSave() {
+    const entries = Object.values(draft);
+    if (entries.length === 0) return;
     try {
-      await clearAssignment.mutateAsync({ employeeId, date, hrNote });
+      let applied = 0;
+      let pending = 0;
+      const failed: { employeeId: string; date: string; message: string }[] = [];
+      // The backend takes up to 400 changes per request.
+      for (let i = 0; i < entries.length; i += 400) {
+        const res = await saveBatch.mutateAsync(entries.slice(i, i + 400));
+        applied += res.applied;
+        pending += res.pending;
+        failed.push(...res.failed);
+      }
+      // Whatever saved leaves the draft; anything that failed stays staged.
+      const failedKeys = new Set(failed.map((f) => `${f.employeeId}|${f.date}`));
+      setDraft((d) => Object.fromEntries(Object.entries(d).filter(([k]) => failedKeys.has(k))));
+      if (applied > 0) {
+        toast.success(`Saved ${applied} change${applied === 1 ? '' : 's'}${pending ? ` -- ${pending} sent to HR for approval` : ''}`);
+      }
+      if (failed.length > 0) {
+        toast.error(`${failed.length} change${failed.length === 1 ? '' : 's'} could not be saved: ${failed[0].message}`);
+      }
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -245,9 +397,13 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
               </Select>
             )}
           </div>
-          <Button onClick={() => openBulk([])}>
+          <Button variant="outline" onClick={() => openBulk([])}>
             <CalendarPlus className="h-4 w-4" />
             Assign Multiple
+          </Button>
+          <Button onClick={handleSave} disabled={draftCount === 0} loading={saveBatch.isPending}>
+            <Save className="h-4 w-4" />
+            Save{draftCount > 0 ? ` (${draftCount})` : ''}
           </Button>
         </div>
       }
@@ -307,6 +463,23 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
           </div>
         </div>
 
+        {draftCount > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-accent-soft px-5 py-2.5">
+            <p className="text-xs font-medium text-accent-dark">
+              {draftCount} unsaved change{draftCount === 1 ? '' : 's'} -- nothing is final until you press Save.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDraft({})} disabled={saveBatch.isPending}>
+                Discard
+              </Button>
+              <Button size="sm" onClick={handleSave} loading={saveBatch.isPending}>
+                <Save className="h-3.5 w-3.5" />
+                Save changes
+              </Button>
+            </div>
+          </div>
+        )}
+
         {openCell && <div className="fixed inset-0 z-20" onClick={() => closeCell(openCell)} />}
 
         <div className="overflow-x-auto">
@@ -358,20 +531,48 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                     <p className="text-[13px] font-medium text-text-primary truncate">{emp.fullName}</p>
                     <p className="text-[11px] text-text-muted truncate">{emp.designation?.title ?? emp.employeeCode}</p>
                   </div>
-                  <button
-                    onClick={() => openBulk([emp.id])}
-                    title={`Assign ${emp.fullName} for many days`}
-                    aria-label={`Assign ${emp.fullName} for many days`}
-                    className="ml-auto shrink-0 rounded-md p-1 text-text-muted opacity-60 hover:bg-surface-sunken hover:text-accent-dark group-hover:opacity-100"
-                  >
-                    <CalendarPlus className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center">
+                    <button
+                      onClick={() => handleRandomOff(emp)}
+                      title="Random weekly day off -- one random day off in every week (click again to re-shuffle)"
+                      aria-label={`Random weekly day off for ${emp.fullName}`}
+                      className="rounded-md p-1 text-text-muted opacity-60 hover:bg-surface-sunken hover:text-accent-dark group-hover:opacity-100"
+                    >
+                      <Shuffle className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => openBulk([emp.id])}
+                      title={`Assign ${emp.fullName} for many days`}
+                      aria-label={`Assign ${emp.fullName} for many days`}
+                      className="rounded-md p-1 text-text-muted opacity-60 hover:bg-surface-sunken hover:text-accent-dark group-hover:opacity-100"
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {days.map((day, i) => {
                   const dateIso = isoDate(day);
                   const key = `${emp.id}|${dateIso}`;
-                  const assignment = assignmentMap.get(key);
+                  const saved = assignmentMap.get(key);
+                  const dr = draft[key];
+                  const isDraft = !!dr;
+                  const draftCleared = dr?.action === 'CLEAR';
+                  // A staged change overrides what's saved until Save.
+                  const assignment: RosterAssignment | undefined = dr
+                    ? draftCleared
+                      ? undefined
+                      : ({
+                          id: `draft-${key}`,
+                          employeeId: emp.id,
+                          date: dateIso,
+                          type: dr.type,
+                          shiftId: dr.shiftId ?? null,
+                          shift: dr.shiftId ? shiftById.get(dr.shiftId) : undefined,
+                          status: 'APPROVED',
+                          pendingRemoval: false,
+                        } as unknown as RosterAssignment)
+                    : saved;
                   const status = attendanceMap.get(key);
                   const alignRight = i >= days.length - (compact ? 4 : 2);
                   const openUp = employees.length > 4 && rowIdx >= employees.length - 2;
@@ -406,10 +607,11 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                               assignment.type === 'SHIFT' && assignment.shift
                                 ? ` (${assignment.shift.startTime}–${assignment.shift.endTime})`
                                 : ''
-                            }${isPendingRemoval ? ' -- removal pending' : isPending ? ' -- pending approval' : ''}`}
+                            }${isDraft ? ' -- unsaved' : isPendingRemoval ? ' -- removal pending' : isPending ? ' -- pending approval' : ''}`}
                             className={cn(
                               'relative flex h-11 w-full items-center justify-center rounded-md px-0.5 text-center hover:brightness-95',
                               colors!.bg,
+                              isDraft && 'ring-2 ring-accent',
                             )}
                           >
                             <span className={cn('w-full truncate text-[10px] font-semibold', colors!.text)}>
@@ -427,10 +629,13 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         ) : (
                           <button
                             onClick={() => setOpenCell(openCell === key ? null : key)}
-                            title="Assign"
-                            className="flex h-11 w-full items-center justify-center rounded-md border border-dashed border-line text-[13px] text-text-muted hover:border-accent hover:text-accent-dark"
+                            title={draftCleared ? 'Will be cleared when you Save' : 'Assign'}
+                            className={cn(
+                              'flex h-11 w-full items-center justify-center rounded-md border border-dashed text-[13px] hover:border-accent hover:text-accent-dark',
+                              draftCleared ? 'border-danger bg-danger-soft text-danger' : 'border-line text-text-muted',
+                            )}
                           >
-                            +
+                            {draftCleared ? '×' : '+'}
                           </button>
                         )
                       ) : (
@@ -441,6 +646,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                           className={cn(
                             'w-full flex flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left hover:brightness-95',
                             colors!.bg,
+                            isDraft && 'ring-2 ring-accent',
                           )}
                         >
                           <span className={cn('flex w-full items-center gap-1.5 text-[11px] font-semibold', colors!.text)}>
@@ -468,9 +674,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                       ) : (
                         <button
                           onClick={() => setOpenCell(openCell === key ? null : key)}
-                          className="w-full flex items-center justify-center rounded-lg border-2 border-dashed border-line py-2.5 text-[11px] font-medium text-text-muted hover:border-accent hover:text-accent-dark"
+                          className={cn(
+                            'w-full flex items-center justify-center rounded-lg border-2 border-dashed py-2.5 text-[11px] font-medium hover:border-accent hover:text-accent-dark',
+                            draftCleared ? 'border-danger bg-danger-soft text-danger' : 'border-line text-text-muted',
+                          )}
                         >
-                          + Assign
+                          {draftCleared ? 'Will be cleared' : '+ Assign'}
                         </button>
                       )}
 
@@ -623,6 +832,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
             <Lock className="h-3 w-3 text-danger" />
             Removal pending HR approval
           </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
+            <span className="h-3 w-3 rounded ring-2 ring-accent" />
+            Unsaved (press Save)
+          </span>
         </div>
       </Card>
 
@@ -632,10 +845,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
         employees={employees}
         shifts={shifts ?? []}
         initialEmployeeIds={bulkEmployeeIds}
+        rangeStart={startDate}
+        rangeEnd={endDate}
         defaultStart={todayIso >= startDate && todayIso <= endDate ? todayIso : startDate}
-        defaultEnd={endDate}
         todayIso={todayIso}
         isHrOrAdmin={isHrOrAdmin}
+        onApply={handleBulkApply}
       />
     </ProgramWorkspace>
   );

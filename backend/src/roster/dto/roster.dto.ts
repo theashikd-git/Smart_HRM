@@ -1,16 +1,15 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
-  IsBoolean,
   IsDateString,
   IsEnum,
-  IsInt,
+  IsIn,
   IsOptional,
   IsString,
-  Max,
-  Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 export enum RosterDayTypeDto {
@@ -67,46 +66,38 @@ export class RemoveRosterAssignmentDto {
   hrNote?: string;
 }
 
-// Assign the same duty to many employees across a date range in one go
-// (the Roster's "Assign Multiple" tool) -- so a whole month can be filled
-// in a few clicks instead of one cell at a time.
-export class BulkAssignRosterDto {
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(200)
-  @IsString({ each: true })
-  employeeIds: string[];
+// One staged edit from the Roster screen. The screen collects every change
+// locally (assign / day off / clear / random off) and only sends them all
+// together when the manager presses Save.
+export class RosterChangeDto {
+  @IsString()
+  employeeId: string;
 
   @IsDateString()
-  startDate: string;
+  date: string;
 
-  @IsDateString()
-  endDate: string;
+  @IsIn(['SET', 'CLEAR'])
+  action: 'SET' | 'CLEAR';
 
+  @ValidateIf((o) => o.action === 'SET')
   @IsEnum(RosterDayTypeDto)
-  type: RosterDayTypeDto;
+  type?: RosterDayTypeDto;
 
-  @ValidateIf((o) => o.type === RosterDayTypeDto.SHIFT)
+  @ValidateIf((o) => o.action === 'SET' && o.type === RosterDayTypeDto.SHIFT)
   @IsString()
   shiftId?: string;
 
-  // Only these weekdays inside the range get the duty (0 = Sunday ...
-  // 6 = Saturday, same as JS getDay()). Omit/empty = every day.
-  @IsOptional()
-  @IsArray()
-  @IsInt({ each: true })
-  @Min(0, { each: true })
-  @Max(6, { each: true })
-  weekdays?: number[];
-
-  // true = leave days that already have a duty alone, only fill the gaps.
-  @IsOptional()
-  @IsBoolean()
-  skipExisting?: boolean;
-
-  // Required when the range includes a date that has already passed --
-  // same rule as a single past-date change (see RosterService.upsert).
+  // Required for a date that has already passed (same rule as a single edit).
   @IsOptional()
   @IsString()
   hrNote?: string;
+}
+
+export class BatchRosterDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(400)
+  @ValidateNested({ each: true })
+  @Type(() => RosterChangeDto)
+  changes: RosterChangeDto[];
 }

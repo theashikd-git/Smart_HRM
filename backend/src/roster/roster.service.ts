@@ -4,7 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   ApproveRosterAssignmentDto,
-  BulkAssignRosterDto,
+  BatchRosterDto,
   RemoveRosterAssignmentDto,
   RosterDayTypeDto,
   RosterQueryDto,
@@ -166,6 +166,7 @@ export class RosterService {
     actorId?: string,
     actorRole?: string,
     actorEmployeeId?: string | null,
+    quiet = false,
   ) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
@@ -257,7 +258,7 @@ export class RosterService {
     // assignment doesn't show on their dashboard yet, so telling them
     // about it now would be confusing (and they'd see it vanish/change
     // if HR edits it before approving).
-    if (assignment.status === 'APPROVED') {
+    if (assignment.status === 'APPROVED' && !quiet) {
       await this.notificationsService.createForEmployee(
         employeeId,
         'SHIFT',
@@ -272,155 +273,61 @@ export class RosterService {
   }
 
   /**
-   * "Assign Multiple": the same duty for several employees across a date
-   * range (optionally only certain weekdays), applied in one transaction
-   * instead of one request per cell. Follows exactly the rules of a single
-   * upsert() -- employees must be in the assigner's own department, a
-   * shift must belong to that department (or be General), today/future
-   * dates take effect immediately, and any past date in the range needs a
-   * reason (HR/Admin apply it right away, a Manager/Supervisor's go PENDING
-   * for approval). Employees get one summary notification, not one per day.
+   * Saves a staged batch of edits from the Roster screen (assign, day off,
+   * clear, random-off...). Every change is run through the very same
+   * upsert()/remove() as a single-cell edit, so department scoping, the
+   * shift/department match and the past-date rules (reason required,
+   * Manager/Supervisor changes go PENDING) all apply unchanged. One bad
+   * change doesn't block the rest -- it's reported back in `failed` so the
+   * screen can keep just those as unsaved. Each affected employee gets one
+   * summary notification instead of one per day.
    */
-  async bulkAssign(
-    dto: BulkAssignRosterDto,
-    actorId?: string,
-    actorRole?: string,
-    actorEmployeeId?: string | null,
-  ) {
-    const startDay = new Date(`${dto.startDate.slice(0, 10)}T00:00:00Z`);
-    const endDay = new Date(`${dto.endDate.slice(0, 10)}T00:00:00Z`);
-    if (Number.isNaN(startDay.getTime()) || Number.isNaN(endDay.getTime())) throw new BadRequestException('Invalid date');
-    if (endDay < startDay) throw new BadRequestException('endDate must not be before startDate');
-    const spanDays = Math.round((endDay.getTime() - startDay.getTime()) / 86400000) + 1;
-    if (spanDays > 62) throw new BadRequestException('Pick a range of at most 62 days.');
-
-    const employeeIds = [...new Set(dto.employeeIds)];
-    const employees = await this.prisma.employee.findMany({
-      where: { id: { in: employeeIds } },
-      select: { id: true, fullName: true, departmentId: true },
-    });
-    if (employees.length !== employeeIds.length) throw new NotFoundException('One or more employees were not found');
-
-    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
-    if (allowed !== null && employees.some((e) => !e.departmentId || !allowed.includes(e.departmentId))) {
-      throw new ForbiddenException('You can only assign duty to employees in your own department.');
-    }
-
-    let shiftId: string | null = null;
-    if (dto.type === RosterDayTypeDto.SHIFT) {
-      if (!dto.shiftId) throw new BadRequestException('shiftId is required when type is SHIFT');
-      const shift = await this.prisma.shift.findUnique({
-        where: { id: dto.shiftId },
-        select: { id: true, departmentId: true },
-      });
-      if (!shift) throw new NotFoundException('Shift not found');
-      if (shift.departmentId && employees.some((e) => e.departmentId !== shift.departmentId)) {
-        throw new BadRequestException("This shift belongs to a different department than one of the selected employees.");
-      }
-      shiftId = dto.shiftId;
-    }
-
-    // Calendar days (as YYYY-MM-DD strings, so there's no timezone drift)
-    // that fall on one of the requested weekdays.
-    const weekdaySet = dto.weekdays && dto.weekdays.length > 0 ? new Set(dto.weekdays) : null;
-    const dateStrs: string[] = [];
-    for (let i = 0; i < spanDays; i++) {
-      const d = new Date(startDay.getTime() + i * 86400000);
-      if (weekdaySet && !weekdaySet.has(d.getUTCDay())) continue;
-      dateStrs.push(d.toISOString().slice(0, 10));
-    }
-    if (dateStrs.length === 0) throw new BadRequestException('None of the selected weekdays fall inside that date range.');
-    if (dateStrs.length * employees.length > 2000) {
-      throw new BadRequestException('That is too many days at once -- pick fewer employees or a shorter range.');
-    }
-
-    const today = startOfDay(new Date());
-    const dates = dateStrs.map((s) => ({ str: s, date: startOfDay(new Date(s)) }));
-    const hasBackdate = dates.some((d) => d.date < today);
-    if (hasBackdate && !dto.hrNote?.trim()) {
-      throw new BadRequestException('A reason is required because this range includes dates that have already passed.');
-    }
-
-    const hrOrAdmin = this.isHrOrAdmin(actorRole);
-    const existingRows = await this.prisma.rosterAssignment.findMany({
-      where: {
-        employeeId: { in: employeeIds },
-        date: { gte: dates[0].date, lte: dates[dates.length - 1].date },
-      },
-      select: { employeeId: true, date: true },
-    });
-    const existingKeys = new Set(existingRows.map((r) => `${r.employeeId}|${r.date.toISOString().slice(0, 10)}`));
-
-    const ops: any[] = [];
-    let skipped = 0;
+  async batchApply(dto: BatchRosterDto, actorId?: string, actorRole?: string, actorEmployeeId?: string | null) {
+    let applied = 0;
     let pending = 0;
-    const approvedFor = new Set<string>();
-    const now = new Date();
+    const failed: { employeeId: string; date: string; message: string }[] = [];
+    const notify = new Set<string>();
 
-    for (const emp of employees) {
-      for (const { str, date } of dates) {
-        if (dto.skipExisting && existingKeys.has(`${emp.id}|${str}`)) {
-          skipped++;
-          continue;
+    for (const c of dto.changes) {
+      const date = c.date.slice(0, 10);
+      try {
+        if (c.action === 'CLEAR') {
+          const res: any = await this.remove(c.employeeId, date, { hrNote: c.hrNote }, actorId, actorRole, actorEmployeeId, true);
+          if (res?.pendingRemoval) pending++;
+          else notify.add(c.employeeId);
+        } else {
+          const res = await this.upsert(
+            c.employeeId,
+            date,
+            { type: c.type as RosterDayTypeDto, shiftId: c.shiftId, hrNote: c.hrNote },
+            actorId,
+            actorRole,
+            actorEmployeeId,
+            true,
+          );
+          if (res.status === 'PENDING') pending++;
+          else notify.add(c.employeeId);
         }
-        const isBackdate = date < today;
-        const autoApproved = !isBackdate || hrOrAdmin;
-        const note = isBackdate ? dto.hrNote : undefined;
-        if (autoApproved) approvedFor.add(emp.id);
-        else pending++;
-
-        ops.push(
-          this.prisma.rosterAssignment.upsert({
-            where: { employeeId_date: { employeeId: emp.id, date } },
-            create: {
-              employeeId: emp.id,
-              date,
-              type: dto.type,
-              shiftId,
-              assignedById: actorId,
-              status: autoApproved ? 'APPROVED' : 'PENDING',
-              approvedById: autoApproved ? actorId : null,
-              approvedAt: autoApproved ? now : null,
-              hrNote: note,
-            },
-            update: {
-              type: dto.type,
-              shiftId,
-              assignedById: actorId,
-              hrNote: note,
-              status: autoApproved ? 'APPROVED' : 'PENDING',
-              approvedById: autoApproved ? actorId : null,
-              approvedAt: autoApproved ? now : null,
-              pendingRemoval: false,
-            },
-          }),
-        );
+        applied++;
+      } catch (err: any) {
+        failed.push({
+          employeeId: c.employeeId,
+          date,
+          message: err?.response?.message ?? err?.message ?? 'Could not save this change',
+        });
       }
     }
 
-    for (let i = 0; i < ops.length; i += 200) {
-      await this.prisma.$transaction(ops.slice(i, i + 200));
-    }
-
-    const applied = ops.length;
-    await this.auditService.log({
-      userId: actorId,
-      action: 'ROSTER_BULK_ASSIGNED',
-      entity: 'RosterAssignment',
-      entityId: `bulk:${dateStrs[0]}..${dateStrs[dateStrs.length - 1]}`,
-      details: `${dto.type === RosterDayTypeDto.OFF ? 'Set day off' : 'Assigned shift'} for ${employees.length} employee(s) across ${dateStrs.length} day(s), ${applied} duties applied${skipped ? `, ${skipped} skipped` : ''}${pending ? `, ${pending} awaiting approval` : ''}${dto.hrNote ? ` -- Note: ${dto.hrNote}` : ''}`,
-    });
-
-    for (const employeeId of approvedFor) {
+    for (const employeeId of notify) {
       await this.notificationsService.createForEmployee(
         employeeId,
         'SHIFT',
         'Duty schedule updated',
-        `Your duty schedule was updated from ${dateStrs[0]} to ${dateStrs[dateStrs.length - 1]}.`,
+        'Your duty schedule was updated.',
       );
     }
 
-    return { employees: employees.length, days: dateStrs.length, applied, skipped, pending };
+    return { applied, pending, failed };
   }
 
   /**
@@ -499,6 +406,7 @@ export class RosterService {
     actorId?: string,
     actorRole?: string,
     actorEmployeeId?: string | null,
+    quiet = false,
   ) {
     const date = startOfDay(new Date(dateStr));
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
@@ -555,7 +463,7 @@ export class RosterService {
     // Only notify if the employee could actually see it before (a
     // still-PENDING assignment never showed on their dashboard, so
     // clearing it is a no-op from their point of view).
-    if (wasApproved) {
+    if (wasApproved && !quiet) {
       await this.notificationsService.createForEmployee(
         employeeId,
         'SHIFT',

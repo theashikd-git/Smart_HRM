@@ -1,12 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select, Textarea } from '@/components/ui/Form';
-import { useBulkAssignRoster } from '@/hooks/useRoster';
-import { apiErrorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { RosterDayType, RosterEmployee, Shift } from '@/types';
 
@@ -30,6 +27,16 @@ function daysBetween(a: string, b: string): string[] {
   return out;
 }
 
+export interface BulkPlan {
+  employeeIds: string[];
+  /** YYYY-MM-DD, already filtered to the ticked weekdays. */
+  dates: string[];
+  type: RosterDayType;
+  shiftId?: string;
+  skipExisting: boolean;
+  hrNote?: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -37,17 +44,25 @@ interface Props {
   shifts: Shift[];
   /** Pre-ticked employees (e.g. the row the manager clicked from). */
   initialEmployeeIds: string[];
-  /** Date range the screen is currently showing -- used as the default. */
+  /** The date range the screen is showing -- also the range allowed here
+   *  (the screen only knows what's already on it, so it can honour
+   *  "keep days that already have a duty"). */
+  rangeStart: string;
+  rangeEnd: string;
   defaultStart: string;
-  defaultEnd: string;
   todayIso: string;
   isHrOrAdmin: boolean;
+  /** Stages the plan on the Roster screen (nothing is saved until the
+   *  manager presses Save there). */
+  onApply: (plan: BulkPlan) => void;
 }
 
 /**
  * "Assign Multiple" -- pick people, pick a shift (or day off), pick a date
  * range and which weekdays it applies to, and it fills all of it at once.
  * Replaces clicking 30 cells x N employees one by one for a monthly roster.
+ * It only stages the cells on the Roster; the manager reviews them there
+ * and presses Save to make them real.
  */
 export function BulkAssignModal({
   open,
@@ -55,18 +70,18 @@ export function BulkAssignModal({
   employees,
   shifts,
   initialEmployeeIds,
+  rangeStart,
+  rangeEnd,
   defaultStart,
-  defaultEnd,
   todayIso,
   isHrOrAdmin,
+  onApply,
 }: Props) {
-  const bulk = useBulkAssignRoster();
-
   const [selected, setSelected] = useState<string[]>([]);
   const [type, setType] = useState<RosterDayType>('SHIFT');
   const [shiftId, setShiftId] = useState('');
   const [startDate, setStartDate] = useState(defaultStart);
-  const [endDate, setEndDate] = useState(defaultEnd);
+  const [endDate, setEndDate] = useState(rangeEnd);
   const [weekdays, setWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [skipExisting, setSkipExisting] = useState(true);
   const [reason, setReason] = useState('');
@@ -78,7 +93,7 @@ export function BulkAssignModal({
     setType('SHIFT');
     setShiftId('');
     setStartDate(defaultStart);
-    setEndDate(defaultEnd);
+    setEndDate(rangeEnd);
     setWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setSkipExisting(true);
     setReason('');
@@ -123,8 +138,8 @@ export function BulkAssignModal({
         ? 'Choose a shift.'
         : rangeDays.length === 0
           ? 'Pick a valid date range.'
-          : rangeDays.length > 62
-            ? 'Pick a range of at most 62 days.'
+          : startDate < rangeStart || endDate > rangeEnd
+            ? `Pick dates inside the month/week on screen (${rangeStart} to ${rangeEnd}).`
             : matchingDays.length === 0
               ? 'None of the ticked weekdays fall inside that range.'
               : total > 2000
@@ -133,27 +148,17 @@ export function BulkAssignModal({
                   ? 'A reason is required because the range includes past dates.'
                   : '';
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (problem) return;
-    try {
-      const res = await bulk.mutateAsync({
-        employeeIds: selected,
-        startDate,
-        endDate,
-        type,
-        shiftId: type === 'SHIFT' ? shiftId : undefined,
-        weekdays: weekdays.length === 7 ? undefined : weekdays,
-        skipExisting,
-        hrNote: hasPast ? reason.trim() : undefined,
-      });
-      const parts = [`${res.applied} duties set`];
-      if (res.skipped) parts.push(`${res.skipped} skipped (already had a duty)`);
-      if (res.pending) parts.push(`${res.pending} sent to HR for approval`);
-      toast.success(parts.join(' · '));
-      onClose();
-    } catch (err) {
-      toast.error(apiErrorMessage(err));
-    }
+    onApply({
+      employeeIds: selected,
+      dates: matchingDays,
+      type,
+      shiftId: type === 'SHIFT' ? shiftId : undefined,
+      skipExisting,
+      hrNote: hasPast ? reason.trim() : undefined,
+    });
+    onClose();
   }
 
   return (
@@ -161,15 +166,15 @@ export function BulkAssignModal({
       open={open}
       onClose={onClose}
       title="Assign Multiple"
-      subtitle="Fill many days for many people at once"
+      subtitle="Fill many days for many people, then review and Save"
       size="lg"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!!problem} loading={bulk.isPending}>
-            {total > 0 && !problem ? `Assign ${total} duties` : 'Assign'}
+          <Button onClick={handleSubmit} disabled={!!problem}>
+            {total > 0 && !problem ? `Add ${total} to roster` : 'Add to roster'}
           </Button>
         </>
       }
@@ -248,10 +253,10 @@ export function BulkAssignModal({
 
           <div className="grid grid-cols-2 gap-3">
             <FieldWrap label="From">
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input type="date" value={startDate} min={rangeStart} max={rangeEnd} onChange={(e) => setStartDate(e.target.value)} />
             </FieldWrap>
             <FieldWrap label="To">
-              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Input type="date" value={endDate} min={startDate} max={rangeEnd} onChange={(e) => setEndDate(e.target.value)} />
             </FieldWrap>
           </div>
 
@@ -292,7 +297,7 @@ export function BulkAssignModal({
             <FieldWrap
               label="Reason (range includes past dates)"
               required
-              hint={isHrOrAdmin ? 'Applied right away.' : 'Past dates are sent to HR for approval.'}
+              hint={isHrOrAdmin ? 'Applied right away when you Save.' : 'Past dates are sent to HR for approval when you Save.'}
             >
               <Textarea
                 value={reason}

@@ -7,7 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RosterService } from './roster.service';
 import {
   ApproveRosterAssignmentDto,
-  BulkAssignRosterDto,
+  BatchRosterDto,
   RemoveRosterAssignmentDto,
   RosterQueryDto,
   UpsertRosterAssignmentDto,
@@ -38,13 +38,14 @@ export class RosterController {
     return this.service.pendingCount();
   }
 
-  // Fill many employees x many days with one duty at once. Same rules as
-  // a single upsert (own department only, past dates need a reason and a
-  // Manager/Supervisor's go PENDING) -- see RosterService.bulkAssign.
-  @Post('bulk')
+  // Save a whole staged batch of roster edits (assign / day off / clear)
+  // from the Roster screen in one request. Each change follows exactly the
+  // same rules as the single-cell endpoints below -- see
+  // RosterService.batchApply.
+  @Post('batch')
   @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
-  bulkAssign(@Body() dto: BulkAssignRosterDto, @CurrentUser() user: any) {
-    return this.service.bulkAssign(dto, user.id, user.role, user.employeeId);
+  batch(@Body() dto: BatchRosterDto, @CurrentUser() user: any) {
+    return this.service.batchApply(dto, user.id, user.role, user.employeeId);
   }
 
   // MANAGER/SUPERVISOR can assign/re-assign too -- their own assignment
