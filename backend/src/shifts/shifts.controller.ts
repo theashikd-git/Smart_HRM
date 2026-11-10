@@ -15,9 +15,9 @@ export class ShiftsController {
   constructor(private service: ShiftsService) {}
 
   @Post()
-  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
+  @Roles('ADMIN', 'HR')
   create(@Body() dto: CreateShiftDto, @CurrentUser() user: any) {
-    return this.service.create(dto, user.id, user.role, user.employeeId);
+    return this.service.create(dto, user.id);
   }
 
   @Get()
@@ -31,14 +31,14 @@ export class ShiftsController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
+  @Roles('ADMIN', 'HR')
   update(@Param('id') id: string, @Body() dto: UpdateShiftDto, @CurrentUser() user: any) {
-    return this.service.update(id, dto, user.id, user.role, user.employeeId);
+    return this.service.update(id, dto, user.id);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
   remove(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.remove(id, user.id, user.role, user.employeeId);
+    return this.service.remove(id, user.id);
   }
 }

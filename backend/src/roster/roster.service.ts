@@ -183,8 +183,17 @@ export class RosterService {
     let shiftId: string | null = null;
     if (dto.type === RosterDayTypeDto.SHIFT) {
       if (!dto.shiftId) throw new BadRequestException('shiftId is required when type is SHIFT');
-      const shift = await this.prisma.shift.findUnique({ where: { id: dto.shiftId }, select: { id: true } });
+      const shift = await this.prisma.shift.findUnique({
+        where: { id: dto.shiftId },
+        select: { id: true, departmentId: true },
+      });
       if (!shift) throw new NotFoundException('Shift not found');
+      // Shifts are created per department by HR/Admin -- only that
+      // department's own shifts (or a General, department-less one) can be
+      // put on one of its employees.
+      if (shift.departmentId && shift.departmentId !== employee.departmentId) {
+        throw new BadRequestException("This shift belongs to a different department than the employee's.");
+      }
       shiftId = dto.shiftId;
     }
 

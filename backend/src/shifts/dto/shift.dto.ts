@@ -31,9 +31,9 @@ export class CreateShiftDto {
   @IsString()
   overtimeRule?: string;
 
-  // Department this shift belongs to. Omit/null = a "General" shift usable
-  // by every department. A MANAGER/SUPERVISOR's own value here is ignored
-  // and replaced with their own department -- see ShiftsService.
+  // Department this shift belongs to. Required when creating (enforced in
+  // ShiftsService); only HR/Admin create/edit shifts. Older shifts with no
+  // department stay "General" and are usable by every department.
   @IsOptional()
   @IsString()
   departmentId?: string;
@@ -70,9 +70,9 @@ export class UpdateShiftDto {
   @IsString()
   overtimeRule?: string;
 
-  // Department this shift belongs to. Omit/null = a "General" shift usable
-  // by every department. A MANAGER/SUPERVISOR's own value here is ignored
-  // and replaced with their own department -- see ShiftsService.
+  // Department this shift belongs to. Required when creating (enforced in
+  // ShiftsService); only HR/Admin create/edit shifts. Older shifts with no
+  // department stay "General" and are usable by every department.
   @IsOptional()
   @IsString()
   departmentId?: string;

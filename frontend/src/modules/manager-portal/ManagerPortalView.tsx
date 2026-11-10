@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { NotificationBell } from '@/components/shell/NotificationBell';
 import { RosterProgram } from '@/modules/personnel/roster/RosterProgram';
-import { ShiftProgram } from '@/modules/personnel/shift/ShiftProgram';
 import { ManagerDashboard } from '@/modules/personnel/dashboard/ManagerDashboard';
 import { MyLeaveTab } from '@/modules/employee-portal/MyLeaveTab';
 import { LeaveRequestTab } from '@/modules/employee-portal/LeaveRequestTab';
@@ -17,18 +16,16 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useAuthStore } from '@/lib/auth-store';
 import type { WorkbenchTab } from '@/types/workbench';
 
-type PortalTab = 'dashboard' | 'my-leave' | 'leave-request' | 'leave-on-behalf' | 'roster' | 'shift';
+type PortalTab = 'dashboard' | 'my-leave' | 'leave-request' | 'leave-on-behalf' | 'roster';
 
 const BASE_TABS: { id: PortalTab; label: string; locked?: boolean }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'my-leave', label: 'My Leave' },
   { id: 'leave-on-behalf', label: 'Leave on Behalf' },
   { id: 'roster', label: 'Roster' },
-  { id: 'shift', label: 'Shift' },
 ];
 
 const ROSTER_TAB: WorkbenchTab = { key: 'roster', programId: 'roster', title: 'Roster', breadcrumb: ['Roster'] };
-const SHIFT_TAB: WorkbenchTab = { key: 'shift', programId: 'shift', title: 'Shift', breadcrumb: ['Shift'] };
 
 // Rendered from two separate routes -- /manager-portal (MANAGER) and
 // /supervisor-portal (SUPERVISOR), see app/manager-portal/page.tsx and
@@ -141,7 +138,6 @@ export function ManagerPortalView() {
           </div>
         )}
         {activeTab === 'roster' && <RosterProgram tab={ROSTER_TAB} />}
-        {activeTab === 'shift' && <ShiftProgram tab={SHIFT_TAB} />}
       </main>
     </div>
   );

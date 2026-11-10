@@ -11,7 +11,6 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { useShifts, useCreateShift, useUpdateShift, useDeleteShift, ShiftPayload } from '@/hooks/useShifts';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useAuthStore } from '@/lib/auth-store';
 import { apiErrorMessage } from '@/lib/api';
 import { Shift } from '@/types';
 
@@ -27,9 +26,6 @@ const EMPTY: ShiftPayload = {
 };
 
 export default function ShiftsPage() {
-  const role = useAuthStore((s) => s.user?.role);
-  const isScoped = role === 'MANAGER' || role === 'SUPERVISOR';
-
   const { data, isLoading } = useShifts();
   const { data: departments } = useDepartments();
   const createShift = useCreateShift();
@@ -172,21 +168,23 @@ export default function ShiftsPage() {
           <FieldWrap label="Shift Name" required>
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required className="col-span-2" />
           </FieldWrap>
-          <FieldWrap label="Department" hint={isScoped ? 'Set automatically to your own department' : 'Leave as General to make it usable by every department'}>
-            {isScoped ? (
-              <div className="flex h-9 items-center rounded-md border border-line bg-surface-sunken px-3 text-sm text-text-muted">
-                Your department
-              </div>
-            ) : (
-              <Select value={form.departmentId || ''} onChange={(e) => set('departmentId', e.target.value || undefined)}>
-                <option value="">General (all departments)</option>
-                {departments?.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </Select>
-            )}
+          <FieldWrap
+            label="Department"
+            required={!editing || !!editing.departmentId}
+            hint="Managers and Supervisors of this department can assign this shift to their employees"
+          >
+            <Select
+              value={form.departmentId || ''}
+              onChange={(e) => set('departmentId', e.target.value || undefined)}
+              required={!editing || !!editing.departmentId}
+            >
+              <option value="">{editing && !editing.departmentId ? 'General (all departments)' : 'Select department'}</option>
+              {departments?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </Select>
           </FieldWrap>
           <FieldWrap label="Start Time" required>
             <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} required />

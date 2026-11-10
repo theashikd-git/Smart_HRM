@@ -404,7 +404,9 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                             </div>
                           )}
 
-                          {(shifts ?? []).map((s) => {
+                          {(shifts ?? [])
+                            .filter((s) => !s.departmentId || s.departmentId === emp.department?.id)
+                            .map((s) => {
                             const c = shiftColors(s.id);
                             const disabled = needsNote && !noteDraft.trim();
                             return (

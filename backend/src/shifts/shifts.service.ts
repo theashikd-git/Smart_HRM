@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateShiftDto, UpdateShiftDto } from './dto/shift.dto';
@@ -13,18 +13,15 @@ export class ShiftsService {
   ) {}
 
   /**
-   * Which department id(s) this actor may create/manage shifts for.
-   * - null  = unrestricted (ADMIN/HR/MANAGING_DIRECTOR/EMPLOYEE) -- sees and
-   *   can touch every department's shifts, same as before this feature.
-   * - []    = restricted but currently tied to no department at all (a
-   *   MANAGER who heads no department, or a SUPERVISOR with no employee
-   *   record / no department on it yet).
-   * - [...] = restricted to exactly these department ids. A MANAGER is
-   *   scoped to the department(s) where they're the configured head
-   *   (Department.headEmployeeId -- the same rule already used for Roster
-   *   approval and Leave tier resolution). A SUPERVISOR has no such
-   *   "department I lead" concept in this app, so they're scoped to the
-   *   department their own employee record belongs to instead.
+   * Which department(s) this actor may SEE shifts for. Shifts are created
+   * and managed only by HR/Admin (department-wise); a MANAGER/SUPERVISOR
+   * just picks from them when assigning duty on the Roster, so they only
+   * see their own department's shifts plus General (department-less) ones.
+   * - null  = unrestricted (ADMIN/HR/MANAGING_DIRECTOR/EMPLOYEE).
+   * - [...] = restricted to exactly these department ids ([] if tied to
+   *   none). A MANAGER is scoped to the department(s) they head
+   *   (Department.headEmployeeId); a SUPERVISOR to the department their own
+   *   employee record belongs to.
    */
   private async resolveActorDepartmentIds(
     actorRole?: string,
@@ -49,26 +46,15 @@ export class ShiftsService {
     return employee?.departmentId ? [employee.departmentId] : [];
   }
 
-  async create(dto: CreateShiftDto, actorId?: string, actorRole?: string, actorEmployeeId?: string | null) {
-    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
-    let departmentId = dto.departmentId ?? null;
-
-    if (allowed !== null) {
-      if (allowed.length === 0) {
-        throw new ForbiddenException(
-          'You are not set up as the head or a member of any department yet, so you cannot create shifts. Ask HR/Admin to set this up first.',
-        );
-      }
-      if (departmentId && !allowed.includes(departmentId)) {
-        throw new ForbiddenException('You can only create shifts for your own department.');
-      }
-      // A restricted actor always lands in (one of) their own department(s) --
-      // never leaves a Manager/Supervisor-created shift General by omission.
-      departmentId = departmentId ?? allowed[0];
+  async create(dto: CreateShiftDto, actorId?: string) {
+    if (!dto.departmentId) {
+      throw new BadRequestException('Select the department this shift belongs to.');
     }
+    const department = await this.prisma.department.findUnique({ where: { id: dto.departmentId }, select: { id: true } });
+    if (!department) throw new NotFoundException('Department not found');
 
     const shift = await this.prisma.shift.create({
-      data: { ...dto, departmentId },
+      data: dto,
       include: { department: DEPARTMENT_SELECT },
     });
     await this.auditService.log({
@@ -100,29 +86,8 @@ export class ShiftsService {
     return shift;
   }
 
-  /** Throws if a restricted actor (MANAGER/SUPERVISOR) may not touch this
-   *  shift -- either because it's outside their own department(s), or
-   *  because it's a General (department-less) shift, which only HR/Admin
-   *  may edit. Also blocks re-pointing it at someone else's department. */
-  private assertCanManage(
-    existing: { departmentId: string | null },
-    allowed: string[] | null,
-    nextDepartmentId: string | undefined,
-  ) {
-    if (allowed === null) return;
-    if (!existing.departmentId || !allowed.includes(existing.departmentId)) {
-      throw new ForbiddenException('You can only manage shifts in your own department.');
-    }
-    if (nextDepartmentId !== undefined && nextDepartmentId !== null && !allowed.includes(nextDepartmentId)) {
-      throw new ForbiddenException('You can only assign shifts to your own department.');
-    }
-  }
-
-  async update(id: string, dto: UpdateShiftDto, actorId?: string, actorRole?: string, actorEmployeeId?: string | null) {
-    const existing = await this.findOne(id);
-    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
-    this.assertCanManage(existing, allowed, dto.departmentId);
-
+  async update(id: string, dto: UpdateShiftDto, actorId?: string) {
+    await this.findOne(id);
     const shift = await this.prisma.shift.update({
       where: { id },
       data: dto,
@@ -137,11 +102,8 @@ export class ShiftsService {
     return shift;
   }
 
-  async remove(id: string, actorId?: string, actorRole?: string, actorEmployeeId?: string | null) {
-    const existing = await this.findOne(id);
-    const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
-    this.assertCanManage(existing, allowed, undefined);
-
+  async remove(id: string, actorId?: string) {
+    await this.findOne(id);
     await this.prisma.shift.delete({ where: { id } });
     await this.auditService.log({
       userId: actorId,
