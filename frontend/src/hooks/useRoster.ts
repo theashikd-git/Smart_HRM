@@ -100,3 +100,40 @@ export function useClearRosterAssignment() {
     },
   });
 }
+
+export interface BulkAssignPayload {
+  employeeIds: string[];
+  startDate: string;
+  endDate: string;
+  type: RosterDayType;
+  shiftId?: string;
+  /** JS getDay() values (0 = Sunday). Omit for every day in the range. */
+  weekdays?: number[];
+  /** true = leave days that already have a duty untouched. */
+  skipExisting?: boolean;
+  // Required by the backend when the range includes past dates.
+  hrNote?: string;
+}
+
+export interface BulkAssignResult {
+  employees: number;
+  days: number;
+  applied: number;
+  skipped: number;
+  pending: number;
+}
+
+/** "Assign Multiple" -- fills many employees x many days in one request
+ *  (POST /roster/bulk). */
+export function useBulkAssignRoster() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: BulkAssignPayload) =>
+      (await api.post<BulkAssignResult>('/roster/bulk', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roster'] });
+      qc.invalidateQueries({ queryKey: ['my-roster'] });
+      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
+    },
+  });
+}

@@ -1,4 +1,17 @@
-import { IsDateString, IsEnum, IsOptional, IsString, ValidateIf } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 export enum RosterDayTypeDto {
   SHIFT = 'SHIFT',
@@ -49,6 +62,50 @@ export class RemoveRosterAssignmentDto {
   // HR/Admin it clears the entry right away; for MANAGER/SUPERVISOR it
   // instead files a removal request awaiting HR/Admin's approval (see
   // RosterService.remove/approve).
+  @IsOptional()
+  @IsString()
+  hrNote?: string;
+}
+
+// Assign the same duty to many employees across a date range in one go
+// (the Roster's "Assign Multiple" tool) -- so a whole month can be filled
+// in a few clicks instead of one cell at a time.
+export class BulkAssignRosterDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  employeeIds: string[];
+
+  @IsDateString()
+  startDate: string;
+
+  @IsDateString()
+  endDate: string;
+
+  @IsEnum(RosterDayTypeDto)
+  type: RosterDayTypeDto;
+
+  @ValidateIf((o) => o.type === RosterDayTypeDto.SHIFT)
+  @IsString()
+  shiftId?: string;
+
+  // Only these weekdays inside the range get the duty (0 = Sunday ...
+  // 6 = Saturday, same as JS getDay()). Omit/empty = every day.
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  weekdays?: number[];
+
+  // true = leave days that already have a duty alone, only fill the gaps.
+  @IsOptional()
+  @IsBoolean()
+  skipExisting?: boolean;
+
+  // Required when the range includes a date that has already passed --
+  // same rule as a single past-date change (see RosterService.upsert).
   @IsOptional()
   @IsString()
   hrNote?: string;

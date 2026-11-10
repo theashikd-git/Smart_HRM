@@ -10,6 +10,7 @@ import {
   CalendarOff,
   Lock,
   Clock3,
+  CalendarPlus,
   type LucideIcon,
 } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
@@ -27,6 +28,7 @@ import {
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, cn, initials } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
+import { BulkAssignModal } from './BulkAssignModal';
 import type { RosterAssignment, RosterDayType } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
@@ -55,6 +57,12 @@ function mondayOf(d: Date): Date {
   return monday;
 }
 
+function monthStartOf(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+type ViewMode = 'week' | 'month';
+
 function addDays(d: Date, n: number): Date {
   const nd = new Date(d);
   nd.setDate(d.getDate() + n);
@@ -73,8 +81,8 @@ function shortDate(d: Date): string {
 }
 
 /**
- * The Roster program: a weekly calendar of every active employee's planned
- * shift, with real attendance status layered in for days that have already
+ * The Roster program: a Week or full-Month (default) calendar of every active
+ * employee's planned shift, with real attendance status layered in for days that have already
  * happened. Distinct from Attendance (what actually happened) -- this is
  * what's *planned*, and clicking a cell assigns or clears that plan.
  *
@@ -86,9 +94,16 @@ function shortDate(d: Date): string {
  * request (a change goes PENDING, a clear sets isPendingRemoval) that
  * isn't final until HR/Admin approves it here, and isn't yet visible on
  * the employee's own dashboard either (see useMyRoster/MyCalendarCard).
+ *
+ * Month view shows every day of the month in compact cells, and the
+ * "Assign Multiple" tool fills many employees x many days in one go
+ * (BulkAssignModal) so a whole month's roster isn't built cell by cell.
  */
 export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [anchor, setAnchor] = useState(() => monthStartOf(new Date()));
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkEmployeeIds, setBulkEmployeeIds] = useState<string[]>([]);
   const [departmentId, setDepartmentId] = useState('');
   const [openCell, setOpenCell] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -101,10 +116,45 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   // HR/Admin's approval instead of taking effect right away.
   const isRestrictedAssigner = role === 'MANAGER' || role === 'SUPERVISOR';
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const compact = viewMode === 'month';
+  const days = useMemo(() => {
+    if (viewMode === 'week') return Array.from({ length: 7 }, (_, i) => addDays(anchor, i));
+    const y = anchor.getFullYear();
+    const m = anchor.getMonth();
+    const count = new Date(y, m + 1, 0).getDate();
+    return Array.from({ length: count }, (_, i) => new Date(y, m, i + 1));
+  }, [viewMode, anchor]);
   const startDate = isoDate(days[0]);
-  const endDate = isoDate(days[6]);
+  const endDate = isoDate(days[days.length - 1]);
   const todayIso = isoDate(new Date());
+  const gridCols = compact ? `190px repeat(${days.length}, 56px)` : '236px repeat(7, minmax(0, 1fr))';
+  const gridMinWidth = compact ? 190 + days.length * 56 : 1180;
+
+  function switchMode(next: ViewMode) {
+    if (next === viewMode) return;
+    const today = new Date();
+    const sameMonth = anchor.getFullYear() === today.getFullYear() && anchor.getMonth() === today.getMonth();
+    const base = sameMonth ? today : anchor;
+    setAnchor(next === 'month' ? monthStartOf(base) : mondayOf(base));
+    setViewMode(next);
+    setOpenCell(null);
+  }
+  function step(dir: 1 | -1) {
+    setAnchor((a) => (viewMode === 'week' ? addDays(a, 7 * dir) : new Date(a.getFullYear(), a.getMonth() + dir, 1)));
+    setOpenCell(null);
+  }
+  function goToday() {
+    setAnchor(viewMode === 'week' ? mondayOf(new Date()) : monthStartOf(new Date()));
+    setOpenCell(null);
+  }
+  function openBulk(ids: string[]) {
+    setBulkEmployeeIds(ids);
+    setBulkOpen(true);
+  }
+  const rangeLabel =
+    viewMode === 'month'
+      ? anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : `${shortDate(days[0])} – ${shortDate(days[6])}`;
 
   const { data: departments } = useDepartments();
   const { data: shifts } = useShifts();
@@ -195,6 +245,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
               </Select>
             )}
           </div>
+          <Button onClick={() => openBulk([])}>
+            <CalendarPlus className="h-4 w-4" />
+            Assign Multiple
+          </Button>
         </div>
       }
     >
@@ -211,40 +265,59 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
       </div>
 
       <Card>
-        <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-4 px-5 pt-5 pb-3">
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">This Week</h3>
-            <p className="text-xs text-text-secondary mt-0.5">
-              {shortDate(days[0])} – {shortDate(days[6])}
-            </p>
+            <h3 className="text-sm font-semibold text-text-primary">{viewMode === 'month' ? 'This Month' : 'This Week'}</h3>
+            <p className="text-xs text-text-secondary mt-0.5">{rangeLabel}</p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setWeekStart((d) => addDays(d, -7))}
-              className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-              aria-label="Previous week"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <Button variant="outline" size="sm" onClick={() => setWeekStart(mondayOf(new Date()))}>
-              This Week
-            </Button>
-            <button
-              onClick={() => setWeekStart((d) => addDays(d, 7))}
-              className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
-              aria-label="Next week"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-3">
+            <div className="inline-flex rounded-md border border-line p-0.5">
+              {(['week', 'month'] as ViewMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  className={cn(
+                    'rounded px-2.5 py-1 text-xs font-medium capitalize',
+                    viewMode === m ? 'bg-accent-soft text-accent-dark' : 'text-text-muted hover:text-text-primary',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => step(-1)}
+                className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
+                aria-label={viewMode === 'month' ? 'Previous month' : 'Previous week'}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <Button variant="outline" size="sm" onClick={goToday}>
+                Today
+              </Button>
+              <button
+                onClick={() => step(1)}
+                className="rounded-md p-1.5 text-text-muted hover:bg-surface-sunken hover:text-text-primary"
+                aria-label={viewMode === 'month' ? 'Next month' : 'Next week'}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {openCell && <div className="fixed inset-0 z-20" onClick={() => closeCell(openCell)} />}
 
         <div className="overflow-x-auto">
-          <div className="min-w-[1180px]">
-            <div className="grid border-t border-b border-line" style={{ gridTemplateColumns: '236px repeat(7, minmax(0, 1fr))' }}>
-              <div className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-text-muted bg-surface-sunken/60">
+          <div style={{ minWidth: gridMinWidth }}>
+            <div className="grid border-t border-b border-line" style={{ gridTemplateColumns: gridCols }}>
+              <div
+                className={cn(
+                  'px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-text-muted bg-surface-sunken/60',
+                  compact && 'sticky left-0 z-10 bg-surface-sunken',
+                )}
+              >
                 Employee
               </div>
               {days.map((day, i) => {
@@ -253,11 +326,11 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                   <div
                     key={i}
                     className={cn(
-                      'px-2 py-2.5 text-center border-l border-line',
+                      compact ? 'px-0.5 py-2 text-center border-l border-line' : 'px-2 py-2.5 text-center border-l border-line',
                       isToday ? 'bg-accent-soft text-accent-dark' : 'text-text-secondary',
                     )}
                   >
-                    <div className="text-[10px] font-semibold tracking-wide">{WEEKDAY_LABELS[i]}</div>
+                    <div className="text-[10px] font-semibold tracking-wide">{WEEKDAY_LABELS[(day.getDay() + 6) % 7]}</div>
                     <div className="mt-0.5 text-[13px] font-semibold">{day.getDate()}</div>
                   </div>
                 );
@@ -270,13 +343,14 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
               </div>
             )}
 
-            {employees.map((emp) => (
-              <div
-                key={emp.id}
-                className="grid border-b border-line"
-                style={{ gridTemplateColumns: '236px repeat(7, minmax(0, 1fr))' }}
-              >
-                <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0">
+            {employees.map((emp, rowIdx) => (
+              <div key={emp.id} className="grid border-b border-line" style={{ gridTemplateColumns: gridCols }}>
+                <div
+                  className={cn(
+                    'group flex items-center gap-2.5 px-4 py-2.5 min-w-0',
+                    compact && 'sticky left-0 z-10 bg-white',
+                  )}
+                >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-[11px] font-semibold text-text-primary">
                     {initials(emp.fullName)}
                   </div>
@@ -284,6 +358,14 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                     <p className="text-[13px] font-medium text-text-primary truncate">{emp.fullName}</p>
                     <p className="text-[11px] text-text-muted truncate">{emp.designation?.title ?? emp.employeeCode}</p>
                   </div>
+                  <button
+                    onClick={() => openBulk([emp.id])}
+                    title={`Assign ${emp.fullName} for many days`}
+                    aria-label={`Assign ${emp.fullName} for many days`}
+                    className="ml-auto shrink-0 rounded-md p-1 text-text-muted opacity-60 hover:bg-surface-sunken hover:text-accent-dark group-hover:opacity-100"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                  </button>
                 </div>
 
                 {days.map((day, i) => {
@@ -291,7 +373,8 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                   const key = `${emp.id}|${dateIso}`;
                   const assignment = assignmentMap.get(key);
                   const status = attendanceMap.get(key);
-                  const alignRight = i >= 5;
+                  const alignRight = i >= days.length - (compact ? 4 : 2);
+                  const openUp = employees.length > 4 && rowIdx >= employees.length - 2;
                   const colors = assignment
                     ? assignment.type === 'OFF'
                       ? OFF_COLORS
@@ -314,7 +397,44 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                   const noteDraft = noteDrafts[key] ?? '';
 
                   return (
-                    <div key={i} className="relative border-l border-line p-1.5">
+                    <div key={i} className={cn('relative border-l border-line', compact ? 'p-0.5' : 'p-1.5')}>
+                      {compact ? (
+                        assignment ? (
+                          <button
+                            onClick={() => setOpenCell(openCell === key ? null : key)}
+                            title={`${assignment.type === 'OFF' ? 'Day Off' : assignment.shift?.name ?? 'Shift'}${
+                              assignment.type === 'SHIFT' && assignment.shift
+                                ? ` (${assignment.shift.startTime}–${assignment.shift.endTime})`
+                                : ''
+                            }${isPendingRemoval ? ' -- removal pending' : isPending ? ' -- pending approval' : ''}`}
+                            className={cn(
+                              'relative flex h-11 w-full items-center justify-center rounded-md px-0.5 text-center hover:brightness-95',
+                              colors!.bg,
+                            )}
+                          >
+                            <span className={cn('w-full truncate text-[10px] font-semibold', colors!.text)}>
+                              {assignment.type === 'OFF' ? 'OFF' : assignment.shift?.name ?? 'Shift'}
+                            </span>
+                            {(isPending || isPendingRemoval) && (
+                              <span
+                                className={cn(
+                                  'absolute left-0.5 top-0.5 h-1.5 w-1.5 rounded-full',
+                                  isPendingRemoval ? 'bg-danger' : 'bg-warning',
+                                )}
+                              />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setOpenCell(openCell === key ? null : key)}
+                            title="Assign"
+                            className="flex h-11 w-full items-center justify-center rounded-md border border-dashed border-line text-[13px] text-text-muted hover:border-accent hover:text-accent-dark"
+                          >
+                            +
+                          </button>
+                        )
+                      ) : (
+                        <>
                       {assignment ? (
                         <button
                           onClick={() => setOpenCell(openCell === key ? null : key)}
@@ -354,6 +474,9 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         </button>
                       )}
 
+                        </>
+                      )}
+
                       {status && (
                         <span
                           className={cn(
@@ -366,7 +489,8 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                       {openCell === key && (
                         <div
                           className={cn(
-                            'absolute top-full mt-1 w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',
+                            'absolute w-52 rounded-lg border border-line bg-white p-1.5 shadow-popover z-30',
+                            openUp ? 'bottom-full mb-1' : 'top-full mt-1',
                             alignRight ? 'right-0' : 'left-0',
                           )}
                         >
@@ -496,11 +620,23 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
             Pending HR approval
           </span>
           <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
-            <Lock className="h-3 w-3 text-text-muted" />
-            Approved -- locked from Manager
+            <Lock className="h-3 w-3 text-danger" />
+            Removal pending HR approval
           </span>
         </div>
       </Card>
+
+      <BulkAssignModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        employees={employees}
+        shifts={shifts ?? []}
+        initialEmployeeIds={bulkEmployeeIds}
+        defaultStart={todayIso >= startDate && todayIso <= endDate ? todayIso : startDate}
+        defaultEnd={endDate}
+        todayIso={todayIso}
+        isHrOrAdmin={isHrOrAdmin}
+      />
     </ProgramWorkspace>
   );
 }

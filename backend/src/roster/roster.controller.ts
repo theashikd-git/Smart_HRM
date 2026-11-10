@@ -1,11 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RosterService } from './roster.service';
-import { ApproveRosterAssignmentDto, RemoveRosterAssignmentDto, RosterQueryDto, UpsertRosterAssignmentDto } from './dto/roster.dto';
+import {
+  ApproveRosterAssignmentDto,
+  BulkAssignRosterDto,
+  RemoveRosterAssignmentDto,
+  RosterQueryDto,
+  UpsertRosterAssignmentDto,
+} from './dto/roster.dto';
 
 @ApiTags('Roster')
 @ApiBearerAuth()
@@ -30,6 +36,15 @@ export class RosterController {
   @Get('pending-count')
   pendingCount() {
     return this.service.pendingCount();
+  }
+
+  // Fill many employees x many days with one duty at once. Same rules as
+  // a single upsert (own department only, past dates need a reason and a
+  // Manager/Supervisor's go PENDING) -- see RosterService.bulkAssign.
+  @Post('bulk')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'SUPERVISOR')
+  bulkAssign(@Body() dto: BulkAssignRosterDto, @CurrentUser() user: any) {
+    return this.service.bulkAssign(dto, user.id, user.role, user.employeeId);
   }
 
   // MANAGER/SUPERVISOR can assign/re-assign too -- their own assignment
