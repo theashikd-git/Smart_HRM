@@ -13,6 +13,7 @@ import {
   CalendarPlus,
   Save,
   Shuffle,
+  Dices,
   type LucideIcon,
 } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
@@ -30,7 +31,8 @@ import {
 import { apiErrorMessage } from '@/lib/api';
 import { attendanceStatusColors, cn, initials } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
-import { BulkAssignModal, type BulkPlan } from './BulkAssignModal';
+import { BulkAssignModal, type BulkPlan, type AutoPlan } from './BulkAssignModal';
+import { generateRoster } from './autoRoster';
 import type { RosterAssignment, RosterDayType, RosterEmployee } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
@@ -230,11 +232,11 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
 
   /** What a cell will look like once Save is pressed: the staged change if
    *  there is one, otherwise what's saved. */
-  function effective(key: string, d: Draft = draft): { type: RosterDayType } | undefined {
+  function effective(key: string, d: Draft = draft): { type: RosterDayType; shiftId?: string } | undefined {
     const dr = d[key];
-    if (dr) return dr.action === 'CLEAR' ? undefined : { type: dr.type as RosterDayType };
+    if (dr) return dr.action === 'CLEAR' ? undefined : { type: dr.type as RosterDayType, shiftId: dr.shiftId };
     const saved = assignmentMap.get(key);
-    return saved ? { type: saved.type } : undefined;
+    return saved ? { type: saved.type, shiftId: saved.shiftId ?? undefined } : undefined;
   }
 
   const employees = data?.employees ?? [];
@@ -337,6 +339,113 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
     toast.success(`${staged} added${skipped ? ` (${skipped} skipped, already had a duty)` : ''} -- review, then press Save`);
   }
 
+  /** Makes the random roster (see autoRoster.ts) for one or more groups of
+   *  people and stages it. Nothing is saved -- the manager can change any
+   *  cell, re-generate, or Discard, then press Save. */
+  function runAuto(plans: AutoPlan[]) {
+    const people = new Set(plans.flatMap((p) => p.employeeIds));
+    const dates = new Set(plans.flatMap((p) => p.dates));
+    // Start from the draft without earlier unsaved edits for these people in
+    // these days, so generating again simply re-rolls.
+    let next: Draft = {};
+    for (const [k, c] of Object.entries(draft)) {
+      if (people.has(c.employeeId) && dates.has(c.date)) continue;
+      next[k] = c;
+    }
+    const base = next;
+    let shiftsMade = 0;
+    let offsMade = 0;
+    const short: { date: string; shiftId: string; missing: number }[] = [];
+    for (const plan of plans) {
+      const res = generateRoster({
+        ...plan,
+        lookup: (employeeId, date) => effective(`${employeeId}|${date}`, base),
+      });
+      shiftsMade += res.shifts;
+      offsMade += res.offs;
+      short.push(...res.shortfalls);
+      for (const c of res.cells) {
+        next = applyChange(next, assignmentMap.get(`${c.employeeId}|${c.date}`), {
+          employeeId: c.employeeId,
+          date: c.date,
+          action: 'SET',
+          type: c.type,
+          shiftId: c.shiftId,
+        });
+      }
+    }
+    setDraft(next);
+
+    if (shiftsMade + offsMade === 0) {
+      toast('Nothing to fill -- those days already have duties.');
+      return;
+    }
+    toast.success(`Roster made: ${shiftsMade} shifts and ${offsMade} days off -- change anything you like, then press Save`);
+    if (short.length > 0) {
+      const first = short[0];
+      const name = shiftById.get(first.shiftId)?.name ?? 'a shift';
+      toast(
+        `Not enough people on ${short.length} shift-day${short.length === 1 ? '' : 's'} (e.g. ${first.date} ${name} is ${first.missing} short). Lower the numbers or add staff.`,
+        { duration: 8000 },
+      );
+    }
+  }
+
+  function handleAuto(plan: AutoPlan) {
+    runAuto([plan]);
+  }
+
+  /** "Random Roster": one click, no questions. Everyone on screen gets one
+   *  random day off a week and a fair mix of their department's shifts
+   *  (mornings, evenings...) for the rest of the period -- today onwards
+   *  only. Each shift gets an equal share of the people working. */
+  function handleRandomRoster() {
+    const dates = days.map(isoDate).filter((d) => d >= todayIso);
+    if (employees.length === 0) {
+      toast('No employees to make a roster for.');
+      return;
+    }
+    if (dates.length === 0) {
+      toast('This period is already in the past -- go to today or a later month.');
+      return;
+    }
+    // Group by department so each person only gets shifts that fit them.
+    const groups = new Map<string, RosterEmployee[]>();
+    for (const e of employees) {
+      const k = e.department?.id ?? '';
+      groups.set(k, [...(groups.get(k) ?? []), e]);
+    }
+    const plans: AutoPlan[] = [];
+    let noShifts = 0;
+    for (const [deptId, members] of groups) {
+      const usable = (shifts ?? [])
+        .filter((sh) => !sh.departmentId || sh.departmentId === deptId)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (usable.length === 0) {
+        noShifts += members.length;
+        continue;
+      }
+      // Everyone but the one person off each day is working: split them evenly.
+      const working = Math.max(1, members.length - Math.ceil(members.length / 7));
+      const base = Math.floor(working / usable.length);
+      const rem = working % usable.length;
+      plans.push({
+        employeeIds: members.map((m) => m.id),
+        dates,
+        shifts: usable.map((sh, i) => ({ id: sh.id, count: base + (i < rem ? 1 : 0) })),
+        weeklyOff: true,
+        keepExisting: true,
+        fillEveryone: true,
+      });
+    }
+    if (plans.length === 0) {
+      toast.error('No shifts are set up for these employees yet -- ask HR to add shifts for the department.');
+      return;
+    }
+    if (noShifts > 0) toast(`${noShifts} employee${noShifts === 1 ? ' has' : 's have'} no shifts set up and were skipped.`);
+    runAuto(plans);
+  }
+
   async function handleSave() {
     const entries = Object.values(draft);
     if (entries.length === 0) return;
@@ -397,6 +506,14 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
               </Select>
             )}
           </div>
+          <Button
+            variant="outline"
+            onClick={handleRandomRoster}
+            title="One click: random day off every week + a fair mix of shifts for everyone, from today. Review, then Save."
+          >
+            <Dices className="h-4 w-4" />
+            Random Roster
+          </Button>
           <Button variant="outline" onClick={() => openBulk([])}>
             <CalendarPlus className="h-4 w-4" />
             Assign Multiple
@@ -851,6 +968,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
         todayIso={todayIso}
         isHrOrAdmin={isHrOrAdmin}
         onApply={handleBulkApply}
+        onAuto={handleAuto}
       />
     </ProgramWorkspace>
   );
