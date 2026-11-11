@@ -287,7 +287,7 @@ export function BulkAssignModal({
 
       <div className="grid gap-5 md:grid-cols-2">
         {/* Left: who */}
-        <div>
+        <div className="min-w-0">
           <div className="mb-1.5 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
               Employees ({selected.length}/{employees.length})
@@ -325,7 +325,7 @@ export function BulkAssignModal({
         </div>
 
         {/* Right: what + when */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {mode === 'auto' ? (
             <div>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
@@ -335,21 +335,27 @@ export function BulkAssignModal({
                 {usableShifts.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 border-b border-line px-3 py-2 last:border-b-0">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium text-text-primary">{s.name}</span>
+                      <span className="block truncate text-[13px] font-medium text-text-primary" title={s.name}>
+                        {s.name}
+                      </span>
                       <span className="block text-[11px] text-text-muted">
                         {s.startTime}–{s.endTime}
                       </span>
                     </span>
-                    <Input
+                    {/* Plain input, not <Input>: that one is always w-full (and cn()
+                        doesn't merge classes), which stretched it over the shift name. */}
+                    <input
                       type="number"
                       min={0}
                       max={200}
+                      inputMode="numeric"
+                      aria-label={`People needed on ${s.name}`}
                       value={counts[s.id] ?? 0}
                       onChange={(e) => {
                         setCountsTouched(true);
                         setCounts((c) => ({ ...c, [s.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)) }));
                       }}
-                      className="w-20 text-center"
+                      className="h-9 w-16 shrink-0 rounded-lg border border-line bg-white px-2 text-center text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                   </div>
                 ))}
