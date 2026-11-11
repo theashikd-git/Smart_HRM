@@ -9,8 +9,9 @@
 //  - every person gets ONE day off per week (a week = Mon-Sun); days off are
 //    spread so the same weekday isn't empty for everybody;
 //  - each day, every shift is filled up to the number of people asked for;
-//  - people keep the same shift through a week and rotate to the next shift
-//    the following week, so nobody is stuck on one forever;
+//  - shifts are shuffled day by day but kept fair: each slot goes to whoever
+//    has had that shift the fewest times, so everyone ends up with about the
+//    same number of each shift and nobody is stuck on one;
 //  - extra people (more staff than the shifts need) are spread across the
 //    shifts when `fillEveryone` is on, otherwise they're left unassigned;
 //  - with `keepExisting`, any day that already has a duty is left alone (an
@@ -121,20 +122,30 @@ export function generateRoster(input: AutoInput): AutoResult {
   }
 
   // ---- 2. fill the shifts, day by day --------------------------------------
+  // Fair mix: every person keeps a running count of how many days they've
+  // had each shift, and each day a slot goes to whoever has done that shift
+  // the fewest times -- so over the period everyone ends up with about the
+  // same number of Mornings, Evenings and Nights, and nobody is stuck on one.
   const shortfalls: AutoShortfall[] = [];
-  const lastShift = new Map<string, string>();
-  let prevWeek = '';
+  const tally = new Map<string, Map<string, number>>();
+  const countOf = (e: string, sid: string) => tally.get(e)?.get(sid) ?? 0;
+  const bump = (e: string, sid: string) => {
+    const m = tally.get(e) ?? new Map<string, number>();
+    m.set(sid, (m.get(sid) ?? 0) + 1);
+    tally.set(e, m);
+  };
+  // Shifts already on the roster in this range count towards the mix too.
+  if (keepExisting) {
+    for (const e of employeeIds) {
+      for (const d of dates) {
+        const ex = lookup(e, d);
+        if (ex?.type === 'SHIFT' && ex.shiftId) bump(e, ex.shiftId);
+      }
+    }
+  }
 
   if (shifts.length > 0) {
-    const order = shifts.map((s) => s.id);
     for (const date of dates) {
-      const week = mondayStr(date);
-      if (week !== prevWeek) {
-        // New week: everyone rotates to the next shift in the list.
-        for (const [e, sid] of lastShift) lastShift.set(e, order[(order.indexOf(sid) + 1) % order.length]);
-        prevWeek = week;
-      }
-
       const needs = new Map(shifts.map((s) => [s.id, s.count]));
       const given = new Map(shifts.map((s) => [s.id, 0]));
       const workers: string[] = [];
@@ -152,46 +163,45 @@ export function generateRoster(input: AutoInput): AutoResult {
         workers.push(e);
       }
 
+      const free = new Set(workers);
       const assign = (e: string, sid: string) => {
         cells.set(key(e, date), { employeeId: e, date, type: 'SHIFT', shiftId: sid });
-        lastShift.set(e, sid);
+        bump(e, sid);
         given.set(sid, (given.get(sid) ?? 0) + 1);
         needs.set(sid, Math.max(0, (needs.get(sid) ?? 0) - 1));
+        free.delete(e);
       };
 
-      // Pass 1: stay on the shift they were on (or rotated to) if it still needs people.
-      const unplaced: string[] = [];
-      for (const e of shuffle(workers)) {
-        const pref = lastShift.get(e);
-        if (pref && (needs.get(pref) ?? 0) > 0) assign(e, pref);
-        else unplaced.push(e);
-      }
-      // Pass 2: send the rest to whichever shift is shortest.
-      const extra: string[] = [];
-      for (const e of unplaced) {
-        let best = '';
-        let bestNeed = 0;
-        for (const s of shifts) {
-          const n = needs.get(s.id) ?? 0;
-          if (n > bestNeed) {
-            best = s.id;
-            bestNeed = n;
-          }
+      // One slot per person a shift still needs today, taken in random order;
+      // each goes to the free person who has had that shift the least.
+      const slots: string[] = [];
+      for (const s of shifts) for (let i = 0; i < (needs.get(s.id) ?? 0); i++) slots.push(s.id);
+      for (const sid of shuffle(slots)) {
+        if (free.size === 0) break;
+        let least = Infinity;
+        let pool: string[] = [];
+        for (const e of free) {
+          const c = countOf(e, sid);
+          if (c < least) {
+            least = c;
+            pool = [e];
+          } else if (c === least) pool.push(e);
         }
-        if (best) assign(e, best);
-        else extra.push(e);
+        assign(pool[Math.floor(Math.random() * pool.length)], sid);
       }
-      // Pass 3: more people than the shifts asked for -- spread them out.
+
+      // More people than the shifts asked for -- spread the extras over the
+      // shifts that are fullest relative to their target, again preferring
+      // the shift each person has had the least.
       if (fillEveryone) {
-        for (const e of extra) {
-          const pref = lastShift.get(e);
+        for (const e of shuffle([...free])) {
           let best = shifts[0].id;
-          let bestRatio = Infinity;
+          let bestScore = Infinity;
           for (const s of shifts) {
-            const ratio = (given.get(s.id) ?? 0) / s.count - (s.id === pref ? 0.01 : 0);
-            if (ratio < bestRatio) {
+            const score = (given.get(s.id) ?? 0) / s.count + countOf(e, s.id) * 0.001;
+            if (score < bestScore) {
               best = s.id;
-              bestRatio = ratio;
+              bestScore = score;
             }
           }
           assign(e, best);
