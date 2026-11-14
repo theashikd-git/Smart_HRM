@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
-import { useCreateEmployee, useUpdateEmployee, useResetEmployeePassword } from '@/hooks/useEmployees';
+import { useCreateEmployee, useUpdateEmployee, useResetEmployeePassword, useEmployee } from '@/hooks/useEmployees';
 import { useAuthStore } from '@/lib/auth-store';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDesignations } from '@/hooks/useDesignations';
@@ -88,6 +88,15 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const { data: shifts } = useShifts();
   const { data: employeeCategories } = useEmployeeCategories();
   const selectedCategory = employeeCategories?.find((c) => c.id === form.leaveCategoryId);
+  // The employee list no longer carries each person's photo (it's a large
+  // base64 image -- see EmployeesService.findAll), so when editing from the
+  // list, fetch just this one record to get it.
+  const needsPhoto = open && !!employee && employee.photo === undefined;
+  const { data: fullEmployee } = useEmployee(needsPhoto ? employee!.id : undefined);
+  useEffect(() => {
+    const photo = fullEmployee?.photo;
+    if (photo) setForm((f) => (f.photo ? f : { ...f, photo }));
+  }, [fullEmployee]);
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const resetPassword = useResetEmployeePassword();

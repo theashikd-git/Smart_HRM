@@ -1,10 +1,19 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DeviceSyncService } from '../devices/device-sync.service';
 import { UsersService } from '../users/users.service';
 import { LeaveService } from '../leave/leave.service';
 import { CreateEmployeeDto, EmployeeQueryDto, ResignEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
+
+// Every Employee column except `photo` (see findAll). Built from Prisma's own
+// field list so a column added to the schema later is included automatically.
+const EMPLOYEE_LIST_FIELDS = Object.fromEntries(
+  Object.values(Prisma.EmployeeScalarFieldEnum)
+    .filter((f) => f !== 'photo')
+    .map((f) => [f, true]),
+) as Prisma.EmployeeSelect;
 
 @Injectable()
 export class EmployeesService {
@@ -141,10 +150,13 @@ export class EmployeesService {
       ];
     }
 
+    // The list leaves out `photo`: it's stored as a base64 data URL (often
+    // hundreds of KB each), so sending it for every row made this the
+    // heaviest response in the app. The full record (findOne) still has it.
     const [items, total] = await Promise.all([
       this.prisma.employee.findMany({
         where,
-        include: this.includeRelations(),
+        select: { ...EMPLOYEE_LIST_FIELDS, ...this.includeRelations() },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

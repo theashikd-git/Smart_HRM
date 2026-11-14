@@ -54,60 +54,76 @@ export class DashboardService {
   }
 
   async weeklyAttendance() {
-    const days: { date: string; present: number; late: number; absent: number }[] = [];
-    const activeEmployees = await this.prisma.employee.count({ where: { status: 'ACTIVE' } });
-
+    // One grouped query for the whole week instead of 14 separate counts.
+    const dayStarts: Date[] = [];
     for (let i = 6; i >= 0; i--) {
       const day = startOfDay(new Date());
       day.setDate(day.getDate() - i);
-      const nextDay = new Date(day);
-      nextDay.setDate(nextDay.getDate() + 1);
+      dayStarts.push(day);
+    }
+    const end = new Date(dayStarts[6]);
+    end.setDate(end.getDate() + 1);
 
-      const [present, late] = await Promise.all([
-        this.prisma.attendanceRecord.count({
-          where: { date: { gte: day, lt: nextDay }, status: { in: ['PRESENT', 'HALF_DAY'] } },
-        }),
-        this.prisma.attendanceRecord.count({
-          where: { date: { gte: day, lt: nextDay }, status: 'LATE' },
-        }),
-      ]);
+    const [activeEmployees, rows] = await Promise.all([
+      this.prisma.employee.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.attendanceRecord.groupBy({
+        by: ['date', 'status'],
+        where: { date: { gte: dayStarts[0], lt: end }, status: { in: ['PRESENT', 'HALF_DAY', 'LATE'] } },
+        _count: { _all: true },
+      }),
+    ]);
 
-      days.push({
-        date: day.toISOString().slice(0, 10),
-        present,
-        late,
-        absent: Math.max(activeEmployees - present - late, 0),
-      });
+    // Same day key the per-day range queries used to match on.
+    const perDay = new Map<string, { present: number; late: number }>();
+    for (const r of rows) {
+      const k = r.date.toISOString().slice(0, 10);
+      const d = perDay.get(k) ?? { present: 0, late: 0 };
+      if (r.status === 'LATE') d.late += r._count._all;
+      else d.present += r._count._all;
+      perDay.set(k, d);
     }
 
-    return days;
+    return dayStarts.map((day) => {
+      const date = day.toISOString().slice(0, 10);
+      const { present, late } = perDay.get(date) ?? { present: 0, late: 0 };
+      return { date, present, late, absent: Math.max(activeEmployees - present - late, 0) };
+    });
   }
 
   async departmentAttendance() {
-    const departments = await this.prisma.department.findMany({
-      include: { employees: { select: { id: true, status: true } } },
-    });
-
     const today = startOfDay(new Date());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const result: { department: string; employees: number; present: number }[] = [];
-    for (const dept of departments) {
-      const activeIds = dept.employees.filter((e) => e.status === 'ACTIVE').map((e) => e.id);
-      const present = activeIds.length
-        ? await this.prisma.attendanceRecord.count({
-            where: {
-              employeeId: { in: activeIds },
-              date: { gte: today, lt: tomorrow },
-              status: { in: ['PRESENT', 'LATE', 'HALF_DAY'] },
-            },
-          })
-        : 0;
-      result.push({ department: dept.name, employees: activeIds.length, present });
+    // Three queries total, however many departments there are (it used to
+    // run one attendance count per department).
+    const [departments, activeByDept, presentRows] = await Promise.all([
+      this.prisma.department.findMany({ select: { id: true, name: true } }),
+      this.prisma.employee.groupBy({ by: ['departmentId'], where: { status: 'ACTIVE' }, _count: { _all: true } }),
+      this.prisma.attendanceRecord.findMany({
+        where: {
+          date: { gte: today, lt: tomorrow },
+          status: { in: ['PRESENT', 'LATE', 'HALF_DAY'] },
+          employee: { status: 'ACTIVE' },
+        },
+        select: { employee: { select: { departmentId: true } } },
+      }),
+    ]);
+
+    const active = new Map<string | null, number>(
+      activeByDept.map((r) => [r.departmentId, r._count._all] as [string | null, number]),
+    );
+    const present = new Map<string | null, number>();
+    for (const r of presentRows) {
+      const k = r.employee.departmentId;
+      present.set(k, (present.get(k) ?? 0) + 1);
     }
 
-    return result;
+    return departments.map((d) => ({
+      department: d.name,
+      employees: active.get(d.id) ?? 0,
+      present: present.get(d.id) ?? 0,
+    }));
   }
 
   /**
@@ -365,18 +381,16 @@ export class DashboardService {
   }
 
   async employeeGrowth() {
-    const months: { month: string; count: number }[] = [];
     const now = new Date();
-
-    for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const count = await this.prisma.employee.count({
-        where: { createdAt: { lt: monthEnd } },
-      });
-      months.push({ month: monthStart.toISOString().slice(0, 7), count });
-    }
-
+    // The six monthly counts are independent -- run them together.
+    const months = await Promise.all(
+      [5, 4, 3, 2, 1, 0].map(async (i) => {
+        const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        const count = await this.prisma.employee.count({ where: { createdAt: { lt: monthEnd } } });
+        return { month: monthStart.toISOString().slice(0, 7), count };
+      }),
+    );
     return months;
   }
 }

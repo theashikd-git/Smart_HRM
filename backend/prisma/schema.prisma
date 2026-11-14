@@ -505,6 +505,11 @@ model Employee {
   leaveRequests     LeaveRequest[]
   account           User?
 
+  // Speed: the employee list/filters, the dashboard counts and Roster all
+  // filter by status/department and sort by newest.
+  @@index([status])
+  @@index([departmentId, status])
+  @@index([createdAt])
   @@map("employees")
 }
 
@@ -601,6 +606,7 @@ model AttendanceLog {
   // constraint makes it impossible even if two syncs somehow overlap.
   @@unique([employeeId, timestamp])
   @@index([employeeId, timestamp])
+  @@index([timestamp])
   @@map("attendance_logs")
 }
 
@@ -624,6 +630,8 @@ model AttendanceRecord {
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
+  // Dashboard/report queries ask "who was present on this date".
+  @@index([date, status])
   @@map("attendance_records")
 }
 
@@ -847,6 +855,7 @@ model AuditLog {
 
   user User? @relation(fields: [userId], references: [id])
 
+  @@index([createdAt])
   @@map("audit_logs")
 }
 // ---------------------------------------------------------------------------

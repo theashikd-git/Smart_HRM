@@ -31,6 +31,16 @@ async function bootstrap() {
   // form's photo upload, which sends the picture as a base64 data URL in
   // the JSON body rather than multipart -- bump it before anything else
   // touches the request.
+  // gzip API responses (lists, reports) -- much smaller over the wire. Loaded
+  // defensively so the backend still starts if `npm install` hasn't been run
+  // yet after this dependency was added.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    app.use(require('compression')());
+  } catch {
+    bootstrapLogger.warn('compression not installed -- run "npm install" in backend to enable gzip');
+  }
+
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
 

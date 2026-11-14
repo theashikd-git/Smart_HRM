@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { TopNavigation } from './TopNavigation';
 import { WorkbenchBar } from './WorkbenchBar';
@@ -9,9 +10,23 @@ import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { PersonnelDashboard } from '@/modules/personnel/dashboard/PersonnelDashboard';
 import { ProgramRouter } from '@/modules/personnel/ProgramRouter';
-import { LeaveModuleView } from '@/modules/leave/LeaveModuleView';
-import { DeviceModuleView } from '@/modules/device/DeviceModuleView';
-import { SystemSettingsModuleView } from '@/modules/system-settings/SystemSettingsModuleView';
+
+// The three single-screen modules load only when opened (see ProgramRouter).
+const moduleLoading = () => (
+  <div className="flex h-full items-center justify-center">
+    <Loader2 className="h-5 w-5 animate-spin text-accent" />
+  </div>
+);
+const LeaveModuleView = dynamic(() => import('@/modules/leave/LeaveModuleView').then((m) => m.LeaveModuleView), {
+  loading: moduleLoading,
+});
+const DeviceModuleView = dynamic(() => import('@/modules/device/DeviceModuleView').then((m) => m.DeviceModuleView), {
+  loading: moduleLoading,
+});
+const SystemSettingsModuleView = dynamic(
+  () => import('@/modules/system-settings/SystemSettingsModuleView').then((m) => m.SystemSettingsModuleView),
+  { loading: moduleLoading },
+);
 
 export function AppShellRoot() {
   const { ready } = useRequireAuth();
