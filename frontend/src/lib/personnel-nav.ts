@@ -9,6 +9,7 @@ import {
   Clock,
   CalendarOff,
   CalendarCheck,
+  ClipboardCheck,
   FileBarChart,
 } from 'lucide-react';
 import type { ProgramDefinition, SidebarNode } from '@/types/workbench';
@@ -64,6 +65,11 @@ export const PROGRAM_REGISTRY: Record<string, ProgramDefinition> = {
     breadcrumb: ['Personnel', 'Leave Management', 'Leave Policy'],
   },
   roster: { id: 'roster', title: 'Roster', breadcrumb: ['Personnel', 'Roster'] },
+  'roster-approvals': {
+    id: 'roster-approvals',
+    title: 'Roster Approvals',
+    breadcrumb: ['Personnel', 'Roster Approvals'],
+  },
   shift: { id: 'shift', title: 'Shift', breadcrumb: ['Personnel', 'Shift'] },
   holiday: { id: 'holiday', title: 'Government Holiday', breadcrumb: ['Personnel', 'Government Holiday'] },
   attendance: {
@@ -135,6 +141,13 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
     ],
   },
   { type: 'leaf', id: 'roster', label: 'Roster', icon: CalendarDays, programId: 'roster' },
+  {
+    type: 'leaf',
+    id: 'roster-approvals',
+    label: 'Roster Approvals',
+    icon: ClipboardCheck,
+    programId: 'roster-approvals',
+  },
   { type: 'leaf', id: 'shift', label: 'Shift', icon: Clock, programId: 'shift' },
   { type: 'leaf', id: 'holiday', label: 'Government Holiday', icon: CalendarOff, programId: 'holiday' },
   { type: 'leaf', id: 'attendance', label: 'Attendance', icon: CalendarCheck, programId: 'attendance' },

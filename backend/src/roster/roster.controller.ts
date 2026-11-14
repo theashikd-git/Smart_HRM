@@ -38,6 +38,14 @@ export class RosterController {
     return this.service.pendingCount();
   }
 
+  // The Roster Approvals screen: every Manager/Supervisor change or removal
+  // request waiting on HR/Admin. Managing Director may look but not decide.
+  @Get('pending')
+  @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
+  listPending() {
+    return this.service.listPending();
+  }
+
   // Save a whole staged batch of roster edits (assign / day off / clear)
   // from the Roster screen in one request. Each change follows exactly the
   // same rules as the single-cell endpoints below -- see
@@ -72,6 +80,17 @@ export class RosterController {
     @CurrentUser() user: any,
   ) {
     return this.service.approve(employeeId, date, dto ?? {}, user.id);
+  }
+
+  @Patch(':employeeId/:date/reject')
+  @Roles('ADMIN', 'HR')
+  reject(
+    @Param('employeeId') employeeId: string,
+    @Param('date') date: string,
+    @Body() dto: ApproveRosterAssignmentDto | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.reject(employeeId, date, dto ?? {}, user.id);
   }
 
   @Delete(':employeeId/:date')

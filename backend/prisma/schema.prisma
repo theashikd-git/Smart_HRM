@@ -412,6 +412,11 @@ model RosterAssignment {
   approvedById   String?
   approvedAt     DateTime?
   hrNote         String?
+  // What this date held before a Manager/Supervisor's still-PENDING change
+  // replaced it -- so HR/Admin rejecting the change can put it back
+  // (see RosterService.reject). Null when there was nothing before.
+  previousType    RosterDayType?
+  previousShiftId String?
 
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   shift      Shift?   @relation(fields: [shiftId], references: [id])

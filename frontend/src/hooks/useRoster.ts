@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { RosterAssignment, RosterDayType, RosterWeekData } from '@/types';
+import { PendingRosterItem, RosterAssignment, RosterDayType, RosterWeekData } from '@/types';
 
 export interface RosterWeekQuery {
   startDate: string;
@@ -125,6 +125,30 @@ export function useSaveRosterBatch() {
   return useMutation({
     mutationFn: async (changes: RosterChange[]) =>
       (await api.post<BatchRosterResult>('/roster/batch', { changes })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roster'] });
+      qc.invalidateQueries({ queryKey: ['my-roster'] });
+      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
+    },
+  });
+}
+
+/** Roster Approvals screen: everything waiting on HR/Admin. Keyed under
+ *  'roster' so every roster change/approve/reject refreshes it too. */
+export function useRosterPendingList() {
+  return useQuery({
+    queryKey: ['roster', 'pending'],
+    queryFn: async () => (await api.get<PendingRosterItem[]>('/roster/pending')).data,
+    refetchInterval: 30_000,
+  });
+}
+
+/** HR/Admin turns a pending change / clear request down. */
+export function useRejectRosterAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, date, note }: ApproveRosterPayload) =>
+      (await api.patch(`/roster/${employeeId}/${date}/reject`, { note })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });

@@ -22,6 +22,7 @@ const CompanyProgram = dynamic<ProgramProps>(() => import('./organization/Compan
 const DepartmentProgram = dynamic<ProgramProps>(() => import('./department/DepartmentProgram').then((m) => m.DepartmentProgram), { loading: ProgramLoading });
 const DesignationProgram = dynamic<ProgramProps>(() => import('./designation/DesignationProgram').then((m) => m.DesignationProgram), { loading: ProgramLoading });
 const RosterProgram = dynamic<ProgramProps>(() => import('./roster/RosterProgram').then((m) => m.RosterProgram), { loading: ProgramLoading });
+const RosterApprovalsProgram = dynamic<ProgramProps>(() => import('./roster/RosterApprovalsProgram').then((m) => m.RosterApprovalsProgram), { loading: ProgramLoading });
 const ShiftProgram = dynamic<ProgramProps>(() => import('./shift/ShiftProgram').then((m) => m.ShiftProgram), { loading: ProgramLoading });
 const LeaveWorkflowsProgram = dynamic<ProgramProps>(() => import('./leave-management/LeaveWorkflowsProgram').then((m) => m.LeaveWorkflowsProgram), { loading: ProgramLoading });
 const LeaveTypeProgram = dynamic<ProgramProps>(() => import('./leave-management/LeaveTypeProgram').then((m) => m.LeaveTypeProgram), { loading: ProgramLoading });
@@ -51,6 +52,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <DesignationProgram tab={tab} />;
     case 'roster':
       return <RosterProgram tab={tab} />;
+    case 'roster-approvals':
+      return <RosterApprovalsProgram tab={tab} />;
     case 'shift':
       return <ShiftProgram tab={tab} />;
     case 'leave-workflows':

@@ -213,7 +213,17 @@ export class RosterService {
     }
     const autoApproved = !isBackdate || hrOrAdmin;
 
+    // Remember what was there before a pending change, so HR/Admin rejecting
+    // it can restore it. A change that's applied right away (or a repeat
+    // edit of one still pending) keeps/clears this accordingly.
+    const previous = autoApproved
+      ? { previousType: null, previousShiftId: null }
+      : existing?.status === 'APPROVED'
+        ? { previousType: existing.type, previousShiftId: existing.shiftId }
+        : { previousType: existing?.previousType ?? null, previousShiftId: existing?.previousShiftId ?? null };
+
     const updateData: Record<string, unknown> = {
+      ...previous,
       type: dto.type,
       shiftId,
       assignedById: actorId,
@@ -375,7 +385,14 @@ export class RosterService {
 
     const assignment = await this.prisma.rosterAssignment.update({
       where: { employeeId_date: { employeeId, date } },
-      data: { status: 'APPROVED', approvedById: actorId, approvedAt: new Date(), hrNote: dto.note },
+      data: {
+        status: 'APPROVED',
+        approvedById: actorId,
+        approvedAt: new Date(),
+        hrNote: dto.note,
+        previousType: null,
+        previousShiftId: null,
+      },
       include: ASSIGNMENT_INCLUDE,
     });
 
@@ -397,6 +414,98 @@ export class RosterService {
     );
 
     return assignment;
+  }
+
+  /**
+   * Everything waiting on HR/Admin: Manager/Supervisor changes to past dates
+   * (status PENDING) and their requests to clear one (pendingRemoval).
+   * Powers the Roster Approvals screen.
+   */
+  async listPending() {
+    return this.prisma.rosterAssignment.findMany({
+      where: { OR: [{ status: 'PENDING' }, { pendingRemoval: true }] },
+      include: {
+        ...ASSIGNMENT_INCLUDE,
+        employee: {
+          select: {
+            id: true,
+            employeeCode: true,
+            fullName: true,
+            department: { select: { id: true, name: true } },
+            designation: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      take: 500,
+    });
+  }
+
+  /**
+   * HR/Admin turns a pending request down. A rejected removal request just
+   * keeps the duty as it was. A rejected change puts back what the date
+   * held before (or, if it was newly assigned, clears it again).
+   */
+  async reject(employeeId: string, dateStr: string, dto: ApproveRosterAssignmentDto, actorId?: string) {
+    const date = startOfDay(new Date(dateStr));
+    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
+
+    const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
+    if (!existing) throw new NotFoundException('Roster assignment not found');
+
+    const noteText = dto.note ? ` -- Note: ${dto.note}` : '';
+
+    if (existing.pendingRemoval) {
+      const updated = await this.prisma.rosterAssignment.update({
+        where: { employeeId_date: { employeeId, date } },
+        data: { pendingRemoval: false },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'ROSTER_REMOVAL_REJECTED',
+        entity: 'RosterAssignment',
+        entityId: existing.id,
+        details: `Rejected request to clear roster assignment for ${dateStr}${noteText}`,
+      });
+      return updated;
+    }
+
+    if (existing.status !== 'PENDING') {
+      throw new BadRequestException('Nothing is waiting for approval on this date.');
+    }
+
+    if (existing.previousType) {
+      const restored = await this.prisma.rosterAssignment.update({
+        where: { employeeId_date: { employeeId, date } },
+        data: {
+          type: existing.previousType,
+          shiftId: existing.previousShiftId,
+          status: 'APPROVED',
+          previousType: null,
+          previousShiftId: null,
+        },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      await this.auditService.log({
+        userId: actorId,
+        action: 'ROSTER_REJECTED',
+        entity: 'RosterAssignment',
+        entityId: existing.id,
+        details: `Rejected change for ${dateStr} -- previous duty restored${noteText}`,
+      });
+      return restored;
+    }
+
+    await this.prisma.rosterAssignment.deleteMany({ where: { employeeId, date } });
+    await this.auditService.log({
+      userId: actorId,
+      action: 'ROSTER_REJECTED',
+      entity: 'RosterAssignment',
+      entityId: existing.id,
+      details: `Rejected new duty for ${dateStr}${noteText}`,
+    });
+    return { success: true };
   }
 
   async remove(

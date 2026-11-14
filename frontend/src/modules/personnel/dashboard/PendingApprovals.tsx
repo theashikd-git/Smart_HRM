@@ -47,7 +47,7 @@ export function PendingApprovals() {
       count: rosterLoading ? undefined : pendingRosterCount ?? 0,
       available: true,
       onClick: () => {
-        const program = PROGRAM_REGISTRY['roster'];
+        const program = PROGRAM_REGISTRY['roster-approvals'];
         if (program) openProgram(program);
       },
     },

@@ -90,6 +90,21 @@ export interface RosterAssignment {
   approvedBy?: { id: string; fullName: string } | null;
 }
 
+/** One row of the Roster Approvals screen -- a Manager/Supervisor change or
+ *  clear request on a past date, waiting on HR/Admin. */
+export interface PendingRosterItem extends RosterAssignment {
+  /** What the date held before the pending change (so HR can see what it replaces). */
+  previousType?: RosterDayType | null;
+  previousShiftId?: string | null;
+  employee: {
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    department?: { id: string; name: string } | null;
+    designation?: { title: string } | null;
+  };
+}
+
 export interface RosterEmployee {
   id: string;
   employeeCode: string;
