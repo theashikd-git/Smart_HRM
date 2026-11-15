@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ReportsService } from './reports.service';
+import { AttendanceDetailType, ReportsService } from './reports.service';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -48,6 +48,21 @@ export class ReportsController {
     const data = await this.reportsService.employeeAttendance(employeeId, startDate, endDate);
     if (format === 'csv') return this.sendCsv(res!, 'employee-attendance.csv', data);
     res!.json(data);
+  }
+
+  // Backs every report on Personnel > Reports and the Attendance tabs
+  // (late / absent / overtime / present / early-out / missing-punch).
+  @Get('attendance-detail')
+  @Roles('ADMIN', 'HR', 'MANAGER', 'MANAGING_DIRECTOR')
+  attendanceDetail(
+    @Query('type') type: AttendanceDetailType,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('employeeId') employeeId?: string,
+    @Query('shiftId') shiftId?: string,
+  ) {
+    return this.reportsService.attendanceDetail({ type, startDate, endDate, departmentId, employeeId, shiftId });
   }
 
   @Get('late')

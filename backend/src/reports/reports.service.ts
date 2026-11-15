@@ -1,10 +1,34 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+const DAY_INDEX: Record<string, number> = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+
+/** Shift.weekendRule ("Fri,Sat") -> JS Date.getDay() indices. */
+function weekendDays(rule?: string | null): Set<number> {
+  const days = new Set<number>();
+  if (!rule) return days;
+  for (const token of rule.split(',')) {
+    const key = token.trim().slice(0, 3).toUpperCase();
+    if (key in DAY_INDEX) days.add(DAY_INDEX[key]);
+  }
+  return days;
+}
+
+export type AttendanceDetailType = 'late' | 'absent' | 'overtime' | 'present' | 'early-out' | 'missing-punch';
+
+export interface AttendanceDetailFilters {
+  type: AttendanceDetailType;
+  startDate?: string;
+  endDate?: string;
+  departmentId?: string;
+  employeeId?: string;
+  shiftId?: string;
 }
 
 function toCsv(rows: Record<string, any>[]): string {
@@ -119,6 +143,209 @@ export class ReportsService {
       results.push({ department: dept.name, presentCount: records, lateCount });
     }
     return results;
+  }
+
+  /**
+   * One endpoint behind every report on Personnel > Reports (Late, Absent,
+   * Overtime, Present, Early Out, Missing Punch) and the matching Attendance
+   * tabs -- same row shape for all, so the screen only differs by columns.
+   * Filters: date range, department, a single employee, and the employee's
+   * assigned shift. Absent is worked out (there is no stored row for a day
+   * nobody punched), skipping holidays, approved leave, a rostered day off
+   * and the shift's weekend days.
+   */
+  async attendanceDetail(f: AttendanceDetailFilters) {
+    const start = startOfDay(f.startDate ? new Date(f.startDate) : new Date());
+    const end = startOfDay(f.endDate ? new Date(f.endDate) : start);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new BadRequestException('Invalid date');
+    if (end < start) throw new BadRequestException('endDate must not be before startDate');
+    if ((end.getTime() - start.getTime()) / 86400000 > 92) {
+      throw new BadRequestException('Pick a range of at most 3 months.');
+    }
+
+    const employeeFilter: any = {};
+    if (f.departmentId) employeeFilter.departmentId = f.departmentId;
+    if (f.shiftId) employeeFilter.shiftId = f.shiftId;
+    if (f.employeeId) employeeFilter.id = f.employeeId;
+
+    if (f.type === 'absent') {
+      const rows = await this.absentRows(start, end, employeeFilter);
+      return { type: f.type, total: rows.length, rows };
+    }
+
+    const where: any = { date: { gte: start, lte: end } };
+    if (Object.keys(employeeFilter).length) where.employee = employeeFilter;
+    switch (f.type) {
+      case 'late':
+        where.status = 'LATE';
+        break;
+      case 'present':
+        where.status = { in: ['PRESENT', 'LATE', 'HALF_DAY'] };
+        break;
+      case 'overtime':
+        where.overtimeMinutes = { gt: 0 };
+        break;
+      case 'early-out':
+        where.earlyLeaveMinutes = { gt: 0 };
+        break;
+      case 'missing-punch':
+        where.OR = [
+          { checkIn: { not: null }, checkOut: null },
+          { checkIn: null, checkOut: { not: null } },
+        ];
+        break;
+      default:
+        throw new BadRequestException('Unknown report type');
+    }
+
+    const records = await this.prisma.attendanceRecord.findMany({
+      where,
+      include: {
+        employee: {
+          select: {
+            fullName: true,
+            employeeCode: true,
+            department: { select: { name: true } },
+            shift: { select: { name: true, startTime: true, endTime: true } },
+          },
+        },
+      },
+      orderBy: [{ date: 'desc' }, { checkIn: 'asc' }],
+      take: 5000,
+    });
+
+    const rows = records.map((r) => ({
+      id: r.id,
+      date: r.date,
+      employeeId: r.employeeId,
+      employeeName: r.employee.fullName,
+      employeeCode: r.employee.employeeCode,
+      department: r.employee.department?.name ?? null,
+      shift: r.employee.shift?.name ?? null,
+      scheduledIn: r.employee.shift?.startTime ?? null,
+      scheduledOut: r.employee.shift?.endTime ?? null,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      workHours: r.workHours ? Number(r.workHours) : null,
+      lateMinutes: r.lateMinutes,
+      earlyLeaveMinutes: r.earlyLeaveMinutes,
+      overtimeMinutes: r.overtimeMinutes,
+      status: r.status,
+      note: f.type === 'missing-punch' ? (r.checkIn ? 'Check-out missing' : 'Check-in missing') : r.notes ?? null,
+    }));
+    return { type: f.type, total: rows.length, rows };
+  }
+
+  private async absentRows(start: Date, end: Date, employeeFilter: any) {
+    const today = startOfDay(new Date());
+    const now = new Date();
+    const lastDay = end > today ? today : end; // never report a future day as absent
+    if (lastDay < start) return [];
+
+    const days: { date: Date; key: string; dow: number }[] = [];
+    for (let d = new Date(start); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      const c = new Date(d);
+      days.push({ date: c, key: c.toISOString().slice(0, 10), dow: c.getDay() });
+    }
+    const todayKey = today.toISOString().slice(0, 10);
+
+    const employees = await this.prisma.employee.findMany({
+      where: { status: 'ACTIVE', ...employeeFilter },
+      select: {
+        id: true,
+        fullName: true,
+        employeeCode: true,
+        joiningDate: true,
+        department: { select: { name: true } },
+        shift: { select: { name: true, startTime: true, endTime: true, graceMinutes: true, weekendRule: true } },
+      },
+    });
+    if (employees.length === 0) return [];
+    const ids = employees.map((e) => e.id);
+
+    const [records, leaves, holidays, rosters] = await Promise.all([
+      this.prisma.attendanceRecord.findMany({
+        where: { employeeId: { in: ids }, date: { gte: start, lte: lastDay } },
+        select: { employeeId: true, date: true, status: true, notes: true },
+      }),
+      this.prisma.leaveRequest.findMany({
+        where: { employeeId: { in: ids }, status: 'APPROVED', startDate: { lte: lastDay }, endDate: { gte: start } },
+        select: { employeeId: true, startDate: true, endDate: true },
+      }),
+      this.prisma.holiday.findMany({ where: { date: { gte: start, lte: lastDay } }, select: { date: true } }),
+      this.prisma.rosterAssignment.findMany({
+        where: { employeeId: { in: ids }, date: { gte: start, lte: lastDay }, status: 'APPROVED' },
+        select: { employeeId: true, date: true, type: true },
+      }),
+    ]);
+
+    const k = (d: Date) => d.toISOString().slice(0, 10);
+    const recordAt = new Map(records.map((r) => [`${r.employeeId}|${k(r.date)}`, r]));
+    const holidayKeys = new Set(holidays.map((h) => k(h.date)));
+    const rosterAt = new Map(rosters.map((r) => [`${r.employeeId}|${k(r.date)}`, r.type]));
+    const leaveByEmp = new Map<string, { s: string; e: string }[]>();
+    for (const l of leaves) {
+      const list = leaveByEmp.get(l.employeeId) ?? [];
+      list.push({ s: k(l.startDate), e: k(l.endDate) });
+      leaveByEmp.set(l.employeeId, list);
+    }
+
+    const rows: any[] = [];
+    for (const emp of employees) {
+      const weekend = weekendDays(emp.shift?.weekendRule);
+      const joined = emp.joiningDate ? startOfDay(emp.joiningDate) : null;
+      for (const day of days) {
+        if (joined && joined > day.date) continue;
+        if (holidayKeys.has(day.key)) continue;
+
+        const rec = recordAt.get(`${emp.id}|${day.key}`);
+        // A real row means they punched (or HR set a status by hand); only a
+        // row that is itself marked ABSENT counts here.
+        if (rec && rec.status !== 'ABSENT') continue;
+
+        const planned = rosterAt.get(`${emp.id}|${day.key}`);
+        if (!rec) {
+          if (planned === 'OFF') continue;
+          if (planned !== 'SHIFT' && weekend.has(day.dow)) continue;
+          if (leaveByEmp.get(emp.id)?.some((l) => l.s <= day.key && day.key <= l.e)) continue;
+
+          // Today isn't over: only count someone once their shift has well
+          // started (start + grace + 1h; noon if they have no shift).
+          if (day.key === todayKey) {
+            let limit = 12 * 60;
+            if (emp.shift?.startTime) {
+              const [h, m] = emp.shift.startTime.split(':').map(Number);
+              if (!Number.isNaN(h)) limit = h * 60 + (m || 0) + (emp.shift.graceMinutes ?? 0) + 60;
+            }
+            if (now.getHours() * 60 + now.getMinutes() < limit) continue;
+          }
+        }
+
+        rows.push({
+          id: `absent-${emp.id}-${day.key}`,
+          date: new Date(`${day.key}T00:00:00.000Z`),
+          employeeId: emp.id,
+          employeeName: emp.fullName,
+          employeeCode: emp.employeeCode,
+          department: emp.department?.name ?? null,
+          shift: emp.shift?.name ?? null,
+          scheduledIn: emp.shift?.startTime ?? null,
+          scheduledOut: emp.shift?.endTime ?? null,
+          checkIn: null,
+          checkOut: null,
+          workHours: null,
+          lateMinutes: 0,
+          earlyLeaveMinutes: 0,
+          overtimeMinutes: 0,
+          status: 'ABSENT',
+          note: rec?.notes ?? 'No punch recorded',
+        });
+        if (rows.length >= 5000) break;
+      }
+    }
+
+    rows.sort((a, b) => b.date.getTime() - a.date.getTime() || a.employeeName.localeCompare(b.employeeName));
+    return rows;
   }
 
   async deviceActivity() {

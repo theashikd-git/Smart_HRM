@@ -3,14 +3,15 @@
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { PROGRAM_REGISTRY } from '@/lib/personnel-nav';
+import type { AttendanceDetailType } from '@/hooks/useReports';
 import type { WorkbenchTab } from '@/types/workbench';
-import { ReportFilterBar } from './ReportFilterBar';
-import { ReportTableContent } from './ReportTableContent';
+import { AttendanceDetailReport } from './AttendanceDetailReport';
 
+/** Personnel > Reports -- every tab is a real report (see AttendanceDetailReport). */
 export function ReportsProgram({ tab }: { tab: WorkbenchTab }) {
   const setInternalTab = useWorkbenchStore((s) => s.setInternalTab);
   const program = PROGRAM_REGISTRY.reports;
-  const activeInternalTab = tab.activeInternalTab ?? program.defaultInternalTab!;
+  const activeInternalTab = (tab.activeInternalTab ?? program.defaultInternalTab!) as AttendanceDetailType;
 
   return (
     <ProgramWorkspace
@@ -20,8 +21,8 @@ export function ReportsProgram({ tab }: { tab: WorkbenchTab }) {
       activeInternalTab={activeInternalTab}
       onInternalTabChange={(tabId) => setInternalTab(tab.key, tabId)}
     >
-      <ReportFilterBar />
-      <ReportTableContent reportId={activeInternalTab} />
+      {/* key = fresh filters when switching between reports */}
+      <AttendanceDetailReport key={activeInternalTab} reportId={activeInternalTab} />
     </ProgramWorkspace>
   );
 }

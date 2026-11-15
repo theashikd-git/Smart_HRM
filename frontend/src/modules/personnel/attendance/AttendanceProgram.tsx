@@ -4,6 +4,8 @@ import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
 import { useWorkbenchStore } from '@/hooks/useWorkbenchStore';
 import { PROGRAM_REGISTRY } from '@/lib/personnel-nav';
 import { AttendanceReport } from './AttendanceReport';
+import { AttendanceDetailReport } from '../reports/AttendanceDetailReport';
+import { MonthlyAttendanceReport } from '../reports/MonthlyAttendanceReport';
 import type { WorkbenchTab } from '@/types/workbench';
 
 export function AttendanceProgram({ tab }: { tab: WorkbenchTab }) {
@@ -21,11 +23,13 @@ export function AttendanceProgram({ tab }: { tab: WorkbenchTab }) {
     >
       {activeInternalTab === 'daily' ? (
         <AttendanceReport />
+      ) : activeInternalTab === 'monthly' ? (
+        <MonthlyAttendanceReport />
       ) : (
-        <div className="rounded border border-line bg-white p-8 text-center text-xs text-text-muted">
-          {program.internalTabs?.find((t) => t.id === activeInternalTab)?.label} view will be available in a future
-          phase.
-        </div>
+        <AttendanceDetailReport
+          key={activeInternalTab}
+          reportId={activeInternalTab as 'late' | 'absent' | 'overtime'}
+        />
       )}
     </ProgramWorkspace>
   );
