@@ -127,10 +127,11 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => switchMode('staff')}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === 'staff' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
+              <ShieldCheck className="h-3.5 w-3.5" />
               Administrator Login
             </button>
           </div>
