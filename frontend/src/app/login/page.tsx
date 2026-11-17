@@ -14,7 +14,7 @@ type Mode = 'staff' | 'employee';
 export default function LoginPage() {
   const router = useRouter();
   const { login, employeeLogin, isLoading, hydrate, hydrated, token, user } = useAuthStore();
-  const [mode, setMode] = useState<Mode>('staff');
+  const [mode, setMode] = useState<Mode>('employee');
 
   const [username, setUsername] = useState('admin@smarthrm.local');
   const [password, setPassword] = useState('Admin@123');
@@ -116,15 +116,6 @@ export default function LoginPage() {
           <div className="mt-5 flex items-center rounded-lg border border-line bg-white p-0.5 w-full">
             <button
               type="button"
-              onClick={() => switchMode('staff')}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                mode === 'staff' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              Staff Login
-            </button>
-            <button
-              type="button"
               onClick={() => switchMode('employee')}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === 'employee' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
@@ -132,6 +123,15 @@ export default function LoginPage() {
             >
               <IdCard className="h-3.5 w-3.5" />
               Employee Login
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('staff')}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === 'staff' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Administrator Login
             </button>
           </div>
 
