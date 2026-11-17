@@ -45,7 +45,7 @@ A full-stack HRM platform for a hospital: employees, departments, shifts, leave,
 |------|--------|
 | **ADMIN** | Full staff workbench, plus System Settings, user management, audit logs, device removal |
 | **HR** | Full staff workbench: employees, departments, designations, shifts, devices, attendance, leave, reports |
-| **MANAGING DIRECTOR** | Same workbench as HR/Manager/Supervisor, minus System Settings (ADMIN-only). A dedicated MD dashboard is planned but not yet built |
+| **DIRECTOR** | Same workbench as HR/Manager/Supervisor, minus System Settings (ADMIN-only). A dedicated Director dashboard is planned but not yet built |
 | **MANAGER** | Own **Manager Portal** (`/manager-portal`): dashboard, My Leave, Leave Request, Leave on Behalf, Roster, Shift |
 | **SUPERVISOR** | Own **Supervisor Portal** (`/supervisor-portal`), currently identical to the Manager Portal (the schema documents a narrower, tier-based intent for a future release) |
 | **EMPLOYEE** | Own **Employee Portal** (`/employee-portal`): self-service dashboard, My Leave, Leave Request |
@@ -285,7 +285,7 @@ Dashboard, printable Attendance Report, and the 9 report types
 
 - **Roster and Shift are locked** in the Manager/Supervisor Portal: visible with a "coming soon" indicator, intentionally held back for a future release.
 - **Supervisor is currently identical to Manager** in the portal UI. The data model already supports a narrower, tier-based permission set (see the `Role` enum in `schema.prisma`).
-- **Managing Director** has no dedicated dashboard yet and sees the same workbench as HR/Manager/Supervisor.
+- **Director** has no dedicated dashboard yet and sees the same workbench as HR/Manager/Supervisor.
 - **XLSX/PDF report export** is not yet implemented. CSV export is available for every report; the Attendance Report is print/PDF-via-browser only for now.
 - **Real-time push sync** (device → server without polling) would require the ZKTeco Push SDK / webhook support instead of the current pull-based `POST /attendance/sync`.
 - **Multi-device / multi-company** support is intentionally out of scope for v1. The schema and services are structured so both can be added later without a rewrite (`Device` and `Company` are already separate tables from `Employee`).

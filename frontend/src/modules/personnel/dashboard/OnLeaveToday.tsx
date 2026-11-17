@@ -10,7 +10,7 @@ import { formatDate } from '@/lib/utils';
  * this is plain /leave/requests filtered to status=APPROVED with a date
  * range covering today and no department scoping, so it shows for anyone
  * who sees the full PersonnelDashboard (ADMIN, HR, MANAGING_DIRECTOR) --
- * a Managing Director doesn't need to be a specific department's head to
+ * a Director doesn't need to be a specific department's head to
  * see the whole hospital's leave picture.
  */
 export function OnLeaveToday() {

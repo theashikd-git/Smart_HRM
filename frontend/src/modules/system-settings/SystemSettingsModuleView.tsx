@@ -16,7 +16,7 @@ import type { SystemUser } from '@/types';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
-  MANAGING_DIRECTOR: 'Managing Director',
+  MANAGING_DIRECTOR: 'Director',
   HR: 'HR Officer',
   MANAGER: 'Manager',
   SUPERVISOR: 'Supervisor',
@@ -38,7 +38,7 @@ function isEmployeeIdLogin(u: { username: string }): boolean {
 
 const STAFF_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'ADMIN', label: 'Administrator' },
-  { value: 'MANAGING_DIRECTOR', label: 'Managing Director' },
+  { value: 'MANAGING_DIRECTOR', label: 'Director' },
   { value: 'HR', label: 'HR Officer' },
   { value: 'MANAGER', label: 'Manager' },
   { value: 'SUPERVISOR', label: 'Supervisor' },
@@ -90,7 +90,7 @@ function UserManagement() {
   async function handleCreate() {
     try {
       // Add Staff User always creates a traditional username/password
-      // login, whatever the role -- Manager/Supervisor/Managing Director
+      // login, whatever the role -- Manager/Supervisor/Director
       // access via Employee ID is granted from Add/Edit Employee instead.
       await createUser.mutateAsync({
         role: form.role as any,
@@ -331,7 +331,7 @@ function UserManagement() {
             <FieldWrap label="Role" required>
               <Select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
                 <option value="ADMIN">Administrator</option>
-                <option value="MANAGING_DIRECTOR">Managing Director</option>
+                <option value="MANAGING_DIRECTOR">Director</option>
                 <option value="HR">HR Officer</option>
                 <option value="MANAGER">Manager</option>
                 <option value="SUPERVISOR">Supervisor</option>

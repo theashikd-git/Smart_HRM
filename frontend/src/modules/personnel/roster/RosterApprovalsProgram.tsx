@@ -234,7 +234,7 @@ export function RosterApprovalsProgram({ tab }: { tab: WorkbenchTab }) {
                     {i.assignedBy ? (
                       <>
                         <p className="text-text-primary">{i.assignedBy.fullName}</p>
-                        <p className="text-[11px] text-text-muted capitalize">{i.assignedBy.role.toLowerCase().replace('_', ' ')}</p>
+                        <p className="text-[11px] text-text-muted capitalize">{i.assignedBy.role === 'MANAGING_DIRECTOR' ? 'director' : i.assignedBy.role.toLowerCase().replace('_', ' ')}</p>
                       </>
                     ) : (
                       '—'

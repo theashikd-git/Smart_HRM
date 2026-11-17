@@ -303,7 +303,7 @@ export class UsersService {
     }
 
     // 'Staff login' here means specifically the traditional ADMIN bucket --
-    // NOT any non-EMPLOYEE role. A Manager/Supervisor/Managing Director
+    // NOT any non-EMPLOYEE role. A Manager/Supervisor/Director
     // role is still an Employee ID login either way it was granted.
     const existingIsStaffLogin = existing.role === 'ADMIN';
 

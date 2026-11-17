@@ -5,6 +5,7 @@ import { ChevronDown, KeyRound, LogOut, User } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { initials } from '@/lib/utils';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { roleLabel } from '@/lib/role-label';
 
 export function UserMenu() {
   const [open, setOpen] = useState(false);
@@ -42,7 +43,7 @@ export function UserMenu() {
           <div className="border-b border-line px-3 py-2">
             <p className="text-xs font-medium text-text-primary">{name}</p>
             <p className="text-[11px] text-text-muted">{user?.username || ''}</p>
-            {user?.role && <p className="text-[11px] text-text-muted mt-0.5">{user.role}</p>}
+            {user?.role && <p className="text-[11px] text-text-muted mt-0.5">{roleLabel(user.role)}</p>}
           </div>
           <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-text-secondary hover:bg-surface-sunken">
             <User className="h-3.5 w-3.5" /> My Profile

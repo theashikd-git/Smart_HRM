@@ -531,7 +531,7 @@ export class LeaveService {
     }
 
     // Tier rule: a Supervisor can't act on behalf of a Manager (or a
-    // Managing Director); a Manager can't act on behalf of a Managing
+    // Director); a Manager can't act on behalf of a Managing
     // Director. Both can act for a plain Employee, and a Manager can act
     // for a Supervisor.
     const excludedRoles: EmployeeRole[] = actorRole === 'SUPERVISOR' ? ['MANAGER', 'MANAGING_DIRECTOR'] : ['MANAGING_DIRECTOR'];

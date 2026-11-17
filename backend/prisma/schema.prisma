@@ -17,9 +17,9 @@ datasource db {
 enum Role {
   ADMIN
   // No @Roles() guard grants this elevated access yet -- for now a
-  // Managing Director account sees the same modules as HR/MANAGER/
+  // Director account sees the same modules as HR/MANAGER/
   // SUPERVISOR (everything except System Settings, which stays ADMIN-only).
-  // A dedicated Managing Director dashboard/permission set is planned as
+  // A dedicated Director dashboard/permission set is planned as
   // separate follow-up work.
   MANAGING_DIRECTOR
   HR
@@ -65,10 +65,10 @@ enum EmployeeRole {
   EMPLOYEE
   MANAGER
   SUPERVISOR
-  // Grants real Managing Director access via Employee ID login, same as
-  // MANAGER/SUPERVISOR above -- added so Managing Director shows up as its
+  // Grants real Director access via Employee ID login, same as
+  // MANAGER/SUPERVISOR above -- added so Director shows up as its
   // own Employee Role instead of being lumped in under Manager. A dedicated
-  // Managing Director dashboard is planned as separate follow-up work, not
+  // Director dashboard is planned as separate follow-up work, not
   // tied to this enum value.
   MANAGING_DIRECTOR
   ADMINISTRATOR

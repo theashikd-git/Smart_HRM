@@ -74,7 +74,7 @@ export function PersonnelDashboard() {
           {/* Hospital-wide, not gated on department headship -- see
               LateToday/OnLeaveToday for why this differs from the
               department-scoped My Team Attendance/Team On Leave below. A
-              Managing Director (or ADMIN/HR) sees this regardless of
+              Director (or ADMIN/HR) sees this regardless of
               whether they personally lead any one department. */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <LateToday />

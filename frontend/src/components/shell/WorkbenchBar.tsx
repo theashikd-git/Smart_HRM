@@ -11,7 +11,7 @@ import { useAuthStore } from '@/lib/auth-store';
 // mirroring the role-conditional header badge in ManagerPortalView.
 function homeTabLabel(role?: string | null): string {
   if (role === 'ADMIN') return 'Administrator';
-  if (role === 'MANAGING_DIRECTOR') return 'Managing Director';
+  if (role === 'MANAGING_DIRECTOR') return 'Director';
   if (role === 'HR') return 'HR';
   return 'Workbench';
 }

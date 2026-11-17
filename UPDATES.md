@@ -38,7 +38,7 @@ needed** so it doesn't get missed.
 
 ## 2026-10-31 — Dashboard visibility, role access, portal UX
 
-- **Managing Director now has hospital-wide monitoring access.** The
+- **Director now has hospital-wide monitoring access.** The
   backend's role list was missing `MANAGING_DIRECTOR` entirely, so no
   `@Roles()`-guarded endpoint could ever grant it — even though the
   frontend already routed MD logins to the full workbench. Fixed, and
@@ -48,7 +48,7 @@ needed** so it doesn't get missed.
 - **The dashboard now shows hospital-wide "Late Today" and "On Leave
   Today" lists directly**, rather than only to someone who happens to
   head a department — these are visible to anyone who opens the
-  dashboard, including the Managing Director.
+  dashboard, including the Director.
 - **Manager/Supervisor tier rules added:** a Supervisor can't see a
   Manager's check-in/out time or pick a Manager for Leave on Behalf; a
   Manager can see/pick a Supervisor. Leave-on-behalf is now

@@ -48,7 +48,7 @@ export class RosterService {
 
     // A MANAGER/SUPERVISOR only ever sees their own department's team here
     // -- the department filter in the query is ignored for them (there's
-    // nothing else for them to pick from); ADMIN/HR/Managing Director keep
+    // nothing else for them to pick from); ADMIN/HR/Director keep
     // the full picker, same as before.
     const allowed = await this.resolveActorDepartmentIds(actorRole, actorEmployeeId);
     const employeeWhere: any = { status: 'ACTIVE' };
@@ -122,7 +122,7 @@ export class RosterService {
   }
 
   /** Same resolution rule as ShiftsService: null = unrestricted (ADMIN/HR/
-   *  Managing Director/EMPLOYEE); for a MANAGER, the department(s) they
+   *  Director/EMPLOYEE); for a MANAGER, the department(s) they
    *  head (Department.headEmployeeId); for a SUPERVISOR, the single
    *  department their own employee record belongs to -- there's no
    *  "department I lead" concept for that role, so this is what "their

@@ -32,14 +32,14 @@ export class RosterController {
 
   // No @Roles -- same openness as leave's own pending-count (a read-only
   // dashboard badge, not an action), so it works for whichever role lands
-  // on the Admin/HR dashboard (ADMIN, HR, or Managing Director).
+  // on the Admin/HR dashboard (ADMIN, HR, or Director).
   @Get('pending-count')
   pendingCount() {
     return this.service.pendingCount();
   }
 
   // The Roster Approvals screen: every Manager/Supervisor change or removal
-  // request waiting on HR/Admin. Managing Director may look but not decide.
+  // request waiting on HR/Admin. Director may look but not decide.
   @Get('pending')
   @Roles('ADMIN', 'HR', 'MANAGING_DIRECTOR')
   listPending() {

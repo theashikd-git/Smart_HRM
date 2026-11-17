@@ -12,6 +12,7 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Card';
 import { api, apiErrorMessage } from '@/lib/api';
+import { roleLabel } from '@/lib/role-label';
 
 function CompanySettings() {
   const qc = useQueryClient();
@@ -167,7 +168,7 @@ function UserManagement() {
               <Td className="font-medium">{u.fullName}</Td>
               <Td className="text-xs font-mono">{u.username}</Td>
               <Td>
-                <Badge>{u.role}</Badge>
+                <Badge>{roleLabel(u.role)}</Badge>
               </Td>
               <Td className="text-xs">{u.isActive ? 'Active' : 'Inactive'}</Td>
               <Td className="text-right">

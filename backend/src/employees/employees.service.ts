@@ -219,7 +219,7 @@ export class EmployeesService {
       const existingLogin = await this.prisma.user.findUnique({ where: { employeeId: id } });
       // 'Already a staff login' means specifically ADMIN here, matching
       // UsersService.syncLoginForEmployeeRole -- a Manager/Supervisor/
-      // Managing Director role (granted right here via Employee Role, or
+      // Director role (granted right here via Employee Role, or
       // separately via System Settings > Add Staff User) is still an
       // Employee ID login and still needs fresh Admin credentials to
       // convert, same as a plain Employee ID login would.
@@ -272,7 +272,7 @@ export class EmployeesService {
 
     // Keep this employee's login in sync with Employee Role, if it was
     // included on this save -- sets the login's real Role to match
-    // (Manager/Supervisor/Managing Director/Employee), converting between
+    // (Manager/Supervisor/Director/Employee), converting between
     // the Employee ID login and an Administrator staff login as needed
     // (see UsersService.syncLoginForEmployeeRole). Deliberately not
     // caught-and-logged like the device/leave-balance calls above: a

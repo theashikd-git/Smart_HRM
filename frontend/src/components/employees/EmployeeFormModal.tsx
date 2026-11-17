@@ -54,7 +54,7 @@ const EMPTY_FORM = {
   leaveCategoryId: '',
   trialMonths: '',
   // The real system Role this login gets (Employee/Manager/Supervisor/
-  // Managing Director -> Employee ID login with that Role; Administrator
+  // Director -> Employee ID login with that Role; Administrator
   // -> a separate staff login instead) -- see the EmployeeRole type in
   // @/types for the full story.
   employeeRole: 'EMPLOYEE',
@@ -344,7 +344,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
                 <option value="EMPLOYEE">Employee</option>
                 <option value="MANAGER">Manager</option>
                 <option value="SUPERVISOR">Supervisor</option>
-                <option value="MANAGING_DIRECTOR">Managing Director</option>
+                <option value="MANAGING_DIRECTOR">Director</option>
                 {(viewerRole === 'ADMIN' || wasAdministrator) && <option value="ADMINISTRATOR">Administrator</option>}
               </Select>
             </FieldWrap>
