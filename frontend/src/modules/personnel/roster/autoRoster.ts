@@ -12,6 +12,10 @@
 //  - shifts are shuffled day by day but kept fair: each slot goes to whoever
 //    has had that shift the fewest times, so everyone ends up with about the
 //    same number of each shift and nobody is stuck on one;
+//  - shifts ROTATE from one month to the next (round robin): `history` carries
+//    what each person worked in the previous weeks, so someone who did 19
+//    nights last month is first in line for the other shifts this month, and
+//    is the last to be handed nights again;
 //  - extra people (more staff than the shifts need) are spread across the
 //    shifts when `fillEveryone` is on, otherwise they're left unassigned;
 //  - with `keepExisting`, any day that already has a duty is left alone (an
@@ -40,6 +44,12 @@ export interface AutoInput {
   weeklyOff: boolean;
   keepExisting: boolean;
   fillEveryone: boolean;
+  /**
+   * Shift days each person already worked recently (employeeId -> shiftId ->
+   * days), typically the previous 60 days. It is added to the running
+   * tallies so the shift mix rotates between months instead of repeating.
+   */
+  history?: Record<string, Record<string, number>>;
   /** What a cell already holds (saved or staged), for ANY date. */
   lookup: (employeeId: string, date: string) => { type: 'SHIFT' | 'OFF'; shiftId?: string } | undefined;
 }
@@ -134,6 +144,15 @@ export function generateRoster(input: AutoInput): AutoResult {
     m.set(sid, (m.get(sid) ?? 0) + 1);
     tally.set(e, m);
   };
+  // Recent history (previous weeks) comes first: it is what makes the mix
+  // rotate month to month.
+  for (const e of employeeIds) {
+    const h = input.history?.[e];
+    if (!h) continue;
+    for (const s of shifts) {
+      for (let i = 0; i < (h[s.id] ?? 0); i++) bump(e, s.id);
+    }
+  }
   // Shifts already on the roster in this range count towards the mix too.
   if (keepExisting) {
     for (const e of employeeIds) {
@@ -143,6 +162,16 @@ export function generateRoster(input: AutoInput): AutoResult {
       }
     }
   }
+
+  // How "overdue" a shift is for someone: their count of it minus their own
+  // average across the shifts in use. Negative = they've had less of it than
+  // their other shifts, so it is their turn. (Comparing deviations rather
+  // than raw counts keeps people with fewer days fair too.)
+  const due = (e: string, sid: string) => {
+    let total = 0;
+    for (const s of shifts) total += countOf(e, s.id);
+    return countOf(e, sid) - total / shifts.length;
+  };
 
   if (shifts.length > 0) {
     for (const date of dates) {
@@ -172,22 +201,28 @@ export function generateRoster(input: AutoInput): AutoResult {
         free.delete(e);
       };
 
-      // One slot per person a shift still needs today, taken in random order;
-      // each goes to the free person who has had that shift the least.
-      const slots: string[] = [];
-      for (const s of shifts) for (let i = 0; i < (needs.get(s.id) ?? 0); i++) slots.push(s.id);
-      for (const sid of shuffle(slots)) {
+      // Hand out today's slots greedily: look at every free person against
+      // every shift that still needs people and pick the pairing where the
+      // person is the most "due" for that shift (ties at random). So someone
+      // who did lots of nights lately is matched to Morning/Evening first,
+      // and a person who is due for Night gets it before anyone else.
+      for (;;) {
         if (free.size === 0) break;
-        let least = Infinity;
-        let pool: string[] = [];
-        for (const e of free) {
-          const c = countOf(e, sid);
-          if (c < least) {
-            least = c;
-            pool = [e];
-          } else if (c === least) pool.push(e);
+        let best = Infinity;
+        let pool: [string, string][] = [];
+        for (const s of shifts) {
+          if ((needs.get(s.id) ?? 0) <= 0) continue;
+          for (const e of free) {
+            const d = due(e, s.id);
+            if (d < best - 1e-9) {
+              best = d;
+              pool = [[e, s.id]];
+            } else if (Math.abs(d - best) <= 1e-9) pool.push([e, s.id]);
+          }
         }
-        assign(pool[Math.floor(Math.random() * pool.length)], sid);
+        if (pool.length === 0) break;
+        const [e, sid] = pool[Math.floor(Math.random() * pool.length)];
+        assign(e, sid);
       }
 
       // More people than the shifts asked for -- spread the extras over the
@@ -198,7 +233,7 @@ export function generateRoster(input: AutoInput): AutoResult {
           let best = shifts[0].id;
           let bestScore = Infinity;
           for (const s of shifts) {
-            const score = (given.get(s.id) ?? 0) / s.count + countOf(e, s.id) * 0.001;
+            const score = (given.get(s.id) ?? 0) / s.count + due(e, s.id) * 0.001;
             if (score < bestScore) {
               best = s.id;
               bestScore = score;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   ChevronLeft,
@@ -24,6 +25,7 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useShifts } from '@/hooks/useShifts';
 import {
   useRosterWeek,
+  fetchRosterRange,
   useSaveRosterBatch,
   useApproveRosterAssignment,
   type RosterChange,
@@ -195,6 +197,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const { data: departments } = useDepartments();
   const { data: shifts } = useShifts();
   const { data, isLoading } = useRosterWeek({ startDate, endDate, departmentId: departmentId || undefined });
+  const queryClient = useQueryClient();
   const saveBatch = useSaveRosterBatch();
   const approveAssignment = useApproveRosterAssignment();
 
@@ -342,7 +345,36 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   /** Makes the random roster (see autoRoster.ts) for one or more groups of
    *  people and stages it. Nothing is saved -- the manager can change any
    *  cell, re-generate, or Discard, then press Save. */
-  function runAuto(plans: AutoPlan[]) {
+  /** Shift days each person worked in the 60 days before `firstDate`, so the
+   *  generator can rotate shifts between months (see autoRoster `history`).
+   *  If it can't be loaded the roster is still made, just without rotation. */
+  async function loadHistory(firstDate: string): Promise<Record<string, Record<string, number>>> {
+    const shift = (d: string, n: number) => {
+      const t = new Date(`${d}T00:00:00Z`);
+      t.setUTCDate(t.getUTCDate() + n);
+      return t.toISOString().slice(0, 10);
+    };
+    try {
+      const res = await fetchRosterRange(queryClient, {
+        startDate: shift(firstDate, -60),
+        endDate: shift(firstDate, -1),
+        departmentId: departmentId || undefined,
+      });
+      const out: Record<string, Record<string, number>> = {};
+      for (const a of res.assignments) {
+        if (a.type !== 'SHIFT' || !a.shiftId) continue;
+        const m = (out[a.employeeId] ??= {});
+        m[a.shiftId] = (m[a.shiftId] ?? 0) + 1;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  async function runAuto(plans: AutoPlan[]) {
+    const firstDate = plans.flatMap((p) => p.dates).sort()[0];
+    const history = firstDate ? await loadHistory(firstDate) : {};
     const people = new Set(plans.flatMap((p) => p.employeeIds));
     const dates = new Set(plans.flatMap((p) => p.dates));
     // Start from the draft without earlier unsaved edits for these people in
@@ -359,6 +391,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
     for (const plan of plans) {
       const res = generateRoster({
         ...plan,
+        history,
         lookup: (employeeId, date) => effective(`${employeeId}|${date}`, base),
       });
       shiftsMade += res.shifts;
@@ -392,13 +425,15 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   }
 
   function handleAuto(plan: AutoPlan) {
-    runAuto([plan]);
+    void runAuto([plan]);
   }
 
   /** "Random Roster": one click, no questions. Everyone on screen gets one
    *  random day off a week and a fair mix of their department's shifts
    *  (mornings, evenings...) for the rest of the period -- today onwards
-   *  only. Each shift gets an equal share of the people working. */
+   *  only. Each shift gets an equal share of the people working, and shifts
+   *  rotate month to month: what people worked in the previous 60 days is
+   *  taken into account (see loadHistory). */
   function handleRandomRoster() {
     const dates = days.map(isoDate).filter((d) => d >= todayIso);
     if (employees.length === 0) {
@@ -443,7 +478,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
       return;
     }
     if (noShifts > 0) toast(`${noShifts} employee${noShifts === 1 ? ' has' : 's have'} no shifts set up and were skipped.`);
-    runAuto(plans);
+    void runAuto(plans);
   }
 
   async function handleSave() {

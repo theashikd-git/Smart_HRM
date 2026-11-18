@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { PendingRosterItem, RosterAssignment, RosterDayType, RosterWeekData } from '@/types';
 
@@ -12,6 +12,15 @@ export function useRosterWeek(query: RosterWeekQuery) {
   return useQuery({
     queryKey: ['roster', query],
     queryFn: async () => (await api.get<RosterWeekData>('/roster', { params: query })).data,
+  });
+}
+
+/** Same data as useRosterWeek but fetched on demand (and cached under the same key). */
+export function fetchRosterRange(qc: QueryClient, query: RosterWeekQuery) {
+  return qc.fetchQuery({
+    queryKey: ['roster', query],
+    queryFn: async () => (await api.get<RosterWeekData>('/roster', { params: query })).data,
+    staleTime: 60_000,
   });
 }
 
