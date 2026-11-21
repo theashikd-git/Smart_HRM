@@ -44,8 +44,23 @@ async function bootstrap() {
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
 
+  // Allowed browser origins: whatever CORS_ORIGIN lists (comma separated), plus
+  // any page served from this machine or a private network address
+  // (10.x, 172.16-31.x, 192.168.x), so the app also works for other computers
+  // on the hospital LAN. Set CORS_ORIGIN="*" to allow every origin.
+  const configured = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const privateOrigin =
+    /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      if (!origin || configured.includes('*') || configured.includes(origin) || privateOrigin.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   });
 
