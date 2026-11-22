@@ -102,6 +102,18 @@ enum AttendanceStatus {
   HALF_DAY
   ON_LEAVE
   HOLIDAY
+  // Checked in after shift start but within the shift's grace minutes.
+  // Counts as present; tracked by attendance policies (see AttendancePolicy).
+  GRACE
+  // Worked on a government holiday or a weekly off day (counted as a duty day).
+  HOLIDAY_DUTY
+  // FLEXIBLE shift: worked fewer hours than the shift's required daily hours.
+  SHORT_HOURS
+}
+
+enum ShiftType {
+  FIXED
+  FLEXIBLE
 }
 
 enum SyncOperation {
@@ -334,6 +346,11 @@ model Shift {
   breakMinutes   Int      @default(60)
   weekendRule    String?  // comma separated days off, e.g. "Fri,Sat"
   overtimeRule   String?
+  // FIXED = start/end time and grace apply (the original behaviour).
+  // FLEXIBLE = no start time: the day just needs requiredHours worked, and
+  // there is no GRACE or LATE status. Existing shifts are all FIXED.
+  shiftType      ShiftType @default(FIXED)
+  requiredHours  Decimal?  @db.Decimal(4, 2)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -464,6 +481,12 @@ model Employee {
   resignationDate   DateTime?
   resignationReason String?
 
+  // Attendance policy exemption (see AttendancePolicy). An exempt employee
+  // still shows GRACE/LATE in reports, but policy absent days are not applied.
+  policyExempt       Boolean   @default(false)
+  policyExemptUntil  DateTime? @db.Date
+  policyExemptReason String?
+
   // Which kind of login this person gets -- see the EmployeeRole enum
   // above for what each value means and EmployeesService/UsersService for
   // how it's provisioned.
@@ -504,6 +527,8 @@ model Employee {
   attendanceLogs    AttendanceLog[]
   attendanceRecords AttendanceRecord[]
   rosterAssignments RosterAssignment[]
+  policyOccurrences PolicyOccurrence[]
+  policyAbsences    PolicyAbsence[]
   syncHistory       SyncHistory[]
   documents         Document[]
   leaveBalances     LeaveBalance[]
@@ -900,4 +925,116 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Attendance policies
+// ---------------------------------------------------------------------------
+// A policy turns repeated GRACE or LATE arrivals into "policy absent" days.
+// `type` says which arrival it counts, `params` holds its settings, so new
+// policy types (or settings) can be added without a new table:
+//   { windowUnit: "DAYS"|"WEEKS"|"MONTHS", windowSize: n,
+//     allowed: n            // free arrivals per window (GRACE; 0 for LATE)
+//     convertEvery: n       // every n arrivals beyond `allowed` = 1 absent day
+//     resetEnabled: boolean, resetAfterDays: n | null }
+// A policy applies from `effectiveFrom` (to `effectiveTo` once deactivated);
+// editing or deactivating one never silently rewrites earlier periods.
+
+enum PolicyType {
+  GRACE
+  LATE
+}
+
+enum PolicyScopeKind {
+  INCLUDE
+  EXCLUDE
+}
+
+enum PolicyTargetType {
+  DEPARTMENT
+  DESIGNATION
+  EMPLOYEE
+}
+
+model AttendancePolicy {
+  id            String     @id @default(uuid())
+  name          String
+  description   String?
+  type          PolicyType
+  params        Json
+  isActive      Boolean    @default(true)
+  effectiveFrom DateTime   @db.Date
+  effectiveTo   DateTime?  @db.Date
+  createdById   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  scopes      AttendancePolicyScope[]
+  occurrences PolicyOccurrence[]
+  absences    PolicyAbsence[]
+
+  @@index([type, isActive])
+  @@map("attendance_policies")
+}
+
+// No INCLUDE rows = the policy applies to everyone. EXCLUDE rows always win.
+model AttendancePolicyScope {
+  id         String           @id @default(uuid())
+  policyId   String
+  kind       PolicyScopeKind
+  targetType PolicyTargetType
+  targetId   String
+
+  policy AttendancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId])
+  @@map("attendance_policy_scopes")
+}
+
+// One GRACE or LATE arrival. Unique per employee, policy and day, so syncing
+// the device twice can never count a day twice. `counted` is false when the
+// employee was exempt that day (shown in reports, never converted).
+model PolicyOccurrence {
+  id          String     @id @default(uuid())
+  employeeId  String
+  policyId    String
+  type        PolicyType
+  date        DateTime   @db.Date
+  windowKey   String
+  windowStart DateTime   @db.Date
+  windowEnd   DateTime   @db.Date
+  counted     Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policy   AttendancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  absences PolicyAbsence[]  @relation("AbsenceOccurrences")
+
+  @@unique([employeeId, policyId, date])
+  @@index([employeeId, date])
+  @@map("policy_occurrences")
+}
+
+// An absent day created by a policy, linked to the occurrences that caused it.
+// (date = the day the last arrival of the group happened)
+model PolicyAbsence {
+  id         String     @id @default(uuid())
+  employeeId String
+  policyId   String
+  type       PolicyType
+  date       DateTime   @db.Date
+  windowKey  String
+  reason     String
+  createdAt  DateTime   @default(now())
+
+  employee    Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policy      AttendancePolicy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  occurrences PolicyOccurrence[] @relation("AbsenceOccurrences")
+
+  // One occurrence can complete at most one group, so a policy creates at most
+  // one absent day per employee per date.
+  @@unique([employeeId, policyId, date])
+  @@index([employeeId, date])
+  @@index([date])
+  @@map("policy_absences")
 }
