@@ -148,7 +148,7 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
                     </>
                   )}
                 </Td>
-                <Td>{s.shiftType === 'FLEXIBLE' ? '—' : `${s.graceMinutes}m`}</Td>
+                <Td>{s.shiftType === 'FLEXIBLE' ? '' : `${s.graceMinutes}m`}</Td>
                 <Td>{s.breakMinutes}m</Td>
                 <Td>{s.weekendRule || ''}</Td>
                 <Td>{s._count?.employees ?? 0}</Td>

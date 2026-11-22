@@ -8,6 +8,63 @@ needed** so it doesn't get missed.
 
 ---
 
+## 2026-11-22 — Attendance policies (Organization > Policy)
+
+- **New: Organization > Policy**, directly under Company. Admin and HR can
+  create, edit, activate and deactivate attendance policies; the Director
+  can view them. Two policy types for now (Grace-period arrivals and Late
+  arrivals); the model stores each policy's settings, so more types can be
+  added later without a new table.
+- **New status Grace** ("Grace-period attendance"): arriving after the
+  shift start but within the shift's own grace minutes. It counts as
+  present. Arriving after the grace minutes is still **Late**, as before.
+- **Grace rule.** Per counting window (N days / weeks / calendar months):
+  a number of free grace arrivals, then every X extra = 1 absent day.
+  Counters can reset at the end of each window or every N days, or never.
+  Example: 7-day window, 3 allowed, every 3 extra = 1 absent day, reset
+  every 7 days: the 4th to 6th grace arrivals in a week make 1 absent day.
+- **Late rule.** Every N late days (default 3) = 1 absent day, counted per
+  window (default calendar month). Leftovers carry over until the reset.
+- **Policy absent days** are kept as their own records, dated the day the
+  last arrival of the group happened, and linked to the arrivals that
+  caused them. The late or grace day itself keeps its status. They show in
+  the Absent report, the Monthly Attendance summary (own "Policy Absent"
+  column), the Attendance screen and the Attendance Report/PDF, labelled
+  "Policy absent (3 late)" or "Policy absent (grace)".
+- **Holiday duty.** A punch on a government/company holiday or on the
+  employee's weekly off day (rostered day off, or the shift's weekend) is
+  now **Holiday duty** (before: Holiday). No grace or late rules apply, and
+  it counts as present in the dashboard and reports.
+- **Who a policy covers.** Everyone, or chosen departments, designations
+  and individual employees, plus an "Except" list. When several match, the
+  most specific wins (employee, designation, department, everyone).
+  Employee groups are not built yet.
+- **Exemptions.** The Employee form (Attendance Settings) has "Attendance
+  policy exempt", an optional "until" date and a reason. An exempt
+  employee still shows Grace/Late, but never gets policy absent days.
+- **Flexible shifts.** Shift type Fixed (default) or Flexible with required
+  hours a day. A flexible shift never shows Grace or Late; fewer hours than
+  required shows as **Short hours**, with no penalty.
+- **Changes are never applied to the past by themselves.** Each policy has
+  an effective date. Changing the rules or scope of a policy that has
+  already counted arrivals starts a new version from the date you pick;
+  the old version keeps its earlier days. Reactivating an ended policy
+  also starts a new version. There is no automatic backfill: to re-run
+  past days, use **Recalculate from date** on the Policy page (days HR
+  corrected by hand are left alone). Re-syncing the device or recalculating
+  never counts a day twice.
+- **Audit log.** Policy created / updated / activated / deactivated,
+  employee exemption changes, shift type changes and recalculations are
+  logged with old and new values, the effective date and who did it.
+- **Action needed:** in `backend`, run `npm install` (adds Jest for the new
+  tests, `npm test`), then stop the backend and run `npx prisma migrate dev`
+  (migration `20261122000000_add_attendance_policies`, additive only:
+  existing shifts become Fixed, no data is changed) and `npx prisma generate`,
+  then restart. Nothing is backfilled. Create your first policy, then use
+  Recalculate from date only if you want it applied to earlier days.
+
+---
+
 ## 2026-11-02 — Leave approval notes, HR-initiated cancellation, text cleanup
 
 - **Approve/Reject notes.** Approving a leave request now opens a small
