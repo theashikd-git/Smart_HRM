@@ -44,18 +44,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('smart_hrm_token');
     const userStr = localStorage.getItem('smart_hrm_user');
-    set({
-      token: token || null,
-      user: userStr ? JSON.parse(userStr) : null,
-      hydrated: true,
-    });
+    // A damaged saved session (empty, "undefined", cut-off JSON...) must not
+    // crash the page: treat it as signed out and clear it.
+    let user: User | null = null;
+    if (userStr) {
+      try {
+        const parsed = JSON.parse(userStr);
+        user = parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        user = null;
+      }
+    }
+    if (!token || !user) {
+      localStorage.removeItem('smart_hrm_token');
+      localStorage.removeItem('smart_hrm_user');
+      set({ token: null, user: null, hydrated: true });
+      return;
+    }
+    set({ token, user, hydrated: true });
   },
 
   login: async (username: string, password: string) => {
     set({ isLoading: true });
     try {
       const res = await api.post('/auth/login', { username, password });
-      const { accessToken, user } = res.data;
+      const { accessToken, user } = res.data ?? {};
+      if (!accessToken || !user) throw new Error('Unexpected reply from the server. Check that the API address is correct.');
       localStorage.setItem('smart_hrm_token', accessToken);
       localStorage.setItem('smart_hrm_user', JSON.stringify(user));
       set({ token: accessToken, user, isLoading: false });
@@ -73,7 +87,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await api.post('/auth/employee-login', { employeeCode, password });
-      const { accessToken, user } = res.data;
+      const { accessToken, user } = res.data ?? {};
+      if (!accessToken || !user) throw new Error('Unexpected reply from the server. Check that the API address is correct.');
       localStorage.setItem('smart_hrm_token', accessToken);
       localStorage.setItem('smart_hrm_user', JSON.stringify(user));
       set({ token: accessToken, user, isLoading: false });
