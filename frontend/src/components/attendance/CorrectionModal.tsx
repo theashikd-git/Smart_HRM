@@ -93,6 +93,9 @@ export function CorrectionModal({
             <option value="HALF_DAY">Half Day</option>
             <option value="ON_LEAVE">On Leave</option>
             <option value="HOLIDAY">Holiday</option>
+            <option value="GRACE">Grace</option>
+            <option value="HOLIDAY_DUTY">Holiday duty</option>
+            <option value="SHORT_HOURS">Short hours</option>
           </Select>
         </FieldWrap>
         <FieldWrap label="Notes">

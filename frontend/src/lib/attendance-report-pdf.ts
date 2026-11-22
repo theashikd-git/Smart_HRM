@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { Company } from '@/hooks/useCompany';
 import type { AttendanceRecord } from '@/types';
 import { formatDate, formatTime } from '@/lib/utils';
+import type { PolicyAbsenceRow } from '@/types/policy';
 
 export const ATTENDANCE_STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
@@ -11,6 +12,9 @@ export const ATTENDANCE_STATUS_LABEL: Record<string, string> = {
   HALF_DAY: 'Half Day',
   ON_LEAVE: 'Leave',
   HOLIDAY: 'Off',
+  GRACE: 'Grace',
+  HOLIDAY_DUTY: 'Holiday duty',
+  SHORT_HOURS: 'Short hours',
 };
 
 const DAY_NAME = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -29,6 +33,8 @@ interface AttendanceReportPdfArgs {
   departmentLabel?: string;
   /** Extra scope appended after the period, e.g. "Employee: Jane Doe (EMP004)" or "Status: Present" -- omitted entirely when there's nothing extra to show. */
   scopeLabel?: string;
+  /** Days an attendance policy turned into an absence (every N late / grace arrivals) -- listed with each employee's dates. */
+  policyAbsences?: PolicyAbsenceRow[];
 }
 
 /**
@@ -56,6 +62,7 @@ function buildAttendanceReportPdf({
   periodLabel,
   departmentLabel = 'All Departments',
   scopeLabel,
+  policyAbsences,
 }: AttendanceReportPdfArgs): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -130,11 +137,12 @@ function buildAttendanceReportPdf({
 
   // Group rows by employee -- name & ID become a section header, and every
   // date that employee has a record for lands underneath it, oldest first.
-  const groups = new Map<string, { name: string; code: string; dept: string; rows: AttendanceRecord[] }>();
+  const groups = new Map<string, { id: string; name: string; code: string; dept: string; rows: AttendanceRecord[] }>();
   for (const r of rows) {
     const key = r.employeeId;
     if (!groups.has(key)) {
       groups.set(key, {
+        id: key,
         name: r.employee?.fullName ?? 'Unknown',
         code: r.employee?.employeeCode ?? '',
         dept: r.employee?.department?.name ?? '',
@@ -172,14 +180,24 @@ function buildAttendanceReportPdf({
     autoTable(doc, {
       startY: y,
       head: [['Date', 'Day', 'Check In', 'Check Out', 'Work Hrs', 'Status']],
-      body: group.rows.map((r) => [
-        formatDate(r.date),
-        dayName(r.date),
-        formatTime(r.checkIn),
-        formatTime(r.checkOut),
-        r.workHours ? `${r.workHours}h` : '',
-        ATTENDANCE_STATUS_LABEL[r.status] ?? r.status,
-      ]),
+      body: [
+        ...group.rows.map((r) => ({
+          date: r.date.slice(0, 10),
+          cells: [
+            formatDate(r.date),
+            dayName(r.date),
+            formatTime(r.checkIn),
+            formatTime(r.checkOut),
+            r.workHours ? `${r.workHours}h` : '',
+            ATTENDANCE_STATUS_LABEL[r.status] ?? r.status,
+          ],
+        })),
+        ...(policyAbsences ?? [])
+          .filter((a) => a.employeeId === group.id)
+          .map((a) => ({ date: a.date.slice(0, 10), cells: [formatDate(a.date), dayName(a.date), '', '', '', a.label] })),
+      ]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((x) => x.cells),
       styles: { fontSize: 8, cellPadding: 1.4, textColor: [30, 30, 30] },
       headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 249, 250] },

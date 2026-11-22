@@ -10,6 +10,9 @@ export interface ShiftPayload {
   breakMinutes?: number;
   weekendRule?: string;
   overtimeRule?: string;
+  // FIXED (default) uses start/end time and grace. FLEXIBLE needs requiredHours a day and never shows Grace/Late.
+  shiftType?: 'FIXED' | 'FLEXIBLE';
+  requiredHours?: number | null;
   // Omit/undefined = General (usable by every department). A MANAGER or
   // SUPERVISOR's own value here is ignored server-side -- see ShiftsService.
   departmentId?: string;

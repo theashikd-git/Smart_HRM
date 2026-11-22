@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   ClipboardCheck,
   FileBarChart,
+  ShieldCheck,
 } from 'lucide-react';
 import type { ProgramDefinition, SidebarNode } from '@/types/workbench';
 
@@ -34,6 +35,7 @@ export const PROGRAM_REGISTRY: Record<string, ProgramDefinition> = {
     breadcrumb: ['Personnel', 'Resigned Employees'],
   },
   'org-company': { id: 'org-company', title: 'Company', breadcrumb: ['Personnel', 'Organization', 'Company'] },
+  'org-policy': { id: 'org-policy', title: 'Policy', breadcrumb: ['Personnel', 'Organization', 'Policy'] },
   'org-department': {
     id: 'org-department',
     title: 'Department',
@@ -115,6 +117,7 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
     icon: Building2,
     children: [
       { type: 'leaf', id: 'org-company', label: 'Company', programId: 'org-company' },
+      { type: 'leaf', id: 'org-policy', label: 'Policy', programId: 'org-policy' },
       { type: 'leaf', id: 'org-department', label: 'Department', programId: 'org-department' },
       { type: 'leaf', id: 'org-designation', label: 'Designation', programId: 'org-designation' },
     ],
@@ -170,6 +173,7 @@ export const PERSONNEL_SIDEBAR: SidebarNode[] = [
 // Icons used elsewhere (org sub-items, kept here so the registry file is the single source of nav metadata).
 export const ORG_ICONS: Record<string, typeof Building2> = {
   'org-company': Building2,
+  'org-policy': ShieldCheck,
   'org-department': Building2,
   'org-designation': IdCard,
 };

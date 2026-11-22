@@ -47,6 +47,9 @@ const EMPTY_FORM = {
   departmentId: '',
   designationId: '',
   shiftId: '',
+  policyExempt: false,
+  policyExemptUntil: '',
+  policyExemptReason: '',
   employmentType: 'FULL_TIME',
   salary: '',
   rfidCardNumber: '',
@@ -174,6 +177,9 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
         departmentId: employee.departmentId || '',
         designationId: employee.designationId || '',
         shiftId: employee.shiftId || '',
+        policyExempt: !!employee.policyExempt,
+        policyExemptUntil: employee.policyExemptUntil ? employee.policyExemptUntil.slice(0, 10) : '',
+        policyExemptReason: employee.policyExemptReason || '',
         employmentType: employee.employmentType || 'FULL_TIME',
         salary: employee.salary?.toString() || '',
         rfidCardNumber: employee.rfidCardNumber || '',
@@ -252,6 +258,9 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
       departmentId: form.departmentId || undefined,
       designationId: form.designationId || undefined,
       shiftId: form.shiftId || undefined,
+      policyExempt: form.policyExempt,
+      policyExemptUntil: form.policyExempt ? form.policyExemptUntil || '' : '',
+      policyExemptReason: form.policyExempt ? form.policyExemptReason.trim() : '',
       deviceUserId: form.deviceUserId || undefined,
       trialMonths: selectedCategory?.hasFixedPeriod && form.trialMonths ? Number(form.trialMonths) : undefined,
       staffUsername: form.staffUsername.trim() || undefined,
@@ -538,11 +547,31 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
               <option value="">Unassigned</option>
               {shifts?.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.startTime}–{s.endTime})
+                  {s.name} ({s.shiftType === 'FLEXIBLE' ? `flexible, ${Number(s.requiredHours)}h a day` : `${s.startTime}–${s.endTime}`})
                 </option>
               ))}
             </Select>
           </FieldWrap>
+
+          <div className="sm:col-span-2 rounded-lg border border-line p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+              <input type="checkbox" checked={form.policyExempt} onChange={(e) => set('policyExempt', e.target.checked)} />
+              Attendance policy exempt
+            </label>
+            <p className="mt-1 text-xs text-text-muted">
+              Still shows Grace and Late in reports, but attendance policies never turn their arrivals into absent days.
+            </p>
+            {form.policyExempt && (
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FieldWrap label="Exempt until" hint="Optional -- leave blank until switched off">
+                  <Input type="date" value={form.policyExemptUntil} onChange={(e) => set('policyExemptUntil', e.target.value)} />
+                </FieldWrap>
+                <FieldWrap label="Reason">
+                  <Input value={form.policyExemptReason} onChange={(e) => set('policyExemptReason', e.target.value)} />
+                </FieldWrap>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4', activeTab !== 'payroll' && 'hidden')}>

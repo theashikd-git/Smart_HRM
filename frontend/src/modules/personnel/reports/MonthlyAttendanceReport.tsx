@@ -12,7 +12,7 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useCompany } from '@/hooks/useCompany';
 import { downloadCsv, printTable } from '@/lib/report-export';
 
-const HEADERS = ['Employee', 'Employee ID', 'Department', 'Present', 'Late', 'Half Day', 'Leave', 'Absent', 'Late (min)', 'Overtime (min)', 'Work Hours'];
+const HEADERS = ['Employee', 'Employee ID', 'Department', 'Present', 'Grace', 'Late', 'Half Day', 'Short Hours', 'Holiday Duty', 'Leave', 'Absent', 'Policy Absent', 'Late (min)', 'Overtime (min)', 'Work Hours'];
 
 function monthBounds(month: string) {
   const [y, m] = month.split('-').map(Number);
@@ -39,24 +39,46 @@ export function MonthlyAttendanceReport() {
   const rows = useMemo(() => {
     const map = new Map<
       string,
-      { name: string; code: string; dept: string; present: number; late: number; half: number; leave: number; absent: number; lateMin: number; otMin: number; hours: number }
+      {
+        name: string;
+        code: string;
+        dept: string;
+        present: number;
+        grace: number;
+        late: number;
+        half: number;
+        short: number;
+        duty: number;
+        leave: number;
+        absent: number;
+        policyAbsent: number;
+        lateMin: number;
+        otMin: number;
+        hours: number;
+      }
     >();
     const get = (id: string, name: string, code: string, dept: string) => {
-      if (!map.has(id)) map.set(id, { name, code, dept, present: 0, late: 0, half: 0, leave: 0, absent: 0, lateMin: 0, otMin: 0, hours: 0 });
+      if (!map.has(id)) map.set(id, { name, code, dept, present: 0, grace: 0, late: 0, half: 0, short: 0, duty: 0, leave: 0, absent: 0, policyAbsent: 0, lateMin: 0, otMin: 0, hours: 0 });
       return map.get(id)!;
     };
     for (const r of records ?? []) {
       const e = get(r.employeeId, r.employee.fullName, r.employee.employeeCode, r.employee.department?.name ?? '');
       if (r.status === 'PRESENT') e.present++;
+      else if (r.status === 'GRACE') e.grace++;
       else if (r.status === 'LATE') e.late++;
       else if (r.status === 'HALF_DAY') e.half++;
+      else if (r.status === 'SHORT_HOURS') e.short++;
+      else if (r.status === 'HOLIDAY_DUTY') e.duty++;
       else if (r.status === 'ON_LEAVE') e.leave++;
       e.lateMin += r.lateMinutes ?? 0;
       e.otMin += r.overtimeMinutes ?? 0;
       e.hours += Number(r.workHours ?? 0);
     }
     for (const a of absent?.rows ?? []) {
-      get(a.employeeId, a.employeeName, a.employeeCode, a.department ?? '').absent++;
+      // A policy absent day (every N late / grace arrivals) is counted on its own, apart from days with no punch.
+      const e = get(a.employeeId, a.employeeName, a.employeeCode, a.department ?? '');
+      if (a.policyAbsence) e.policyAbsent++;
+      else e.absent++;
     }
     return [...map.values()]
       .filter((e) => !department || e.dept === department)
@@ -68,10 +90,14 @@ export function MonthlyAttendanceReport() {
     e.code,
     e.dept,
     String(e.present),
+    String(e.grace),
     String(e.late),
     String(e.half),
+    String(e.short),
+    String(e.duty),
     String(e.leave),
     String(e.absent),
+    String(e.policyAbsent),
     String(e.lateMin),
     String(e.otMin),
     e.hours.toFixed(1),
@@ -118,7 +144,7 @@ export function MonthlyAttendanceReport() {
                   subtitle: `${monthLabel} -- ${department || 'All Departments'}`,
                   headers: HEADERS,
                   rows: table,
-                  rightAlign: [3, 4, 5, 6, 7, 8, 9, 10],
+                  rightAlign: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
                 });
                 if (!ok) toast.error('Allow pop-ups for this site to print.');
               }}

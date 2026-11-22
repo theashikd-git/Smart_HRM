@@ -13,6 +13,7 @@ import { ManualPunchModal } from '@/components/attendance/ManualPunchModal';
 import { CorrectionModal } from '@/components/attendance/CorrectionModal';
 import { useAttendance, useSyncAttendance, useApproveAttendance, useMissingPunches } from '@/hooks/useAttendance';
 import { useDepartments } from '@/hooks/useDepartments';
+import { usePolicyAbsences } from '@/hooks/usePolicies';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCompany } from '@/hooks/useCompany';
 import { downloadAttendanceReportPdf, printAttendanceReportPdf } from '@/lib/attendance-report-pdf';
@@ -40,6 +41,13 @@ export default function AttendancePage() {
     pageSize: 15,
   });
   const { data: missing } = useMissingPunches();
+  // Absent days an attendance policy created (every N late / grace arrivals).
+  const { data: policyAbsences } = usePolicyAbsences({
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    departmentId: departmentId || undefined,
+    employeeId: employeeId || undefined,
+  });
   const syncAttendance = useSyncAttendance();
   const approveAttendance = useApproveAttendance();
   const { data: company } = useCompany();
@@ -119,6 +127,9 @@ export default function AttendancePage() {
             <option value="HALF_DAY">Half Day</option>
             <option value="ON_LEAVE">On Leave</option>
             <option value="HOLIDAY">Holiday</option>
+            <option value="GRACE">Grace</option>
+            <option value="HOLIDAY_DUTY">Holiday duty</option>
+            <option value="SHORT_HOURS">Short hours</option>
           </Select>
           <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} className="sm:w-40" />
           <Input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} className="sm:w-40" />
@@ -162,6 +173,7 @@ export default function AttendancePage() {
                 periodLabel: periodLabel(),
                 departmentLabel: departmentLabel(),
                 scopeLabel: scopeLabel(),
+                policyAbsences,
               })
             }
             disabled={!printData?.items.length}
@@ -178,6 +190,7 @@ export default function AttendancePage() {
                 periodLabel: periodLabel(),
                 departmentLabel: departmentLabel(),
                 scopeLabel: scopeLabel(),
+                policyAbsences,
               })
             }
             disabled={!printData?.items.length}
@@ -279,6 +292,34 @@ export default function AttendancePage() {
         )}
       </Card>
 
+      {(policyAbsences?.length ?? 0) > 0 && (
+        <Card className="mt-4 overflow-hidden">
+          <CardHeader title="Policy absent days" subtitle="Absences created by an attendance policy (every N late or grace arrivals)." />
+          <Table>
+            <Thead>
+              <tr>
+                <Th>Employee</Th>
+                <Th>Date</Th>
+                <Th>Absence</Th>
+                <Th>Caused by arrivals on</Th>
+              </tr>
+            </Thead>
+            <Tbody>
+              {policyAbsences!.map((a) => (
+                <Tr key={a.id}>
+                  <Td>
+                    <p className="font-medium">{a.employeeName}</p>
+                    <p className="text-xs text-text-muted font-mono">{a.employeeCode}</p>
+                  </Td>
+                  <Td>{formatDate(a.date)}</Td>
+                  <Td className="font-medium text-danger">{a.label}</Td>
+                  <Td className="text-xs">{a.occurrenceDates.map((d) => formatDate(d)).join(', ')}</Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </Card>
+      )}
 
       <ManualPunchModal open={manualOpen} onClose={() => setManualOpen(false)} />
       <CorrectionModal open={!!correctionRecord} onClose={() => setCorrectionRecord(null)} record={correctionRecord} />

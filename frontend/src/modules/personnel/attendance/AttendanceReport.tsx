@@ -8,6 +8,8 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@/components/ui/Table';
 import { StatusBadge } from '@/components/shell/StatusBadge';
 import { useAttendance } from '@/hooks/useAttendance';
+import { usePolicyAbsences } from '@/hooks/usePolicies';
+import type { PolicyAbsenceRow } from '@/types/policy';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCompany, type Company } from '@/hooks/useCompany';
@@ -22,6 +24,9 @@ export const ATTENDANCE_STATUS_LABEL: Record<string, string> = {
   HALF_DAY: 'Half Day',
   ON_LEAVE: 'Leave',
   HOLIDAY: 'Off',
+  GRACE: 'Grace',
+  HOLIDAY_DUTY: 'Holiday duty',
+  SHORT_HOURS: 'Short hours',
 };
 
 function todayISO() {
@@ -48,6 +53,7 @@ export function AttendanceReportPrintable({
   periodLabel,
   departmentLabel = 'All Departments',
   scopeLabel,
+  policyAbsences,
   isLoading,
 }: {
   company?: Company | null;
@@ -58,6 +64,8 @@ export function AttendanceReportPrintable({
   departmentLabel?: string;
   /** Extra scope appended after the period, e.g. "Employee: Jane Doe (EMP004)" -- omitted entirely when there's nothing extra to show */
   scopeLabel?: string;
+  /** Days an attendance policy turned into an absence -- shown among each employee's dates. */
+  policyAbsences?: PolicyAbsenceRow[];
   isLoading?: boolean;
 }) {
   const summary = useMemo(() => {
@@ -69,11 +77,12 @@ export function AttendanceReportPrintable({
   }, [rows]);
 
   const groups = useMemo(() => {
-    const map = new Map<string, { name: string; code: string; dept: string; rows: AttendanceRecord[] }>();
+    const map = new Map<string, { id: string; name: string; code: string; dept: string; rows: AttendanceRecord[] }>();
     rows.forEach((r) => {
       const key = r.employeeId;
       if (!map.has(key)) {
         map.set(key, {
+          id: key,
           name: r.employee?.fullName ?? 'Unknown',
           code: r.employee?.employeeCode ?? '',
           dept: r.employee?.department?.name ?? '',
@@ -152,6 +161,23 @@ export function AttendanceReportPrintable({
                   </Td>
                 </Tr>
               ))}
+              {/* Absent days an attendance policy created (every N late / grace arrivals). */}
+              {(policyAbsences ?? [])
+                .filter((a) => a.employeeId === g.id)
+                .map((a) => (
+                  <Tr key={a.id}>
+                    <Td>{formatDate(a.date)}</Td>
+                    <Td>{new Date(a.date).toLocaleDateString(undefined, { weekday: 'short' })}</Td>
+                    <Td></Td>
+                    <Td></Td>
+                    <Td></Td>
+                    <Td>
+                      <span className="font-medium text-danger" title={`Caused by: ${a.occurrenceDates.join(', ')}`}>
+                        {a.label}
+                      </span>
+                    </Td>
+                  </Tr>
+                ))}
             </Tbody>
           </Table>
         </div>
@@ -172,6 +198,7 @@ export function AttendanceReportPrintable({
               </span>
             ) : null,
           )}
+          {(policyAbsences?.length ?? 0) > 0 && <span>Policy absent: {policyAbsences!.length}</span>}
         </div>
       )}
     </>
@@ -210,6 +237,12 @@ export function AttendanceReport() {
   });
 
   const rows = data?.items ?? [];
+  const { data: policyAbsences } = usePolicyAbsences({
+    startDate,
+    endDate,
+    employeeId: employeeId || undefined,
+    departmentId: departmentId || undefined,
+  });
   const departmentName = departments?.find((d) => d.id === departmentId)?.name;
   const selectedEmployee = employees?.items.find((e) => e.id === employeeId);
 
@@ -284,6 +317,7 @@ export function AttendanceReport() {
               periodLabel: periodLabel(),
               departmentLabel: departmentLabel(),
               scopeLabel: scopeLabel(),
+              policyAbsences,
             })
           }
           disabled={rows.length === 0}
@@ -301,6 +335,7 @@ export function AttendanceReport() {
               periodLabel: periodLabel(),
               departmentLabel: departmentLabel(),
               scopeLabel: scopeLabel(),
+              policyAbsences,
             })
           }
           disabled={rows.length === 0}
@@ -318,6 +353,7 @@ export function AttendanceReport() {
             periodLabel={periodLabel()}
             departmentLabel={departmentLabel()}
             scopeLabel={scopeLabel()}
+            policyAbsences={policyAbsences}
             isLoading={isLoading}
           />
         </div>

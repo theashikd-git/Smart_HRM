@@ -19,6 +19,7 @@ const ResignedEmployeesProgram = dynamic<ProgramProps>(() => import('./resigned-
 const ReportsProgram = dynamic<ProgramProps>(() => import('./reports/ReportsProgram').then((m) => m.ReportsProgram), { loading: ProgramLoading });
 const AttendanceProgram = dynamic<ProgramProps>(() => import('./attendance/AttendanceProgram').then((m) => m.AttendanceProgram), { loading: ProgramLoading });
 const CompanyProgram = dynamic<ProgramProps>(() => import('./organization/CompanyProgram').then((m) => m.CompanyProgram), { loading: ProgramLoading });
+const PolicyProgram = dynamic<ProgramProps>(() => import('./policy/PolicyProgram').then((m) => m.PolicyProgram), { loading: ProgramLoading });
 const DepartmentProgram = dynamic<ProgramProps>(() => import('./department/DepartmentProgram').then((m) => m.DepartmentProgram), { loading: ProgramLoading });
 const DesignationProgram = dynamic<ProgramProps>(() => import('./designation/DesignationProgram').then((m) => m.DesignationProgram), { loading: ProgramLoading });
 const RosterProgram = dynamic<ProgramProps>(() => import('./roster/RosterProgram').then((m) => m.RosterProgram), { loading: ProgramLoading });
@@ -46,6 +47,8 @@ export function ProgramRouter({ tab }: { tab: WorkbenchTab }) {
       return <AttendanceProgram tab={tab} />;
     case 'org-company':
       return <CompanyProgram tab={tab} />;
+    case 'org-policy':
+      return <PolicyProgram tab={tab} />;
     case 'org-department':
       return <DepartmentProgram tab={tab} />;
     case 'org-designation':

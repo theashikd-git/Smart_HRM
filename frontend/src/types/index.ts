@@ -54,6 +54,9 @@ export interface Shift {
   breakMinutes: number;
   weekendRule?: string | null;
   overtimeRule?: string | null;
+  // FIXED (default): start/end time + grace apply. FLEXIBLE: just requiredHours a day, no Grace/Late.
+  shiftType?: 'FIXED' | 'FLEXIBLE';
+  requiredHours?: number | string | null;
   // null departmentId = a "General" shift, usable by every department.
   departmentId?: string | null;
   department?: { id: string; name: string } | null;
@@ -156,6 +159,10 @@ export interface Employee {
   departmentId?: string | null;
   designationId?: string | null;
   shiftId?: string | null;
+  // Attendance policy exemption: still shows Grace/Late, but no policy absent days.
+  policyExempt?: boolean;
+  policyExemptUntil?: string | null;
+  policyExemptReason?: string | null;
   employmentType: EmploymentType;
   salary?: number | null;
   status: EmployeeStatus;
@@ -237,7 +244,16 @@ export interface DeviceUser {
   hasFace: boolean;
 }
 
-export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'ON_LEAVE' | 'HOLIDAY';
+export type AttendanceStatus =
+  | 'PRESENT'
+  | 'LATE'
+  | 'ABSENT'
+  | 'HALF_DAY'
+  | 'ON_LEAVE'
+  | 'HOLIDAY'
+  | 'GRACE'
+  | 'HOLIDAY_DUTY'
+  | 'SHORT_HOURS';
 
 export interface AttendanceRecord {
   id: string;

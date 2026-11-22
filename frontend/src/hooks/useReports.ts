@@ -31,6 +31,8 @@ export interface AttendanceDetailRow {
   overtimeMinutes: number;
   status: string;
   note: string | null;
+  /** true for an absent day an attendance policy created (every N late / grace arrivals). */
+  policyAbsence?: boolean;
 }
 
 export function useAttendanceDetail(query: AttendanceDetailQuery, options?: { enabled?: boolean }) {

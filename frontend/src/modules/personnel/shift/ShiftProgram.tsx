@@ -23,6 +23,8 @@ const EMPTY: ShiftPayload = {
   breakMinutes: 60,
   weekendRule: '',
   overtimeRule: '',
+  shiftType: 'FIXED',
+  requiredHours: null,
   departmentId: undefined,
 };
 
@@ -64,6 +66,8 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
       breakMinutes: s.breakMinutes,
       weekendRule: s.weekendRule || '',
       overtimeRule: s.overtimeRule || '',
+      shiftType: s.shiftType ?? 'FIXED',
+      requiredHours: s.requiredHours === null || s.requiredHours === undefined ? null : Number(s.requiredHours),
       departmentId: s.departmentId || undefined,
     });
     setModalOpen(true);
@@ -136,9 +140,15 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
                   {s.department?.name ?? <span className="text-text-muted">General</span>}
                 </Td>
                 <Td className="font-mono text-xs">
-                  {s.startTime} – {s.endTime}
+                  {s.shiftType === 'FLEXIBLE' ? (
+                    <span>Flexible · {Number(s.requiredHours)}h a day</span>
+                  ) : (
+                    <>
+                      {s.startTime} – {s.endTime}
+                    </>
+                  )}
                 </Td>
-                <Td>{s.graceMinutes}m</Td>
+                <Td>{s.shiftType === 'FLEXIBLE' ? '—' : `${s.graceMinutes}m`}</Td>
                 <Td>{s.breakMinutes}m</Td>
                 <Td>{s.weekendRule || ''}</Td>
                 <Td>{s._count?.employees ?? 0}</Td>
@@ -207,19 +217,55 @@ export function ShiftProgram({ tab }: { tab: WorkbenchTab }) {
               ))}
             </Select>
           </FieldWrap>
-          <FieldWrap label="Start Time" required>
-            <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} required />
+          <FieldWrap
+            label="Shift Type"
+            hint={form.shiftType === 'FLEXIBLE' ? 'No fixed start: the day just needs the required hours. Never shows Grace or Late.' : 'Fixed start and end time, with grace minutes.'}
+          >
+            <Select
+              value={form.shiftType ?? 'FIXED'}
+              onChange={(e) => {
+                const next = e.target.value as 'FIXED' | 'FLEXIBLE';
+                setForm((f) => ({
+                  ...f,
+                  shiftType: next,
+                  requiredHours: next === 'FLEXIBLE' ? f.requiredHours ?? 8 : null,
+                }));
+              }}
+            >
+              <option value="FIXED">Fixed</option>
+              <option value="FLEXIBLE">Flexible</option>
+            </Select>
           </FieldWrap>
-          <FieldWrap label="End Time" required>
-            <Input type="time" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} required />
-          </FieldWrap>
-          <FieldWrap label="Grace Minutes">
-            <Input
-              type="number"
-              value={form.graceMinutes}
-              onChange={(e) => set('graceMinutes', Number(e.target.value))}
-            />
-          </FieldWrap>
+          {form.shiftType === 'FLEXIBLE' && (
+            <FieldWrap label="Required Hours a Day" required hint="Fewer hours shows as Short hours, with no penalty.">
+              <Input
+                type="number"
+                min={0.5}
+                max={24}
+                step={0.25}
+                value={form.requiredHours ?? ''}
+                onChange={(e) => set('requiredHours', e.target.value === '' ? null : Number(e.target.value))}
+                required
+              />
+            </FieldWrap>
+          )}
+          {form.shiftType !== 'FLEXIBLE' && (
+            <>
+              <FieldWrap label="Start Time" required>
+                <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} required />
+              </FieldWrap>
+              <FieldWrap label="End Time" required>
+                <Input type="time" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} required />
+              </FieldWrap>
+              <FieldWrap label="Grace Minutes">
+                <Input
+                  type="number"
+                  value={form.graceMinutes}
+                  onChange={(e) => set('graceMinutes', Number(e.target.value))}
+                />
+              </FieldWrap>
+            </>
+          )}
           <FieldWrap label="Break Minutes">
             <Input
               type="number"

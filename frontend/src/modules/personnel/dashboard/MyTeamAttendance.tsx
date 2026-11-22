@@ -12,6 +12,9 @@ const STATUS_LABEL: Record<string, string> = {
   HALF_DAY: 'Half Day',
   ON_LEAVE: 'Leave',
   HOLIDAY: 'Off',
+  GRACE: 'Grace',
+  HOLIDAY_DUTY: 'Holiday duty',
+  SHORT_HOURS: 'Short hours',
 };
 
 /**

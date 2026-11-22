@@ -61,6 +61,9 @@ export const attendanceStatusColors: Record<string, { text: string; bg: string; 
   HALF_DAY: { text: 'text-info', bg: 'bg-info-soft', dot: 'bg-info' },
   ON_LEAVE: { text: 'text-accent', bg: 'bg-accent-soft', dot: 'bg-accent' },
   HOLIDAY: { text: 'text-text-secondary', bg: 'bg-surface-sunken', dot: 'bg-text-muted' },
+  GRACE: { text: 'text-warning', bg: 'bg-warning-soft', dot: 'bg-warning' },
+  HOLIDAY_DUTY: { text: 'text-accent', bg: 'bg-accent-soft', dot: 'bg-accent' },
+  SHORT_HOURS: { text: 'text-info', bg: 'bg-info-soft', dot: 'bg-info' },
 };
 
 export const deviceStatusColors: Record<string, { text: string; bg: string; dot: string }> = {
