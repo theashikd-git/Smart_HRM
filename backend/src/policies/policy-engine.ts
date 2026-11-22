@@ -111,12 +111,17 @@ export interface AbsenceOutput {
   occurrenceIds: string[];
 }
 
-/**
- * Turns an employee's arrivals into policy absent days. Pure and repeatable:
- * the same input always gives the same output, and an arrival listed twice
- * (same date) is counted once, so re-syncing can never double count.
- */
-export function computeAbsences(params: PolicyParams, anchor: string, input: OccurrenceInput[]): AbsenceOutput[] {
+interface Simulation {
+  out: AbsenceOutput[];
+  /** Reset period / window the last processed arrival fell in. */
+  period: string | null;
+  windowKey: string | null;
+  seenInWindow: number;
+  /** Arrivals waiting for the group to fill up (carried over). */
+  pending: number;
+}
+
+function simulate(params: PolicyParams, anchor: string, input: OccurrenceInput[]): Simulation {
   const allowed = Math.max(0, Math.floor(params.allowed));
   const every = Math.max(1, Math.floor(params.convertEvery));
 
@@ -150,7 +155,44 @@ export function computeAbsences(params: PolicyParams, anchor: string, input: Occ
       out.push({ date: o.date, windowKey: w.key, occurrenceIds: group.map((g) => g.id) });
     }
   }
-  return out;
+  return { out, period, windowKey, seenInWindow, pending: pending.length };
+}
+
+/**
+ * Turns an employee's arrivals into policy absent days. Pure and repeatable:
+ * the same input always gives the same output, and an arrival listed twice
+ * (same date) is counted once, so re-syncing can never double count.
+ */
+export function computeAbsences(params: PolicyParams, anchor: string, input: OccurrenceInput[]): AbsenceOutput[] {
+  return simulate(params, anchor, input).out;
+}
+
+export interface Counters {
+  windowStart: string;
+  windowEnd: string;
+  /** Arrivals counted in the current window. */
+  inWindow: number;
+  /** First day of the current counter-reset period. */
+  periodStart: string;
+  /** Arrivals carried over, waiting to reach the next absent day. */
+  pending: number;
+  /** Policy absent days created in the current reset period. */
+  absencesInPeriod: number;
+}
+
+/** Where the employee's counters stand on `asOf` (arrivals after that day are ignored). */
+export function counters(params: PolicyParams, anchor: string, input: OccurrenceInput[], asOf: string): Counters {
+  const sim = simulate(params, anchor, input.filter((o) => o.date <= asOf));
+  const w = windowOf(params, anchor, asOf);
+  const periodStart = resetPeriodStart(params, anchor, asOf);
+  return {
+    windowStart: w.start,
+    windowEnd: w.end,
+    inWindow: sim.windowKey === w.key ? sim.seenInWindow : 0,
+    periodStart,
+    pending: sim.period === periodStart ? sim.pending : 0,
+    absencesInPeriod: sim.out.filter((a) => a.date >= periodStart).length,
+  };
 }
 
 // --------------------------------------------------------------- scope -----

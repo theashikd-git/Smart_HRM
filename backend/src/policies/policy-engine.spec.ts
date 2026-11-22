@@ -1,5 +1,6 @@
 import {
   computeAbsences,
+  counters,
   evaluateDay,
   pickPolicy,
   windowOf,
@@ -94,6 +95,22 @@ describe('LATE policy (every 3 late days = 1 absent, per calendar month)', () =>
   });
   it('uncounted (exempt) arrivals never convert', () => {
     expect(computeAbsences(lateParams, anchor, occ(['2026-03-02', '2026-03-09', '2026-03-16'], false))).toEqual([]);
+  });
+});
+
+describe('counters', () => {
+  it('shows the window count, carried-over leftovers and absent days', () => {
+    const c = counters(graceParams, '2026-11-02', occ(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']), '2026-11-07');
+    expect(c).toMatchObject({ windowStart: '2026-11-02', windowEnd: '2026-11-08', inWindow: 5, pending: 2, absencesInPeriod: 0 });
+  });
+  it('a new window starts at zero', () => {
+    const c = counters(graceParams, '2026-11-02', occ(['2026-11-05', '2026-11-06']), '2026-11-10');
+    expect(c).toMatchObject({ inWindow: 0, pending: 0, periodStart: '2026-11-09' });
+  });
+  it('ignores arrivals after the as-of day', () => {
+    const c = counters(lateParams, '2026-01-01', occ(['2026-03-02', '2026-03-09', '2026-03-16']), '2026-03-10');
+    expect(c.pending).toBe(2);
+    expect(c.absencesInPeriod).toBe(0);
   });
 });
 

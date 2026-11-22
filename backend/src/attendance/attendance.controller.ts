@@ -11,6 +11,7 @@ import {
   CorrectAttendanceDto,
   ManualPunchDto,
 } from './dto/attendance.dto';
+import { RecalculateDto } from '../policies/dto/policy.dto';
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
@@ -23,6 +24,14 @@ export class AttendanceController {
   @Roles('ADMIN', 'HR')
   sync(@CurrentUser() user: any) {
     return this.attendanceService.syncFromDevice(user.id);
+  }
+
+  // Explicit "recalculate from date": re-runs the daily rules from raw punches.
+  // Editing a policy never does this by itself.
+  @Post('recalculate')
+  @Roles('ADMIN', 'HR')
+  recalculate(@Body() dto: RecalculateDto, @CurrentUser() user: any) {
+    return this.attendanceService.recalculateFrom(dto.fromDate, dto.employeeId, user.id);
   }
 
   @Post('manual-punch')

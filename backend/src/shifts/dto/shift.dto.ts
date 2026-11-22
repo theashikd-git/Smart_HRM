@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Matches, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -30,6 +30,18 @@ export class CreateShiftDto {
   @IsOptional()
   @IsString()
   overtimeRule?: string;
+
+  // FIXED (default) uses start/end time and grace. FLEXIBLE has no start
+  // time: the day needs `requiredHours` worked and never shows GRACE/LATE.
+  @IsOptional()
+  @IsEnum(['FIXED', 'FLEXIBLE'])
+  shiftType?: 'FIXED' | 'FLEXIBLE';
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.5)
+  @Max(24)
+  requiredHours?: number | null;
 
   // Department this shift belongs to. Required when creating (enforced in
   // ShiftsService); only HR/Admin create/edit shifts. Older shifts with no
@@ -69,6 +81,18 @@ export class UpdateShiftDto {
   @IsOptional()
   @IsString()
   overtimeRule?: string;
+
+  // FIXED (default) uses start/end time and grace. FLEXIBLE has no start
+  // time: the day needs `requiredHours` worked and never shows GRACE/LATE.
+  @IsOptional()
+  @IsEnum(['FIXED', 'FLEXIBLE'])
+  shiftType?: 'FIXED' | 'FLEXIBLE';
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.5)
+  @Max(24)
+  requiredHours?: number | null;
 
   // Department this shift belongs to. Required when creating (enforced in
   // ShiftsService); only HR/Admin create/edit shifts. Older shifts with no

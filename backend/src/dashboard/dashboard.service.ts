@@ -25,7 +25,7 @@ export class DashboardService {
       this.prisma.employee.count(),
       this.prisma.employee.count({ where: { status: 'ACTIVE' } }),
       this.prisma.attendanceRecord.count({
-        where: { date: { gte: today, lt: tomorrow }, status: { in: ['PRESENT', 'LATE', 'HALF_DAY'] } },
+        where: { date: { gte: today, lt: tomorrow }, status: { in: ['PRESENT', 'LATE', 'HALF_DAY', 'GRACE', 'SHORT_HOURS', 'HOLIDAY_DUTY'] } },
       }),
       this.prisma.attendanceRecord.count({
         where: { date: { gte: today, lt: tomorrow }, status: 'LATE' },
@@ -68,7 +68,7 @@ export class DashboardService {
       this.prisma.employee.count({ where: { status: 'ACTIVE' } }),
       this.prisma.attendanceRecord.groupBy({
         by: ['date', 'status'],
-        where: { date: { gte: dayStarts[0], lt: end }, status: { in: ['PRESENT', 'HALF_DAY', 'LATE'] } },
+        where: { date: { gte: dayStarts[0], lt: end }, status: { in: ['PRESENT', 'HALF_DAY', 'LATE', 'GRACE', 'SHORT_HOURS', 'HOLIDAY_DUTY'] } },
         _count: { _all: true },
       }),
     ]);
@@ -103,7 +103,7 @@ export class DashboardService {
       this.prisma.attendanceRecord.findMany({
         where: {
           date: { gte: today, lt: tomorrow },
-          status: { in: ['PRESENT', 'LATE', 'HALF_DAY'] },
+          status: { in: ['PRESENT', 'LATE', 'HALF_DAY', 'GRACE', 'SHORT_HOURS', 'HOLIDAY_DUTY'] },
           employee: { status: 'ACTIVE' },
         },
         select: { employee: { select: { departmentId: true } } },

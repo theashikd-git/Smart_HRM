@@ -130,7 +130,7 @@ export class ReportsService {
         where: {
           employee: { departmentId: dept.id },
           date: this.dateRange(startDate, endDate),
-          status: { in: ['PRESENT', 'LATE', 'HALF_DAY'] },
+          status: { in: ['PRESENT', 'LATE', 'HALF_DAY', 'GRACE', 'SHORT_HOURS'] },
         },
       });
       const lateCount = await this.prisma.attendanceRecord.count({
@@ -180,7 +180,7 @@ export class ReportsService {
         where.status = 'LATE';
         break;
       case 'present':
-        where.status = { in: ['PRESENT', 'LATE', 'HALF_DAY'] };
+        where.status = { in: ['PRESENT', 'LATE', 'HALF_DAY', 'GRACE', 'SHORT_HOURS', 'HOLIDAY_DUTY'] };
         break;
       case 'overtime':
         where.overtimeMinutes = { gt: 0 };
@@ -342,6 +342,45 @@ export class ReportsService {
         });
         if (rows.length >= 5000) break;
       }
+    }
+
+    // Days an attendance policy turned into an absence (every N late / grace
+    // arrivals). The person did punch on those days, so these sit alongside
+    // the days with no punch -- flagged so reports can tell them apart.
+    const byId = new Map(employees.map((e) => [e.id, e]));
+    const policyAbsences = await this.prisma.policyAbsence.findMany({
+      where: {
+        employeeId: { in: ids },
+        date: {
+          gte: new Date(`${start.toISOString().slice(0, 10)}T00:00:00.000Z`),
+          lte: new Date(`${lastDay.toISOString().slice(0, 10)}T00:00:00.000Z`),
+        },
+      },
+      include: { occurrences: { select: { date: true }, orderBy: { date: 'asc' } } },
+    });
+    for (const a of policyAbsences) {
+      const emp = byId.get(a.employeeId);
+      if (!emp) continue;
+      rows.push({
+        id: `policy-absent-${a.id}`,
+        date: a.date,
+        employeeId: emp.id,
+        employeeName: emp.fullName,
+        employeeCode: emp.employeeCode,
+        department: emp.department?.name ?? null,
+        shift: emp.shift?.name ?? null,
+        scheduledIn: emp.shift?.startTime ?? null,
+        scheduledOut: emp.shift?.endTime ?? null,
+        checkIn: null,
+        checkOut: null,
+        workHours: null,
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
+        overtimeMinutes: 0,
+        status: 'ABSENT',
+        policyAbsence: true,
+        note: `${a.reason}: ${a.occurrences.map((o) => o.date.toISOString().slice(0, 10)).join(', ')}`,
+      });
     }
 
     rows.sort((a, b) => b.date.getTime() - a.date.getTime() || a.employeeName.localeCompare(b.employeeName));

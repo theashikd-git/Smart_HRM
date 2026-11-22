@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -18,6 +19,7 @@ import { Transform } from 'class-transformer';
 // for null/undefined, not "", so a blank Email field would still fail
 // @IsEmail() with "email must be an email" even though Email isn't required.
 const blankToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
+const blankToNull = ({ value }: { value: unknown }) => (value === '' ? null : value);
 
 export enum EmploymentTypeDto {
   FULL_TIME = 'FULL_TIME',
@@ -79,6 +81,13 @@ export class CreateEmployeeDto {
   @IsNotEmpty() @IsString() departmentId: string;
   @IsNotEmpty() @IsString() designationId: string;
   @IsOptional() @IsString() shiftId?: string;
+
+  // Attendance policy exemption (Organization > Policy). An exempt employee
+  // still shows GRACE/LATE, but no policy absent days are applied. Optional
+  // end date; blank = until switched off.
+  @IsOptional() @IsBoolean() policyExempt?: boolean;
+  @Transform(blankToNull) @IsOptional() @IsDateString() policyExemptUntil?: string | null;
+  @Transform(blankToNull) @IsOptional() @IsString() policyExemptReason?: string | null;
   @IsOptional() @IsEnum(EmploymentTypeDto) employmentType?: EmploymentTypeDto;
   @IsOptional() @IsNumber() salary?: number;
   @IsOptional() @IsEnum(EmployeeStatusDto) status?: EmployeeStatusDto;
@@ -146,6 +155,13 @@ export class UpdateEmployeeDto {
   @IsNotEmpty() @IsString() departmentId: string;
   @IsNotEmpty() @IsString() designationId: string;
   @IsOptional() @IsString() shiftId?: string;
+
+  // Attendance policy exemption (Organization > Policy). An exempt employee
+  // still shows GRACE/LATE, but no policy absent days are applied. Optional
+  // end date; blank = until switched off.
+  @IsOptional() @IsBoolean() policyExempt?: boolean;
+  @Transform(blankToNull) @IsOptional() @IsDateString() policyExemptUntil?: string | null;
+  @Transform(blankToNull) @IsOptional() @IsString() policyExemptReason?: string | null;
   @IsOptional() @IsEnum(EmploymentTypeDto) employmentType?: EmploymentTypeDto;
   @IsOptional() @IsNumber() salary?: number;
   @IsOptional() @IsEnum(EmployeeStatusDto) status?: EmployeeStatusDto;

@@ -15,6 +15,13 @@ const EMPLOYEE_LIST_FIELDS = Object.fromEntries(
     .map((f) => [f, true]),
 ) as Prisma.EmployeeSelect;
 
+/** Exemption date -> DB date (undefined = leave as is, null = clear). */
+function exemptDate(value?: string | null): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (!value) return null;
+  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+}
+
 @Injectable()
 export class EmployeesService {
   private readonly logger = new Logger(EmployeesService.name);
@@ -28,7 +35,7 @@ export class EmployeesService {
   ) {}
 
   async create(dto: CreateEmployeeDto, actorId?: string) {
-    const { staffUsername, staffPassword, ...employeeData } = dto;
+    const { staffUsername, staffPassword, policyExemptUntil, ...employeeData } = dto;
 
     const employeeCode = dto.employeeCode?.trim() || (await this.generateEmployeeCode());
 
@@ -58,6 +65,8 @@ export class EmployeesService {
       data: {
         ...employeeData,
         employeeCode,
+        policyExemptUntil: dto.policyExempt ? exemptDate(policyExemptUntil) : null,
+        policyExemptReason: dto.policyExempt ? employeeData.policyExemptReason : null,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
         joiningDate,
         // Anchors the leave-category clock: Permanent's 1-year mark,
@@ -177,9 +186,16 @@ export class EmployeesService {
   }
 
   async update(id: string, dto: UpdateEmployeeDto, actorId?: string, actorRole?: string) {
-    const { staffUsername, staffPassword, ...employeeData } = dto;
+    const { staffUsername, staffPassword, policyExemptUntil, ...employeeData } = dto;
 
     const current = await this.findOne(id);
+
+    // Attendance-policy exemption: switching it off clears the end date and reason.
+    const exemptFieldsSent =
+      dto.policyExempt !== undefined || policyExemptUntil !== undefined || dto.policyExemptReason !== undefined;
+    const nextExempt = dto.policyExempt ?? current.policyExempt;
+    const nextExemptUntil = nextExempt ? exemptDate(policyExemptUntil) : null;
+    const nextExemptReason = nextExempt ? dto.policyExemptReason : null;
 
     // Only an Administrator can *promote* someone to Administrator through
     // this field -- but compare against the employee's current Employee
@@ -233,6 +249,9 @@ export class EmployeesService {
       where: { id },
       data: {
         ...employeeData,
+        ...(exemptFieldsSent
+          ? { policyExempt: nextExempt, policyExemptUntil: nextExemptUntil, policyExemptReason: nextExemptReason }
+          : {}),
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
         joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
         // A category change starts a fresh clock (e.g. Provision ->
@@ -250,6 +269,34 @@ export class EmployeesService {
       entity: 'Employee',
       entityId: id,
     });
+
+    if (exemptFieldsSent) {
+      const asKey = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+      const oldValue = {
+        policyExempt: current.policyExempt,
+        policyExemptUntil: asKey(current.policyExemptUntil),
+        policyExemptReason: current.policyExemptReason ?? null,
+      };
+      const newValue = {
+        policyExempt: employee.policyExempt,
+        policyExemptUntil: asKey(employee.policyExemptUntil),
+        policyExemptReason: employee.policyExemptReason ?? null,
+      };
+      if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+        await this.auditService.log({
+          userId: actorId,
+          action: 'EMPLOYEE_POLICY_EXEMPTION_CHANGED',
+          entity: 'Employee',
+          entityId: id,
+          details: JSON.stringify({
+            old: oldValue,
+            new: newValue,
+            effectiveFrom: new Date().toISOString().slice(0, 10),
+            actor: actorId ?? null,
+          }),
+        });
+      }
+    }
 
     // Same reasoning as create(): don't make HR wait on the biometric
     // device -- push in the background. The employee already carries

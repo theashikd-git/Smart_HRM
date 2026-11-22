@@ -19,6 +19,7 @@ import { DepartmentSuperiorsModule } from './department-superiors/department-sup
 import { RosterModule } from './roster/roster.module';
 import { HolidaysModule } from './holidays/holidays.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PoliciesModule } from './policies/policies.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     RosterModule,
     HolidaysModule,
     NotificationsModule,
+    PoliciesModule,
   ],
 })
 export class AppModule {}

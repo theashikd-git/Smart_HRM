@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { HolidaysService } from '../holidays/holidays.service';
+import { PoliciesService } from '../policies/policies.service';
+import { DayInput, DayResult, evaluateDay } from '../policies/policy-engine';
 import { ZktecoClient, RawPunch } from '../devices/zkteco/zkteco-client.interface';
 import { ZKTECO_CLIENT } from '../devices/zkteco/zkteco-client.token';
 import {
@@ -18,6 +20,8 @@ import {
   CorrectAttendanceDto,
   ManualPunchDto,
 } from './dto/attendance.dto';
+
+const DAY_INDEX: Record<string, number> = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -41,6 +45,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     private auditService: AuditService,
     private config: ConfigService,
     private holidaysService: HolidaysService,
+    private policies: PoliciesService,
     @Inject(ZKTECO_CLIENT) private zkteco: ZktecoClient,
   ) {}
 
@@ -253,44 +258,28 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const checkIn = ins.length > 0 ? ins[0].timestamp : logs[0].timestamp;
     const checkOut = outs.length > 0 ? outs[outs.length - 1].timestamp : null;
 
-    let lateMinutes = 0;
     let earlyLeaveMinutes = 0;
     let overtimeMinutes = 0;
     let workHours: number | null = null;
-    let status: 'PRESENT' | 'LATE' | 'HALF_DAY' | 'HOLIDAY' = 'PRESENT';
-
-    if (employee.shift) {
-      const shiftStartMin = toMinutes(employee.shift.startTime);
-      const shiftEndMin = toMinutes(employee.shift.endTime);
-      const grace = employee.shift.graceMinutes;
-
-      const checkInMin = checkIn.getHours() * 60 + checkIn.getMinutes();
-      if (checkInMin > shiftStartMin + grace) {
-        lateMinutes = checkInMin - shiftStartMin;
-        status = 'LATE';
-      }
-
-      if (checkOut) {
-        const checkOutMin = checkOut.getHours() * 60 + checkOut.getMinutes();
-        if (checkOutMin < shiftEndMin) {
-          earlyLeaveMinutes = shiftEndMin - checkOutMin;
-        } else if (checkOutMin > shiftEndMin) {
-          overtimeMinutes = checkOutMin - shiftEndMin;
-        }
-      }
-    }
 
     if (checkOut) {
       workHours = Math.round(((checkOut.getTime() - checkIn.getTime()) / 3600000) * 100) / 100;
-      if (workHours < 4) status = 'HALF_DAY';
     }
 
-    // A punch still gets logged on a declared holiday (someone came in
-    // anyway), but it's recorded as HOLIDAY rather than PRESENT/LATE/HALF_DAY
-    // so holiday work is visible as such everywhere attendance status is shown.
-    if (await this.holidaysService.isHoliday(dayStart)) {
-      status = 'HOLIDAY';
+    // A flexible shift has no fixed end time, so no early-leave / overtime.
+    if (employee.shift && employee.shift.shiftType !== 'FLEXIBLE' && checkOut) {
+      const shiftEndMin = toMinutes(employee.shift.endTime);
+      const checkOutMin = checkOut.getHours() * 60 + checkOut.getMinutes();
+      if (checkOutMin < shiftEndMin) {
+        earlyLeaveMinutes = shiftEndMin - checkOutMin;
+      } else if (checkOutMin > shiftEndMin) {
+        overtimeMinutes = checkOutMin - shiftEndMin;
+      }
     }
+
+    // Status (PRESENT / GRACE / LATE / HALF_DAY / HOLIDAY_DUTY / SHORT_HOURS)
+    // and whether this arrival is tracked by an attendance policy.
+    const { status, lateMinutes, occurrence } = await this.evaluate(employee, dayStart, checkIn, workHours);
 
     const record = await this.prisma.attendanceRecord.upsert({
       where: { employeeId_date: { employeeId, date: dayStart } },
@@ -316,7 +305,135 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    // Keep the stored GRACE / LATE arrival (and any policy absent day it
+    // completes) in step with this day. Repeatable: running it again for the
+    // same day changes nothing.
+    await this.policies.syncDay(employeeId, dayStart.toISOString().slice(0, 10), occurrence);
+
     return record;
+  }
+
+  /** Is the day a declared holiday, a weekly day off (roster OFF, or the shift's weekend), or a normal working day? */
+  private async dayKind(
+    employee: { id: string; shift: { weekendRule: string | null } | null },
+    dayStart: Date,
+  ): Promise<'WORKING' | 'HOLIDAY' | 'WEEKLY_OFF'> {
+    if (await this.holidaysService.isHoliday(dayStart)) return 'HOLIDAY';
+
+    const roster = await this.prisma.rosterAssignment.findUnique({
+      where: { employeeId_date: { employeeId: employee.id, date: dayStart } },
+      select: { type: true, status: true },
+    });
+    if (roster && roster.status === 'APPROVED') return roster.type === 'OFF' ? 'WEEKLY_OFF' : 'WORKING';
+
+    const rule = employee.shift?.weekendRule;
+    if (rule) {
+      for (const token of rule.split(',')) {
+        const key = token.trim().slice(0, 3).toUpperCase();
+        if (key in DAY_INDEX && DAY_INDEX[key] === dayStart.getDay()) return 'WEEKLY_OFF';
+      }
+    }
+    return 'WORKING';
+  }
+
+  /** The day's status and policy occurrence for a check-in, applying every attendance rule. */
+  private async evaluate(
+    employee: {
+      id: string;
+      departmentId: string | null;
+      designationId: string | null;
+      policyExempt: boolean;
+      policyExemptUntil: Date | null;
+      shift: {
+        shiftType: string;
+        startTime: string;
+        graceMinutes: number;
+        requiredHours: any;
+        weekendRule: string | null;
+      } | null;
+    },
+    dayStart: Date,
+    checkIn: Date,
+    workHours: number | null,
+  ): Promise<DayResult> {
+    const [dayKind, leave, defs] = await Promise.all([
+      this.dayKind(employee, dayStart),
+      this.prisma.leaveRequest.findFirst({
+        where: { employeeId: employee.id, status: 'APPROVED', startDate: { lte: dayStart }, endDate: { gte: dayStart } },
+        select: { id: true },
+      }),
+      this.policies.loadDefs(),
+    ]);
+
+    const shift = employee.shift;
+    const input: DayInput = {
+      employee: this.policies.employeeCtx(employee),
+      shift: shift
+        ? {
+            shiftType: shift.shiftType === 'FLEXIBLE' ? 'FLEXIBLE' : 'FIXED',
+            startMin: toMinutes(shift.startTime),
+            graceMin: shift.graceMinutes,
+            requiredHours: shift.requiredHours === null || shift.requiredHours === undefined ? null : Number(shift.requiredHours),
+          }
+        : null,
+      date: dayStart.toISOString().slice(0, 10),
+      checkInMin: checkIn.getHours() * 60 + checkIn.getMinutes(),
+      workHours,
+      dayKind,
+      onApprovedLeave: !!leave,
+      policies: defs,
+    };
+    return evaluateDay(input);
+  }
+
+  /**
+   * Re-runs the daily calculation from raw punches for every day since
+   * `fromDate` (one employee, or everyone). This is the explicit "recalculate
+   * from date" action: editing a policy never does it on its own. Days whose
+   * record HR corrected by hand are left alone.
+   */
+  async recalculateFrom(fromDate: string, employeeId?: string, actorId?: string) {
+    const from = startOfDay(new Date(fromDate));
+    if (Number.isNaN(from.getTime())) throw new NotFoundException('Invalid date');
+
+    const logs = await this.prisma.attendanceLog.findMany({
+      where: { timestamp: { gte: from }, ...(employeeId ? { employeeId } : {}) },
+      select: { employeeId: true, timestamp: true },
+    });
+    const corrected = await this.prisma.attendanceRecord.findMany({
+      where: { date: { gte: from }, notes: { not: null }, ...(employeeId ? { employeeId } : {}) },
+      select: { employeeId: true, date: true },
+    });
+    const skip = new Set(corrected.map((r) => `${r.employeeId}|${r.date.toISOString().slice(0, 10)}`));
+
+    const days = new Map<string, { employeeId: string; day: Date }>();
+    let skipped = 0;
+    for (const l of logs) {
+      const day = startOfDay(l.timestamp);
+      const key = `${l.employeeId}|${day.toISOString().slice(0, 10)}`;
+      if (days.has(key)) continue;
+      if (skip.has(key)) {
+        skipped++;
+        days.set(key, { employeeId: '', day });
+        continue;
+      }
+      days.set(key, { employeeId: l.employeeId, day });
+    }
+
+    let recalculated = 0;
+    for (const { employeeId: id, day } of days.values()) {
+      if (!id) continue;
+      await this.processDay(id, day);
+      recalculated++;
+    }
+
+    await this.policies.auditRecalculation(actorId, {
+      fromDate: from.toISOString().slice(0, 10),
+      employeeId: employeeId ?? null,
+      recalculated,
+      skippedCorrected: skipped,
+    });
+    return { fromDate: from.toISOString().slice(0, 10), recalculated, skippedCorrected: skipped };
   }
 
   async findAll(query: AttendanceQueryDto) {
@@ -370,6 +487,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     await this.findOne(id);
     const record = await this.prisma.attendanceRecord.update({
       where: { id },
+      include: { employee: { include: { shift: true } } },
       data: {
         checkIn: dto.checkIn ? new Date(dto.checkIn) : undefined,
         checkOut: dto.checkOut ? new Date(dto.checkOut) : undefined,
@@ -385,6 +503,22 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       entityId: id,
       details: dto.notes,
     });
+
+    // A correction changes the arrival the policies count. Marking the day
+    // with any status other than LATE / GRACE excuses it; otherwise the
+    // arrival is re-read from the (possibly corrected) check-in time.
+    const excused = dto.status !== undefined && dto.status !== 'LATE' && dto.status !== 'GRACE';
+    let occurrence: DayResult['occurrence'] = null;
+    let key = record.date.toISOString().slice(0, 10);
+    if (record.checkIn) {
+      const dayStart = startOfDay(record.checkIn);
+      key = dayStart.toISOString().slice(0, 10);
+      if (!excused) {
+        const workHours = record.workHours === null ? null : Number(record.workHours);
+        occurrence = (await this.evaluate(record.employee, dayStart, record.checkIn, workHours)).occurrence;
+      }
+    }
+    await this.policies.syncDay(record.employeeId, key, occurrence);
 
     return record;
   }

@@ -53,8 +53,11 @@ export class ShiftsService {
     const department = await this.prisma.department.findUnique({ where: { id: dto.departmentId }, select: { id: true } });
     if (!department) throw new NotFoundException('Department not found');
 
+    if (dto.shiftType === 'FLEXIBLE' && !dto.requiredHours) {
+      throw new BadRequestException('A flexible shift needs the required daily hours.');
+    }
     const shift = await this.prisma.shift.create({
-      data: dto,
+      data: { ...dto, requiredHours: dto.shiftType === 'FLEXIBLE' ? dto.requiredHours : null },
       include: { department: DEPARTMENT_SELECT },
     });
     await this.auditService.log({
@@ -87,10 +90,15 @@ export class ShiftsService {
   }
 
   async update(id: string, dto: UpdateShiftDto, actorId?: string) {
-    await this.findOne(id);
+    const before = await this.findOne(id);
+    const nextType = dto.shiftType ?? before.shiftType;
+    if (nextType === 'FLEXIBLE') {
+      const hours = dto.requiredHours ?? (before.requiredHours === null ? null : Number(before.requiredHours));
+      if (!hours) throw new BadRequestException('A flexible shift needs the required daily hours.');
+    }
     const shift = await this.prisma.shift.update({
       where: { id },
-      data: dto,
+      data: { ...dto, ...(nextType === 'FIXED' ? { requiredHours: null } : {}) },
       include: { department: DEPARTMENT_SELECT },
     });
     await this.auditService.log({
@@ -99,6 +107,23 @@ export class ShiftsService {
       entity: 'Shift',
       entityId: id,
     });
+    // Changing a shift's type changes how every employee on it is judged, so it is logged on its own.
+    const oldHours = before.requiredHours === null ? null : Number(before.requiredHours);
+    const newHours = shift.requiredHours === null ? null : Number(shift.requiredHours);
+    if (before.shiftType !== shift.shiftType || oldHours !== newHours) {
+      await this.auditService.log({
+        userId: actorId,
+        action: 'SHIFT_TYPE_CHANGED',
+        entity: 'Shift',
+        entityId: id,
+        details: JSON.stringify({
+          old: { shiftType: before.shiftType, requiredHours: oldHours },
+          new: { shiftType: shift.shiftType, requiredHours: newHours },
+          effectiveFrom: new Date().toISOString().slice(0, 10),
+          actor: actorId ?? null,
+        }),
+      });
+    }
     return shift;
   }
 
