@@ -379,8 +379,15 @@ export class RosterService {
       return { success: true };
     }
 
+    // Already approved (someone else got there first, a second click, or the
+    // approvals list was a few seconds out of date): the goal of this call is
+    // already met, so say so instead of failing. Nothing is changed, audited
+    // or notified again.
     if (existing.status !== 'PENDING') {
-      throw new BadRequestException(`Only a pending duty can be approved (current status: ${existing.status}).`);
+      return this.prisma.rosterAssignment.findUniqueOrThrow({
+        where: { employeeId_date: { employeeId, date } },
+        include: ASSIGNMENT_INCLUDE,
+      });
     }
 
     const assignment = await this.prisma.rosterAssignment.update({

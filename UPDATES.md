@@ -8,6 +8,22 @@ needed** so it doesn't get missed.
 
 ---
 
+## 2026-11-24 — Roster Approvals: no more "Only a pending duty can be approved"
+
+- Approving a duty that was already approved (approved from another tab or
+  the Roster grid, or the list was a few seconds old) used to fail with
+  *"Only a pending duty can be approved (current status: APPROVED)"*. It now
+  just succeeds quietly, because the duty is already approved. Nothing is
+  audited or sent to the employee a second time.
+- The Roster Approvals list now refreshes after every approve/reject, even a
+  failed one, so a stale row disappears on its own. The error message also
+  names the employee and date that failed.
+
+**Action needed:** restart the backend (`npm run start:dev`) and refresh the
+browser.
+
+---
+
 ## 2026-11-24 — Roster: Shift Summary column and Coverage card
 
 - **Shift Summary** (new sticky column at the right end of the Roster grid,

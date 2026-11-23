@@ -81,7 +81,7 @@ export function useApproveRosterAssignment() {
   return useMutation({
     mutationFn: async ({ employeeId, date, note }: ApproveRosterPayload) =>
       (await api.patch(`/roster/${employeeId}/${date}/approve`, { note })).data,
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });
       qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
@@ -158,7 +158,7 @@ export function useRejectRosterAssignment() {
   return useMutation({
     mutationFn: async ({ employeeId, date, note }: ApproveRosterPayload) =>
       (await api.patch(`/roster/${employeeId}/${date}/reject`, { note })).data,
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['roster'] });
       qc.invalidateQueries({ queryKey: ['my-roster'] });
       qc.invalidateQueries({ queryKey: ['roster-pending-count'] });

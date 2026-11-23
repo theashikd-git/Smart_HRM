@@ -103,7 +103,14 @@ export function RosterApprovalsProgram({ tab }: { tab: WorkbenchTab }) {
     const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
     const done = results.length - failed.length;
     if (done > 0) toast.success(`${done} ${action === 'approve' ? 'approved' : 'rejected'}`);
-    if (failed.length > 0) toast.error(`${failed.length} failed: ${apiErrorMessage(failed[0].reason)}`);
+    if (failed.length > 0) {
+      // Say which one, so it's clear what to look at; the list refreshes itself after a failure.
+      const firstIdx = results.findIndex((r) => r.status === 'rejected');
+      const who = list[firstIdx];
+      toast.error(
+        `${failed.length} failed${who ? ` (${who.employee.fullName}, ${who.date.slice(0, 10)})` : ''}: ${apiErrorMessage(failed[0].reason)}`,
+      );
+    }
     const okKeys = new Set(list.filter((_, idx) => results[idx].status === 'fulfilled').map(keyOf));
     setSelected((cur) => cur.filter((k) => !okKeys.has(k)));
   }
