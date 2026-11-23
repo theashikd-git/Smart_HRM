@@ -15,6 +15,7 @@ import {
   Save,
   Shuffle,
   Dices,
+  CalendarDays,
   type LucideIcon,
 } from 'lucide-react';
 import { ProgramWorkspace } from '@/components/shell/ProgramWorkspace';
@@ -35,6 +36,15 @@ import { attendanceStatusColors, cn, initials } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
 import { BulkAssignModal, type BulkPlan, type AutoPlan } from './BulkAssignModal';
 import { generateRoster } from './autoRoster';
+import {
+  buildCellResolver,
+  summarizeEmployee,
+  coverageForDate,
+  summaryTooltip,
+  formatDayMonth,
+  type EmployeeShiftSummary,
+  type DateCoverage,
+} from './roster-summary';
 import type { RosterAssignment, RosterDayType, RosterEmployee } from '@/types';
 import type { WorkbenchTab } from '@/types/workbench';
 
@@ -53,6 +63,11 @@ const SHIFT_PALETTE = [
 ];
 
 const OFF_COLORS = { bg: 'bg-white', text: 'text-text-secondary', dot: 'bg-text-muted' };
+
+/** Width of the sticky "Shift Summary" column at the right end of the grid. */
+const SUMMARY_W = 228;
+
+type ShiftColors = { bg: string; text: string; dot: string };
 
 function mondayOf(d: Date): Date {
   const day = d.getDay();
@@ -143,6 +158,8 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const [bulkEmployeeIds, setBulkEmployeeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState<Draft>({});
   const [departmentId, setDepartmentId] = useState('');
+  // Date picked for the Coverage card by clicking a date header (null = today).
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [openCell, setOpenCell] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
 
@@ -165,8 +182,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const startDate = isoDate(days[0]);
   const endDate = isoDate(days[days.length - 1]);
   const todayIso = isoDate(new Date());
-  const gridCols = compact ? `190px repeat(${days.length}, 56px)` : '236px repeat(7, minmax(0, 1fr))';
-  const gridMinWidth = compact ? 190 + days.length * 56 : 1180;
+  const gridCols = compact
+    ? `190px repeat(${days.length}, 56px) ${SUMMARY_W}px`
+    : `236px repeat(7, minmax(0, 1fr)) ${SUMMARY_W}px`;
+  const gridMinWidth = (compact ? 190 + days.length * 56 : 1180) + SUMMARY_W;
 
   function switchMode(next: ViewMode) {
     if (next === viewMode) return;
@@ -246,6 +265,36 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
   const shiftsAssigned = (data?.assignments ?? []).filter((a) => a.type === 'SHIFT').length;
   const daysOff = (data?.assignments ?? []).filter((a) => a.type === 'OFF').length;
   const pendingCount = (data?.assignments ?? []).filter((a) => a.status === 'PENDING').length;
+
+  // Shift Summary + Coverage: both read the saved roster with unsaved edits
+  // applied, so they move as soon as a cell is staged.
+  const dateIsos = useMemo(() => days.map(isoDate), [days]);
+  const resolveCell = useMemo(() => buildCellResolver(data?.assignments ?? [], draft), [data, draft]);
+  const summaries = useMemo(() => {
+    const map = new Map<string, EmployeeShiftSummary>();
+    for (const e of data?.employees ?? []) map.set(e.id, summarizeEmployee(resolveCell, e.id, dateIsos, shifts ?? []));
+    return map;
+  }, [data, resolveCell, dateIsos, shifts]);
+
+  // The card's date: the clicked one if it is still in view, else today,
+  // else (today is in another month) the first day of the period.
+  const coverageDate =
+    selectedDate && dateIsos.includes(selectedDate) ? selectedDate : dateIsos.includes(todayIso) ? todayIso : dateIsos[0];
+  // Only highlight a column when it isn't just "today" by default.
+  const highlightDate = selectedDate !== null || coverageDate !== todayIso ? coverageDate : null;
+  const coverage = useMemo<DateCoverage>(() => {
+    const team = data?.employees ?? [];
+    // Shifts that apply to the people in view: general ones plus their departments'.
+    const relevant = (shifts ?? []).filter(
+      (s) => !s.departmentId || team.some((e) => e.department?.id === s.departmentId),
+    );
+    return coverageForDate(resolveCell, team.map((e) => e.id), coverageDate, relevant);
+  }, [data, shifts, resolveCell, coverageDate]);
+
+  function resetCoverageDate() {
+    setSelectedDate(null);
+    if (!dateIsos.includes(todayIso)) goToday();
+  }
 
   function closeCell(key: string) {
     setOpenCell(null);
@@ -560,7 +609,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
         </div>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.7fr)] mb-4">
         <StatTile icon={Users} label="Team Size" value={employees.length} tone="default" />
         <StatTile icon={CalendarCheck} label="Shifts Assigned" value={shiftsAssigned} tone="success" />
         <StatTile icon={CalendarOff} label="Days Off" value={daysOff} tone="default" />
@@ -569,6 +618,12 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
           label="Pending Approval"
           value={pendingCount}
           tone={pendingCount > 0 ? 'warning' : 'default'}
+        />
+        <CoverageTile
+          title={coverageDate === todayIso ? "Today's Coverage" : `Coverage: ${formatDayMonth(coverageDate)}`}
+          coverage={coverage}
+          colorsFor={shiftColors}
+          onReset={coverageDate !== todayIso ? resetCoverageDate : undefined}
         />
       </div>
 
@@ -646,20 +701,28 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                 Employee
               </div>
               {days.map((day, i) => {
-                const isToday = isoDate(day) === todayIso;
+                const iso = isoDate(day);
+                const isToday = iso === todayIso;
                 return (
-                  <div
+                  <button
                     key={i}
+                    type="button"
+                    onClick={() => setSelectedDate(iso)}
+                    title={`Show coverage for ${formatDayMonth(iso)}`}
                     className={cn(
                       compact ? 'px-0.5 py-2 text-center border-l border-line' : 'px-2 py-2.5 text-center border-l border-line',
-                      isToday ? 'bg-accent-soft text-accent-dark' : 'text-text-secondary',
+                      isToday ? 'bg-accent-soft text-accent-dark' : 'text-text-secondary hover:bg-surface-sunken',
+                      highlightDate === iso && 'ring-2 ring-inset ring-accent bg-accent-soft text-accent-dark',
                     )}
                   >
                     <div className="text-[10px] font-semibold tracking-wide">{WEEKDAY_LABELS[(day.getDay() + 6) % 7]}</div>
                     <div className="mt-0.5 text-[13px] font-semibold">{day.getDate()}</div>
-                  </div>
+                  </button>
                 );
               })}
+              <div className="sticky right-0 z-10 flex items-center border-l border-line bg-surface-sunken px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                Shift Summary
+              </div>
             </div>
 
             {!isLoading && employees.length === 0 && (
@@ -750,7 +813,14 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                   const noteDraft = noteDrafts[key] ?? '';
 
                   return (
-                    <div key={i} className={cn('relative border-l border-line', compact ? 'p-0.5' : 'p-1.5')}>
+                    <div
+                      key={i}
+                      className={cn(
+                        'relative border-l border-line',
+                        compact ? 'p-0.5' : 'p-1.5',
+                        highlightDate === dateIso && 'bg-accent-soft/40',
+                      )}
+                    >
                       {compact ? (
                         assignment ? (
                           <button
@@ -944,6 +1014,8 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                     </div>
                   );
                 })}
+
+                <SummaryCell name={emp.fullName} summary={summaries.get(emp.id)} colorsFor={shiftColors} />
               </div>
             ))}
           </div>
@@ -1031,6 +1103,105 @@ function StatTile({
         <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted truncate">{label}</p>
         <span className="text-xl font-semibold text-text-primary leading-tight">{value}</span>
       </div>
+    </div>
+  );
+}
+
+/** Last grid column of an employee row: how their period breaks down by shift. */
+function SummaryCell({
+  name,
+  summary,
+  colorsFor,
+}: {
+  name: string;
+  summary: EmployeeShiftSummary | undefined;
+  colorsFor: (shiftId: string) => ShiftColors;
+}) {
+  if (!summary) return <div className="sticky right-0 z-10 border-l border-line bg-white" />;
+  return (
+    <div
+      title={summaryTooltip(name, summary)}
+      className="sticky right-0 z-10 flex flex-col justify-center gap-1 border-l border-line bg-white px-3 py-1.5"
+    >
+      <div className="flex flex-wrap gap-1">
+        {summary.shifts.map((r) => {
+          const c = colorsFor(r.shiftId);
+          return (
+            <span
+              key={r.shiftId}
+              className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold', c.bg, c.text)}
+            >
+              <span className="max-w-[84px] truncate">{r.name}</span>
+              {r.count}
+              {r.pending > 0 && <span className="h-1.5 w-1.5 rounded-full bg-warning ring-1 ring-white" />}
+            </span>
+          );
+        })}
+        {summary.shifts.length === 0 && <span className="text-[10px] text-text-muted">No shifts</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+        <span className="rounded border border-line px-1.5 py-0.5 font-semibold text-text-secondary">OFF {summary.off}</span>
+        <span className="font-semibold text-text-primary">Duty {summary.duty}</span>
+        <span className="text-text-muted">Unassigned {summary.unassigned}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Stat-row card: head-count per shift (plus OFF and unassigned) for one date.
+ *  A shift with nobody on it is shown in red so gaps stand out. */
+function CoverageTile({
+  title,
+  coverage,
+  colorsFor,
+  onReset,
+}: {
+  title: string;
+  coverage: DateCoverage;
+  colorsFor: (shiftId: string) => ShiftColors;
+  onReset?: () => void;
+}) {
+  return (
+    <div className="col-span-2 rounded border border-line bg-white px-3.5 py-3 sm:col-span-4 lg:col-span-1">
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-surface-sunken text-text-secondary">
+          <CalendarDays className="h-3.5 w-3.5" />
+        </div>
+        <p className="min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-wide text-text-muted">{title}</p>
+        {onReset && (
+          <button type="button" onClick={onReset} className="text-[11px] font-semibold text-accent-dark hover:underline">
+            Today
+          </button>
+        )}
+      </div>
+      {coverage.total === 0 ? (
+        <p className="text-xs text-text-muted">No team members in view.</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {coverage.shifts.map((s) => {
+            const gap = s.count === 0;
+            const c = colorsFor(s.shiftId);
+            return (
+              <span
+                key={s.shiftId}
+                title={`${s.name}${s.range ? ` (${s.range})` : ''}${s.pending ? ` -- ${s.pending} pending approval` : ''}${gap ? ' -- nobody assigned' : ''}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold',
+                  gap ? 'bg-danger-soft text-danger' : cn(c.bg, c.text),
+                )}
+              >
+                <span className="max-w-[96px] truncate">{s.name}</span>
+                <span className="text-sm leading-none">{s.count}</span>
+                {s.pending > 0 && <span className="h-1.5 w-1.5 rounded-full bg-warning ring-1 ring-white" />}
+              </span>
+            );
+          })}
+          <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] font-semibold text-text-secondary">
+            OFF <span className="text-sm leading-none">{coverage.off}</span>
+          </span>
+          <span className="text-[11px] text-text-muted">Unassigned {coverage.unassigned}</span>
+        </div>
+      )}
     </div>
   );
 }
