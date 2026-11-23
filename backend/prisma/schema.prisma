@@ -297,7 +297,8 @@ model Department {
 
   manager        Employee?        @relation("DepartmentManager", fields: [headEmployeeId], references: [id])
   employees      Employee[]
-  designations   Designation[]
+  // Designations this department uses (a designation can belong to several).
+  designations   DepartmentDesignation[]
   superiors      DepartmentSuperior[]
   approvalWorkflow LeaveApprovalWorkflow?
   shifts         Shift[]
@@ -305,18 +306,36 @@ model Department {
   @@map("departments")
 }
 
+// One shared, company-wide list. Which departments use a designation is the
+// DepartmentDesignation join table below. Titles are also unique ignoring case
+// and surrounding spaces, through an index that exists only in the migration
+// (designations_title_lower_key), because Prisma cannot express it here.
 model Designation {
-  id           String        @id @default(uuid())
-  title        String        @unique
-  departmentId String? // department this designation primarily applies to; null = applies anywhere
-  status       OrgUnitStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id        String        @id @default(uuid())
+  title     String        @unique
+  status    OrgUnitStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
-  department Department? @relation(fields: [departmentId], references: [id])
-  employees  Employee[]
+  employees   Employee[]
+  departments DepartmentDesignation[]
 
   @@map("designations")
+}
+
+// Which designations a department offers. Removing a link never changes an
+// employee who already holds the designation; it only stops new assignments.
+model DepartmentDesignation {
+  departmentId  String
+  designationId String
+  createdAt     DateTime @default(now())
+
+  department  Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  designation Designation @relation(fields: [designationId], references: [id], onDelete: Cascade)
+
+  @@id([departmentId, designationId])
+  @@index([designationId])
+  @@map("department_designations")
 }
 
 // One row per (department, employee, title) assignment, so a department
