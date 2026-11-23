@@ -95,7 +95,7 @@ export function RosterApprovalsProgram({ tab }: { tab: WorkbenchTab }) {
     setBusy(true);
     const results = await Promise.allSettled(
       list.map((i) => {
-        const payload = { employeeId: i.employeeId, date: i.date.slice(0, 10), note };
+        const payload = { employeeId: i.employeeId, date: i.date.slice(0, 10), note, assignmentId: i.id };
         return action === 'approve' ? approve.mutateAsync(payload) : reject.mutateAsync(payload);
       }),
     );

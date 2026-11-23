@@ -18,6 +18,10 @@ needed** so it doesn't get missed.
 - The Roster Approvals list now refreshes after every approve/reject, even a
   failed one, so a stale row disappears on its own. The error message also
   names the employee and date that failed.
+- Approve and Reject now act on the exact roster row (by its id, sent from
+  the Approvals list and the Roster grid) instead of matching on employee +
+  date, so a decision can't land on a neighbouring day. Older callers that
+  send only employee + date still work.
 
 **Action needed:** restart the backend (`npm run start:dev`) and refresh the
 browser.

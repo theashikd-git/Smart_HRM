@@ -54,6 +54,14 @@ export class ApproveRosterAssignmentDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  // The exact roster row being decided (from the Approvals list or the grid
+  // cell). When sent, the row is looked up by this id instead of by
+  // employee + date, so a date that doesn't round-trip cleanly can never
+  // land the decision on a neighbouring day.
+  @IsOptional()
+  @IsString()
+  assignmentId?: string;
 }
 
 export class RemoveRosterAssignmentDto {

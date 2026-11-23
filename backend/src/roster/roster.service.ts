@@ -347,14 +347,22 @@ export class RosterService {
    * there's nothing that needs explaining yet.
    */
   async approve(employeeId: string, dateStr: string, dto: ApproveRosterAssignmentDto, actorId?: string) {
-    const date = startOfDay(new Date(dateStr));
-    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
-
-    const existing = await this.prisma.rosterAssignment.findUnique({
-      where: { employeeId_date: { employeeId, date } },
-      include: { shift: { select: { name: true, startTime: true, endTime: true } } },
-    });
+    const shiftInclude = { shift: { select: { name: true, startTime: true, endTime: true } } };
+    // Prefer the exact row id when the caller has it; fall back to employee + date.
+    let existing = dto.assignmentId
+      ? await this.prisma.rosterAssignment.findFirst({ where: { id: dto.assignmentId, employeeId }, include: shiftInclude })
+      : null;
+    if (!existing) {
+      const byDate = startOfDay(new Date(dateStr));
+      if (Number.isNaN(byDate.getTime())) throw new BadRequestException('Invalid date');
+      existing = await this.prisma.rosterAssignment.findUnique({
+        where: { employeeId_date: { employeeId, date: byDate } },
+        include: shiftInclude,
+      });
+    }
     if (!existing) throw new NotFoundException('Roster assignment not found');
+    // Every write below targets the row's own stored date.
+    const date = existing.date;
 
     // A removal request (see remove()) takes priority over whatever
     // status/content is on the row -- approving it here finishes the
@@ -454,11 +462,16 @@ export class RosterService {
    * held before (or, if it was newly assigned, clears it again).
    */
   async reject(employeeId: string, dateStr: string, dto: ApproveRosterAssignmentDto, actorId?: string) {
-    const date = startOfDay(new Date(dateStr));
-    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
-
-    const existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date } } });
+    let existing = dto.assignmentId
+      ? await this.prisma.rosterAssignment.findFirst({ where: { id: dto.assignmentId, employeeId } })
+      : null;
+    if (!existing) {
+      const byDate = startOfDay(new Date(dateStr));
+      if (Number.isNaN(byDate.getTime())) throw new BadRequestException('Invalid date');
+      existing = await this.prisma.rosterAssignment.findUnique({ where: { employeeId_date: { employeeId, date: byDate } } });
+    }
     if (!existing) throw new NotFoundException('Roster assignment not found');
+    const date = existing.date;
 
     const noteText = dto.note ? ` -- Note: ${dto.note}` : '';
 

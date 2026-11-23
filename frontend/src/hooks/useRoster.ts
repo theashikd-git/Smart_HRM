@@ -72,6 +72,8 @@ export interface ApproveRosterPayload {
   employeeId: string;
   date: string;
   note?: string;
+  /** Exact roster row to decide; the server prefers it over employee + date. */
+  assignmentId?: string;
 }
 
 /** HR/Admin confirms a Manager's still-PENDING duty -- only after this
@@ -79,13 +81,15 @@ export interface ApproveRosterPayload {
 export function useApproveRosterAssignment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ employeeId, date, note }: ApproveRosterPayload) =>
-      (await api.patch(`/roster/${employeeId}/${date}/approve`, { note })).data,
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['roster'] });
-      qc.invalidateQueries({ queryKey: ['my-roster'] });
-      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
-    },
+    mutationFn: async ({ employeeId, date, note, assignmentId }: ApproveRosterPayload) =>
+      (await api.patch(`/roster/${employeeId}/${date}/approve`, { note, assignmentId })).data,
+    // Returned so the call only finishes once the lists are fresh again.
+    onSettled: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['roster'] }),
+        qc.invalidateQueries({ queryKey: ['my-roster'] }),
+        qc.invalidateQueries({ queryKey: ['roster-pending-count'] }),
+      ]),
   });
 }
 
@@ -156,12 +160,14 @@ export function useRosterPendingList() {
 export function useRejectRosterAssignment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ employeeId, date, note }: ApproveRosterPayload) =>
-      (await api.patch(`/roster/${employeeId}/${date}/reject`, { note })).data,
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['roster'] });
-      qc.invalidateQueries({ queryKey: ['my-roster'] });
-      qc.invalidateQueries({ queryKey: ['roster-pending-count'] });
-    },
+    mutationFn: async ({ employeeId, date, note, assignmentId }: ApproveRosterPayload) =>
+      (await api.patch(`/roster/${employeeId}/${date}/reject`, { note, assignmentId })).data,
+    // Returned so the call only finishes once the lists are fresh again.
+    onSettled: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['roster'] }),
+        qc.invalidateQueries({ queryKey: ['my-roster'] }),
+        qc.invalidateQueries({ queryKey: ['roster-pending-count'] }),
+      ]),
   });
 }

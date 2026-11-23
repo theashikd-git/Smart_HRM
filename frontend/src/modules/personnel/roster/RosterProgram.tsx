@@ -558,10 +558,10 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
     }
   }
 
-  async function handleApprove(key: string, employeeId: string, date: string, note?: string) {
+  async function handleApprove(key: string, employeeId: string, date: string, note?: string, assignmentId?: string) {
     closeCell(key);
     try {
-      await approveAssignment.mutateAsync({ employeeId, date, note });
+      await approveAssignment.mutateAsync({ employeeId, date, note, assignmentId });
       toast.success('Duty approved');
     } catch (err) {
       toast.error(apiErrorMessage(err));
@@ -927,7 +927,7 @@ export function RosterProgram({ tab }: { tab: WorkbenchTab }) {
                         >
                           {(isPending || isPendingRemoval) && isHrOrAdmin && (
                             <button
-                              onClick={() => handleApprove(key, emp.id, dateIso, noteDraft.trim() || undefined)}
+                              onClick={() => handleApprove(key, emp.id, dateIso, noteDraft.trim() || undefined, saved?.id)}
                               className={cn(
                                 'w-full mb-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold hover:brightness-95',
                                 isPendingRemoval ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success',
