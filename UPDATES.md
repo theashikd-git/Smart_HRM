@@ -8,6 +8,54 @@ needed** so it doesn't get missed.
 
 ---
 
+## 2026-11-23 — Designations are now one shared list
+
+- **Designations no longer belong to a department.** Organization >
+  Designation is a single company-wide list: name, status, employee count
+  and the departments each one is linked to. The Add/Edit form has just the
+  title and status. Names must be unique, ignoring case and extra spaces
+  ("staff nurse" and "Staff Nurse" are the same).
+- **Departments choose their designations.** In Organization > Department,
+  Add/Edit has a searchable "Applicable designations" box with Select all
+  and Clear. The department list shows how many each has.
+- **Employee form.** The designation dropdown lists only the chosen
+  department's active designations and resets when the department changes.
+  When editing, the employee's current designation is still shown even if
+  it was unlinked later. The server checks the same rule, but only when an
+  employee gets a new designation, so unlinking never breaks existing people.
+- **Deleting.** A designation held by employees can't be deleted; set it to
+  Inactive instead. Unlinking a designation from a department is always
+  allowed and leaves existing employees untouched.
+- **API.** `GET /departments/:id/designations` (active only). Department
+  create/update accept `designationIds`; designation create/update no
+  longer take `departmentId`. Changes are written to the audit log with
+  old and new values.
+- **Migration** (`20261123000000_designations_shared_across_departments`)
+  loses nothing: same-name designations (trimmed, case-insensitive) are
+  merged into the oldest one, with employees and attendance policy scopes
+  repointed to it (it stays Active if any copy was). Every old
+  (department, designation) pair becomes a link, plus each employee's own
+  pair. **Designations that had no department are not linked to anything**,
+  so they stay unlinked until you add them to a department. To list them:
+  `SELECT title FROM designations d WHERE NOT EXISTS (SELECT 1 FROM department_designations x WHERE x."designationId" = d.id);`
+
+**Action needed** (from the `backend` folder). On Windows, stop the
+`npm run start:dev` watcher first, or `prisma generate` can't replace its
+files:
+
+```
+npm install
+npx prisma migrate dev
+npx prisma generate
+npm run start:dev
+```
+
+If `migrate dev` offers to reset the database, answer **no** and tell me.
+Then link designations to departments under Organization > Department
+(only the unlinked ones need it).
+
+---
+
 ## 2026-11-22 — Attendance policies (Organization > Policy)
 
 - **New: Organization > Policy**, directly under Company. Admin and HR can
