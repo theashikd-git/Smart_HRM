@@ -8,6 +8,32 @@ needed** so it doesn't get missed.
 
 ---
 
+## 2026-11-24 — Roster: Shift Summary column and Coverage card
+
+- **Shift Summary** (new sticky column at the right end of the Roster grid,
+  Week and Month view). Per employee, for the period on screen: a coloured
+  badge with the count for every shift they have, **OFF** shown separately
+  (not counted as duty), **Duty** (the sum of the shift counts) and
+  **Unassigned** (empty days, in muted text). A small amber dot marks shifts
+  that include pending-approval days. Hover for the full breakdown with each
+  shift's time range (flexible shifts show their required hours).
+- **Today's Coverage** (new 5th card in the stat row, wraps on small
+  screens). Shows how many people are on each shift, OFF and unassigned for
+  one date. Click any date header to see that date ("Coverage: 15 Nov"); the
+  column is highlighted and a **Today** link resets it. A shift with nobody
+  on it is shown in red. If today isn't in the month on screen, the card
+  shows the first day of that period until a date is clicked.
+- Shift types come from the Shift table, so new shifts appear on their own.
+  Numbers include unsaved edits straight away and follow the month/week and
+  department filter. The other four stat cards are unchanged (still saved
+  data only).
+- Frontend only: no API, database or dependency changes. The calculations
+  are small pure functions in `roster-summary.ts`.
+
+**Action needed:** none. Refresh the page.
+
+---
+
 ## 2026-11-23 — Designations are now one shared list
 
 - **Designations no longer belong to a department.** Organization >
