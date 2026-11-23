@@ -24,6 +24,9 @@ export interface Department {
   manager?: { id: string; fullName: string } | null;
   _count?: { employees: number };
   approvalWorkflow?: LeaveApprovalWorkflow | null;
+  /** Designations that apply to this department (many-to-many). */
+  designations?: { id: string; title: string; status: OrgUnitStatus }[];
+  designationCount?: number;
 }
 
 export interface DepartmentSuperior {
@@ -36,12 +39,13 @@ export interface DepartmentSuperior {
   createdAt?: string;
 }
 
+/** A company-wide job title. Departments choose which ones apply to them. */
 export interface Designation {
   id: string;
   title: string;
-  departmentId?: string | null;
   status: OrgUnitStatus;
-  department?: { id: string; name: string } | null;
+  /** Departments this designation is linked to. */
+  departments?: { id: string; name: string }[];
   _count?: { employees: number };
 }
 

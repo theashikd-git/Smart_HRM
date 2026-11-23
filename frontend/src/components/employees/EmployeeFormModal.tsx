@@ -9,8 +9,7 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
 import { useCreateEmployee, useUpdateEmployee, useResetEmployeePassword, useEmployee } from '@/hooks/useEmployees';
 import { useAuthStore } from '@/lib/auth-store';
-import { useDepartments } from '@/hooks/useDepartments';
-import { useDesignations } from '@/hooks/useDesignations';
+import { useDepartments, useDepartmentDesignations } from '@/hooks/useDepartments';
 import { useShifts } from '@/hooks/useShifts';
 import { useEmployeeCategories } from '@/hooks/useLeave';
 import { apiErrorMessage } from '@/lib/api';
@@ -87,7 +86,20 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('private');
   const photoInputRef = useRef<HTMLInputElement>(null);
   const { data: departments } = useDepartments();
-  const { data: designations } = useDesignations();
+  // Designations are a shared list, but each department only offers the ones linked to it.
+  const { data: departmentDesignations } = useDepartmentDesignations(form.departmentId || undefined);
+  // When editing, keep showing the employee's current designation even if it was
+  // since unlinked from (or deactivated for) their department.
+  const designationOptions = (() => {
+    const list = departmentDesignations ?? [];
+    const current = employee?.designation;
+    const keepsCurrent =
+      !!employee && !!current && employee.departmentId === form.departmentId && employee.designationId === current.id;
+    if (keepsCurrent && !list.some((d) => d.id === current!.id)) {
+      return [{ id: current!.id, title: `${current!.title} (not linked)` }, ...list];
+    }
+    return list;
+  })();
   const { data: shifts } = useShifts();
   const { data: employeeCategories } = useEmployeeCategories();
   const selectedCategory = employeeCategories?.find((c) => c.id === form.leaveCategoryId);
@@ -197,6 +209,16 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  /** Changing the department clears the designation, since the list changes with it.
+   *  Going back to the employee's own department restores their saved designation. */
+  function handleDepartmentChange(departmentId: string) {
+    setForm((f) => ({
+      ...f,
+      departmentId,
+      designationId: employee && departmentId === employee.departmentId ? employee.designationId || '' : '',
+    }));
   }
 
   function handlePhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -326,7 +348,7 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
               <Input value={form.fullName} onChange={(e) => set('fullName', e.target.value)} />
             </FieldWrap>
             <FieldWrap label="Department" required>
-              <Select value={form.departmentId} onChange={(e) => set('departmentId', e.target.value)}>
+              <Select value={form.departmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
                 <option value="">Select</option>
                 {departments?.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -336,9 +358,13 @@ export function EmployeeFormModal({ open, onClose, employee }: Props) {
               </Select>
             </FieldWrap>
             <FieldWrap label="Designation" required>
-              <Select value={form.designationId} onChange={(e) => set('designationId', e.target.value)}>
-                <option value="">Select</option>
-                {designations?.map((d) => (
+              <Select
+                value={form.designationId}
+                onChange={(e) => set('designationId', e.target.value)}
+                disabled={!form.departmentId}
+              >
+                <option value="">{form.departmentId ? 'Select' : 'Select a department first'}</option>
+                {designationOptions.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.title}
                   </option>

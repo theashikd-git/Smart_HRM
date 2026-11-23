@@ -49,6 +49,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
               <Th>Department</Th>
               <Th>Code</Th>
               <Th>Manager</Th>
+              <Th className="text-right">Designations</Th>
               <Th className="text-right">Employees</Th>
               <Th className="w-20"></Th>
             </tr>
@@ -64,6 +65,7 @@ export function DepartmentProgram({ tab }: { tab: WorkbenchTab }) {
                 </Td>
                 <Td className="font-mono text-xs text-text-muted">{dept.code}</Td>
                 <Td>{dept.manager?.fullName || ''}</Td>
+                <Td className="text-right">{dept.designationCount ?? dept.designations?.length ?? 0}</Td>
                 <Td className="text-right">{dept._count?.employees ?? 0}</Td>
                 <Td>
                   <div className="flex items-center justify-center gap-1">

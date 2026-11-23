@@ -6,7 +6,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { useUpdateDesignation } from '@/hooks/useDesignations';
-import { useDepartments } from '@/hooks/useDepartments';
 import { apiErrorMessage } from '@/lib/api';
 import type { Designation } from '@/types';
 
@@ -16,20 +15,17 @@ interface Props {
   designation: Designation | null;
 }
 
-/** Edit Designation popup: rename it, reassign its department, or change status. */
+/** Edit Designation popup: rename it or change its status. */
 export function EditDesignationModal({ open, onClose, designation }: Props) {
   const [title, setTitle] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
   const [status, setStatus] = useState('ACTIVE');
   const [errors, setErrors] = useState<{ title?: string; general?: string }>({});
 
-  const { data: departments } = useDepartments();
   const updateDesignation = useUpdateDesignation();
 
   useEffect(() => {
     if (!open || !designation) return;
     setTitle(designation.title);
-    setDepartmentId(designation.departmentId ?? '');
     setStatus(designation.status);
     setErrors({});
   }, [open, designation]);
@@ -50,7 +46,6 @@ export function EditDesignationModal({ open, onClose, designation }: Props) {
       await updateDesignation.mutateAsync({
         id: designation.id,
         title: title.trim(),
-        departmentId: departmentId || undefined,
         status,
       });
       toast.success(`Designation "${title.trim()}" updated`);
@@ -88,16 +83,6 @@ export function EditDesignationModal({ open, onClose, designation }: Props) {
         )}
         <FieldWrap label="Designation Title" required error={errors.title}>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Department" hint="Optional -- leave unassigned to apply anywhere">
-          <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">Unassigned</option>
-            {departments?.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
         </FieldWrap>
         <FieldWrap label="Status">
           <Select value={status} onChange={(e) => setStatus(e.target.value)}>

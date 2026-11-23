@@ -8,6 +8,7 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { useCreateDepartment } from '@/hooks/useDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { apiErrorMessage } from '@/lib/api';
+import { DesignationPicker } from './DesignationPicker';
 
 interface Props {
   open: boolean;
@@ -22,12 +23,13 @@ function codeFromName(name: string): string {
     .slice(0, 12);
 }
 
-/** "Add Department" popup: name, code, and an optional manager. */
+/** "Add Department" popup: name, code, an optional manager and the designations that apply. */
 export function AddDepartmentModal({ open, onClose }: Props) {
   const [code, setCode] = useState('');
   const [codeTouched, setCodeTouched] = useState(false);
   const [name, setName] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [designationIds, setDesignationIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<{ name?: string; code?: string; general?: string }>({});
 
   const { data: employees } = useEmployees({ pageSize: 500 });
@@ -38,6 +40,7 @@ export function AddDepartmentModal({ open, onClose }: Props) {
     setCodeTouched(false);
     setName('');
     setManagerId('');
+    setDesignationIds([]);
     setErrors({});
   }
 
@@ -74,6 +77,7 @@ export function AddDepartmentModal({ open, onClose }: Props) {
         name: name.trim(),
         code: code.trim(),
         headEmployeeId: managerId || undefined,
+        designationIds,
       });
       toast.success(`Department "${name.trim()}" created`);
       handleClose();
@@ -124,6 +128,10 @@ export function AddDepartmentModal({ open, onClose }: Props) {
             </Select>
           </FieldWrap>
         </div>
+
+        <FieldWrap label="Applicable designations" hint="Employees in this department can only be given these designations">
+          <DesignationPicker value={designationIds} onChange={setDesignationIds} />
+        </FieldWrap>
       </div>
     </Modal>
   );

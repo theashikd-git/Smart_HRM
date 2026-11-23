@@ -8,6 +8,7 @@ import { FieldWrap, Input, Select } from '@/components/ui/Form';
 import { useUpdateDepartment } from '@/hooks/useDepartments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { apiErrorMessage } from '@/lib/api';
+import { DesignationPicker } from './DesignationPicker';
 import type { Department } from '@/types';
 
 interface Props {
@@ -24,6 +25,7 @@ export function EditDepartmentModal({ open, onClose, department }: Props) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [designationIds, setDesignationIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<{ name?: string; code?: string; general?: string }>({});
 
   const { data: employees } = useEmployees({ pageSize: 500 });
@@ -36,6 +38,7 @@ export function EditDepartmentModal({ open, onClose, department }: Props) {
     setCode(department.code);
     setName(department.name);
     setManagerId(department.headEmployeeId || '');
+    setDesignationIds((department.designations ?? []).map((d) => d.id));
     setErrors({});
   }, [open, department]);
 
@@ -63,6 +66,7 @@ export function EditDepartmentModal({ open, onClose, department }: Props) {
         name: name.trim(),
         code: code.trim(),
         headEmployeeId: managerId || undefined,
+        designationIds,
       });
       toast.success(`Department "${name.trim()}" updated`);
       handleClose();
@@ -116,6 +120,10 @@ export function EditDepartmentModal({ open, onClose, department }: Props) {
             </Select>
           </FieldWrap>
         </div>
+
+        <FieldWrap label="Applicable designations" hint="Unlinking keeps the designation on employees who already have it">
+          <DesignationPicker value={designationIds} onChange={setDesignationIds} />
+        </FieldWrap>
       </div>
     </Modal>
   );

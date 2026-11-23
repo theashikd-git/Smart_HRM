@@ -9,6 +9,16 @@ export function useDepartments() {
   });
 }
 
+/** Active designations that can be given to employees of one department. */
+export function useDepartmentDesignations(departmentId?: string) {
+  return useQuery({
+    queryKey: ['departments', departmentId, 'designations'],
+    queryFn: async () =>
+      (await api.get<{ id: string; title: string }[]>(`/departments/${departmentId}/designations`)).data,
+    enabled: !!departmentId,
+  });
+}
+
 export function useCreateDepartment() {
   const qc = useQueryClient();
   return useMutation({
@@ -17,8 +27,12 @@ export function useCreateDepartment() {
       code: string;
       headEmployeeId?: string;
       status?: string;
+      designationIds?: string[];
     }): Promise<Department> => (await api.post('/departments', payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['departments'] });
+      qc.invalidateQueries({ queryKey: ['designations'] });
+    },
   });
 }
 
@@ -34,8 +48,12 @@ export function useUpdateDepartment() {
       code?: string;
       headEmployeeId?: string;
       status?: string;
+      designationIds?: string[];
     }): Promise<Department> => (await api.patch(`/departments/${id}`, payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['departments'] });
+      qc.invalidateQueries({ queryKey: ['designations'] });
+    },
   });
 }
 
@@ -43,6 +61,9 @@ export function useDeleteDepartment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/departments/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['departments'] });
+      qc.invalidateQueries({ queryKey: ['designations'] });
+    },
   });
 }

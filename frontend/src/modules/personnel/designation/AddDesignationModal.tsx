@@ -4,9 +4,8 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { FieldWrap, Input, Select } from '@/components/ui/Form';
+import { FieldWrap, Input } from '@/components/ui/Form';
 import { useCreateDesignation } from '@/hooks/useDesignations';
-import { useDepartments } from '@/hooks/useDepartments';
 import { apiErrorMessage } from '@/lib/api';
 
 interface Props {
@@ -14,18 +13,15 @@ interface Props {
   onClose: () => void;
 }
 
-/** "Add Designation" popup: title and an optional department. */
+/** "Add Designation" popup: just the title. Departments pick it up from Organization > Department. */
 export function AddDesignationModal({ open, onClose }: Props) {
   const [title, setTitle] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
   const [errors, setErrors] = useState<{ title?: string; general?: string }>({});
 
-  const { data: departments } = useDepartments();
   const createDesignation = useCreateDesignation();
 
   function reset() {
     setTitle('');
-    setDepartmentId('');
     setErrors({});
   }
 
@@ -44,7 +40,6 @@ export function AddDesignationModal({ open, onClose }: Props) {
     try {
       await createDesignation.mutateAsync({
         title: title.trim(),
-        departmentId: departmentId || undefined,
       });
       toast.success(`Designation "${title.trim()}" created`);
       handleClose();
@@ -78,16 +73,6 @@ export function AddDesignationModal({ open, onClose }: Props) {
         )}
         <FieldWrap label="Designation Title" required error={errors.title}>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Staff Nurse" autoFocus />
-        </FieldWrap>
-        <FieldWrap label="Department" hint="Optional -- leave unassigned to apply anywhere">
-          <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">Unassigned</option>
-            {departments?.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
         </FieldWrap>
       </div>
     </Modal>
