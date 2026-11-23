@@ -39,6 +39,7 @@ async function main() {
   const employees = await prisma.employee.deleteMany({});
   console.log(`Deleted ${employees.count} employee(s) (documents/attendance cascaded)`);
 
+  // Department <-> designation links go with the departments (cascade).
   const departments = await prisma.department.deleteMany({});
   console.log(`Deleted ${departments.count} department(s)`);
 

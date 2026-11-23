@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ArrayUnique, IsArray, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export enum OrgUnitStatusDto {
   ACTIVE = 'ACTIVE',
@@ -21,6 +21,13 @@ export class CreateDepartmentDto {
   @IsOptional()
   @IsEnum(OrgUnitStatusDto)
   status?: OrgUnitStatusDto;
+  // The designations this department uses. When sent, it replaces the whole
+  // list (an empty array clears it); leave it out to keep the current links.
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  designationIds?: string[];
 }
 
 export class UpdateDepartmentDto {
@@ -39,4 +46,11 @@ export class UpdateDepartmentDto {
   @IsOptional()
   @IsEnum(OrgUnitStatusDto)
   status?: OrgUnitStatusDto;
+  // The designations this department uses. When sent, it replaces the whole
+  // list (an empty array clears it); leave it out to keep the current links.
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  designationIds?: string[];
 }

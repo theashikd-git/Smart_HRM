@@ -25,6 +25,12 @@ export class DepartmentsController {
     return this.service.findAll();
   }
 
+  // Active designations this department offers (the employee form's dropdown).
+  @Get(':id/designations')
+  findDesignations(@Param('id') id: string) {
+    return this.service.findDesignations(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

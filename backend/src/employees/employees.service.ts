@@ -34,6 +34,28 @@ export class EmployeesService {
     private leaveService: LeaveService,
   ) {}
 
+  /**
+   * A designation can only be given to someone in a department that lists it
+   * (Organization > Department), and only while it is active. Called for new
+   * assignments only; an employee who keeps the designation they already
+   * have is never re-checked, so unlinking a designation later is harmless.
+   */
+  private async assertDesignationAllowed(departmentId: string | undefined | null, designationId: string) {
+    const designation = await this.prisma.designation.findUnique({
+      where: { id: designationId },
+      select: { title: true, status: true, departments: { where: { departmentId: departmentId ?? '' }, select: { departmentId: true } } },
+    });
+    if (!designation) throw new BadRequestException('Designation not found');
+    if (!departmentId || designation.departments.length === 0) {
+      throw new BadRequestException(
+        `"${designation.title}" is not available in the selected department. Add it to the department under Organization > Department first.`,
+      );
+    }
+    if (designation.status !== 'ACTIVE') {
+      throw new BadRequestException(`"${designation.title}" is inactive and can't be given to an employee.`);
+    }
+  }
+
   async create(dto: CreateEmployeeDto, actorId?: string) {
     const { staffUsername, staffPassword, policyExemptUntil, ...employeeData } = dto;
 
@@ -50,6 +72,8 @@ export class EmployeesService {
     const category = await this.prisma.employeeCategory.findUnique({ where: { id: dto.leaveCategoryId } });
     if (!category) throw new BadRequestException('Employee category not found');
     this.assertTrialMonths(category, dto.trialMonths);
+
+    if (dto.designationId) await this.assertDesignationAllowed(dto.departmentId, dto.designationId);
 
     // Fail before creating anything if Administrator was picked without the
     // credentials it needs -- staffUsername/staffPassword aren't columns on
@@ -211,6 +235,12 @@ export class EmployeesService {
       if (codeTaken && codeTaken.id !== id) {
         throw new ConflictException('Employee ID is already assigned to another employee');
       }
+    }
+
+    // Only a *new* designation is checked against the department; keeping the
+    // one already saved is always fine, even if it was unlinked since.
+    if (dto.designationId && dto.designationId !== current.designationId) {
+      await this.assertDesignationAllowed(dto.departmentId ?? current.departmentId, dto.designationId);
     }
 
     if (dto.deviceUserId) {

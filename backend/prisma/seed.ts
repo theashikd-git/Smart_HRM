@@ -194,6 +194,17 @@ async function main() {
     });
   }
 
+  // -- Department designations ---------------------------------------------
+  // Designations are one shared list; each department offers the ones its
+  // demo employees hold (link is created once, safe to re-run).
+  for (const emp of demoEmployees) {
+    await prisma.departmentDesignation.upsert({
+      where: { departmentId_designationId: { departmentId: emp.departmentId, designationId: emp.designationId } },
+      update: {},
+      create: { departmentId: emp.departmentId, designationId: emp.designationId },
+    });
+  }
+
   console.log('Seed complete.');
   console.log('---------------------------------------------');
   console.log(`Company: ${company.name}`);
