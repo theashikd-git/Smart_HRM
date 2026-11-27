@@ -8,6 +8,36 @@ needed** so it doesn't get missed.
 
 ---
 
+## 2026-11-27 — Device attendance sync: wrong check-in / check-out fixed
+
+- **The problem.** The real ZKTeco client can't read the device's IN/OUT
+  flag, so it guessed by alternating IN, OUT, IN, OUT over each employee's
+  whole punch history. One missed or doubled punch flipped the guess for
+  every later day, and the daily record (which trusted that guess) could
+  show check-in and check-out swapped, a check-in at the end of the day,
+  negative work hours, or a wrong Late status.
+- **The fix.** A day's **check-in is now the earliest punch and the
+  check-out the latest punch** of that day. The guessed flag is no longer
+  used. Two punches less than a minute apart count as one (a double swipe),
+  so a lone double swipe shows as a missing check-out instead of 0 hours. A
+  manual punch added by HR is treated as any other punch.
+- **Large device logs.** Pulling a very large punch history (tens of
+  thousands of records) no longer risks a "Maximum call stack size exceeded"
+  error.
+- **Unlinked device users.** Punches from a device user ID that no employee
+  has as "Device User ID" are still skipped, but the backend log now lists
+  those IDs so a missing or mistyped Device User ID is easy to find.
+- Existing records are not changed automatically. To fix days already
+  calculated wrongly, run **Recalculate from date** on Organization > Policy
+  from the date the problem began (days HR corrected by hand are left
+  alone).
+- Tests added for the new check-in/check-out rule (`npm test`).
+
+**Action needed:** restart the backend (`npm run start:dev`), then run
+Recalculate from date once for the affected period. No database change.
+
+---
+
 ## 2026-11-24 — Roster Approvals: no more "Only a pending duty can be approved"
 
 - Approving a duty that was already approved (approved from another tab or

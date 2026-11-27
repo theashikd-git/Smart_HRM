@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { HolidaysService } from '../holidays/holidays.service';
 import { PoliciesService } from '../policies/policies.service';
 import { DayInput, DayResult, evaluateDay } from '../policies/policy-engine';
+import { pickCheckInOut } from './punch-pairing';
 import { ZktecoClient, RawPunch } from '../devices/zkteco/zkteco-client.interface';
 import { ZKTECO_CLIENT } from '../devices/zkteco/zkteco-client.token';
 import {
@@ -115,9 +116,17 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       // Batch-load existing logs across the whole pulled time range instead
       // of one findFirst() per punch, so duplicate detection is O(1) per
       // punch after a single query rather than N round trips to Postgres.
-      const timestamps = punches.map((p) => p.timestamp.getTime());
-      const rangeStart = new Date(Math.min(...timestamps));
-      const rangeEnd = new Date(Math.max(...timestamps) + 1);
+      // (A loop, not Math.min(...all) -- spreading tens of thousands of
+      // punches into one call throws "Maximum call stack size exceeded".)
+      let minTs = Infinity;
+      let maxTs = -Infinity;
+      for (const p of punches) {
+        const t = p.timestamp.getTime();
+        if (t < minTs) minTs = t;
+        if (t > maxTs) maxTs = t;
+      }
+      const rangeStart = new Date(minTs);
+      const rangeEnd = new Date(maxTs + 1);
       const existingLogs = await this.prisma.attendanceLog.findMany({
         where: {
           employeeId: { in: employees.map((e) => e.id) },
@@ -136,11 +145,13 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       }[] = [];
       const affectedEmployeeDates = new Set<string>();
       let skippedUnknown = 0;
+      const unknownIds = new Set<string>();
 
       for (const punch of punches) {
         const employee = employeeByDeviceUserId.get(punch.deviceUserId);
         if (!employee) {
           skippedUnknown++;
+          unknownIds.add(punch.deviceUserId);
           continue; // unknown device user, skip
         }
         const key = `${employee.id}|${punch.timestamp.getTime()}`;
@@ -163,6 +174,16 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         // in-memory de-dup above, in case another sync somehow ran
         // concurrently.
         await this.prisma.attendanceLog.createMany({ data: toCreate, skipDuplicates: true });
+      }
+
+      if (unknownIds.size > 0) {
+        // Punches from a device user nobody in the HRM is linked to are
+        // dropped -- name them so a missing "Device User ID" on an employee
+        // is easy to spot.
+        const sample = [...unknownIds].slice(0, 20).join(', ');
+        this.logger.warn(
+          `Skipped ${skippedUnknown} punches from ${unknownIds.size} device user ID(s) not linked to any employee: ${sample}${unknownIds.size > 20 ? ', ...' : ''}`,
+        );
       }
 
       for (const key of affectedEmployeeDates) {
@@ -252,11 +273,9 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
     if (!employee) return null;
 
-    const ins = logs.filter((l) => l.inOutMode === 'IN');
-    const outs = logs.filter((l) => l.inOutMode === 'OUT');
-
-    const checkIn = ins.length > 0 ? ins[0].timestamp : logs[0].timestamp;
-    const checkOut = outs.length > 0 ? outs[outs.length - 1].timestamp : null;
+    // Earliest punch = check-in, latest = check-out. The stored IN/OUT flag
+    // isn't used: for a real device it is only a guess (see punch-pairing.ts).
+    const { checkIn, checkOut } = pickCheckInOut(logs)!;
 
     let earlyLeaveMinutes = 0;
     let overtimeMinutes = 0;
